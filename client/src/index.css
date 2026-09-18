@@ -1,0 +1,127 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #168a5b;
+  --color-primary-dark: #0d7048;
+
+  --color-text: #111827;
+  --color-muted: #6b7280;
+
+  --color-border: #e5e7eb;
+}
+
+:root {
+  font-family: "DM Sans", sans-serif;
+  color: #1f2937;
+  background: #f7f8f5;
+}
+
+body {
+  min-width: 320px;
+  background: #f7f8f5;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Outfit", sans-serif;
+}
+
+.admin-dark {
+  background: #111827;
+  color: #e5e7eb;
+}
+
+.admin-dark aside,
+.admin-dark header,
+.admin-dark main section,
+.admin-dark main article,
+.admin-dark form,
+.admin-dark [role="dialog"] > div {
+  background-color: #1f2937;
+  border-color: #374151;
+}
+
+.admin-dark .bg-white,
+.admin-dark .bg-slate-50,
+.admin-dark .bg-gray-50 {
+  background-color: #1f2937;
+}
+
+.admin-dark .text-slate-900,
+.admin-dark .text-slate-800,
+.admin-dark .text-gray-900,
+.admin-dark .text-slate-700 {
+  color: #f3f4f6;
+}
+
+.admin-dark .text-slate-600,
+.admin-dark .text-slate-500,
+.admin-dark .text-gray-500,
+.admin-dark .text-slate-400 {
+  color: #9ca3af;
+}
+
+.admin-dark input,
+.admin-dark select,
+.admin-dark textarea {
+  background-color: #111827;
+  border-color: #4b5563;
+  color: #f3f4f6;
+}
+
+.admin-dark [class*="hover:bg-slate-50"]:hover,
+.admin-dark [class*="hover:bg-gray-50"]:hover {
+  background-color: #273449;
+}
+
+.admin-dark [class*="hover:bg-slate-100"]:hover,
+.admin-dark [class*="hover:bg-gray-100"]:hover {
+  background-color: #374151;
+}
+
+.admin-dark [class*="hover:bg-teal-50"]:hover,
+.admin-dark [class*="hover:bg-emerald-50"]:hover {
+  background-color: #164e43;
+}
+
+.admin-dark [class*="hover:bg-teal-100"]:hover,
+.admin-dark [class*="hover:bg-emerald-100"]:hover {
+  background-color: #166534;
+}
+
+.admin-dark [class*="hover:bg-red-50"]:hover {
+  background-color: #451a1a;
+}
+
+.admin-dark [class*="hover:bg-red-100"]:hover {
+  background-color: #7f1d1d;
+}
+
+.admin-dark [class*="hover:bg-white"]:hover {
+  background-color: #374151;
+}
+
+.admin-dark [class*="hover:text-slate-900"]:hover,
+.admin-dark [class*="hover:text-gray-900"]:hover,
+.admin-dark [class*="hover:text-slate-700"]:hover {
+  color: #f9fafb;
+}
+
+.admin-dark [class*="hover:text-slate-600"]:hover,
+.admin-dark [class*="hover:text-gray-700"]:hover {
+  color: #e5e7eb;
+}
+
+.admin-dark [class*="hover:text-primary"]:hover,
+.admin-dark [class*="hover:text-primary-dark"]:hover {
+  color: #6ee7b7;
+}
+
+.admin-dark [class*="hover:border-primary"]:hover {
+  border-color: #6ee7b7;
+}
