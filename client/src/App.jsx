@@ -35,7 +35,14 @@ const RequireCustomerAuth = ({ children }) => {
     return () => { active = false; };
   }, []);
 
-  if (state === "checking") return <div className="flex min-h-[55vh] items-center justify-center bg-gray-50 text-sm text-gray-500">Checking your account...</div>;
+  if (state === "checking") return (
+    <div className="flex min-h-[55vh] items-center justify-center bg-[#f4f7f4]">
+      <div className="rounded-2xl border border-slate-200 bg-white px-8 py-10 text-center shadow-sm">
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-primary" />
+        <p className="mt-4 text-sm text-gray-500">Checking your account...</p>
+      </div>
+    </div>
+  );
   if (state !== "authorized") return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />;
   return children;
 };

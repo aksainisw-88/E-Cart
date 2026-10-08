@@ -72,8 +72,17 @@ const FeaturedProducts = () => {
         </div>
 
         {loading ? (
-          <div className="rounded-xl border border-gray-200 bg-white px-6 py-12 text-center text-sm text-gray-500">
-            Loading available products...
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((item) => (
+              <div key={item} className="h-80 animate-pulse rounded-2xl border border-slate-200 bg-white">
+                <div className="h-48 rounded-t-2xl bg-slate-100" />
+                <div className="space-y-3 p-4">
+                  <div className="h-3 w-24 rounded bg-slate-100" />
+                  <div className="h-4 w-full rounded bg-slate-100" />
+                  <div className="h-8 w-full rounded bg-slate-100" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : products.length > 0 ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -35,15 +35,151 @@ const AdminDashboard = () => {
   const previousMonth = revenueTrend.at(-2);
   const latestMonth = revenueTrend.at(-1);
   const revenueGrowth = previousMonth?.revenue ? ((Number(latestMonth.revenue) - Number(previousMonth.revenue)) / Number(previousMonth.revenue)) * 100 : 0;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   return (
     <div className="mx-auto max-w-[1500px]">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-medium text-primary">{todayLabel}</p><h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Good morning, Ankit</h1><p className="mt-2 text-sm text-slate-500">Here&apos;s what&apos;s happening with your store today.</p></div><div className="flex flex-wrap gap-2"><Link to="/admin/reports" className="inline-flex w-fit items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-primary hover:text-primary"><BarChart3 className="h-4 w-4" />View reports</Link><Link to="/admin/products" className="inline-flex w-fit items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-dark"><Package className="h-4 w-4" />Manage products</Link></div></div>
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{liveStats.map(({ label, value, change, icon: Icon, tone }) => <div key={label} className="rounded-xl border border-slate-200 bg-white p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-500">{label}</p><p className="mt-2 text-2xl font-bold text-slate-900">{value}</p></div><span className={`flex h-10 w-10 items-center justify-center rounded-lg ${toneClasses[tone]}`}><Icon className="h-5 w-5" /></span></div><p className="mt-4 text-xs font-semibold text-emerald-600">{change || "Live"} <span className="font-normal text-slate-400">from store data</span></p></div>)}</div>
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.35fr_1fr]">
-        <section className="rounded-xl border border-slate-200 bg-white"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="font-semibold text-slate-900">Recent orders</h2><p className="mt-1 text-xs text-slate-500">Latest activity across your store</p></div><Link to="/admin/orders" className="text-sm font-semibold text-primary hover:text-primary-dark">View all</Link></div><div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400"><tr><th className="px-5 py-3 font-semibold">Order</th><th className="px-5 py-3 font-semibold">Customer</th><th className="px-5 py-3 font-semibold">Items</th><th className="px-5 py-3 font-semibold">Amount</th><th className="px-5 py-3 font-semibold">Status</th></tr></thead><tbody className="divide-y divide-slate-100">{liveOrders.map((order) => <tr key={order._id || order.orderNumber} className="hover:bg-slate-50"><td className="px-5 py-4 font-semibold text-slate-700">#{order.orderNumber}</td><td className="px-5 py-4 text-slate-600">{order.customer?.name}</td><td className="px-5 py-4 text-slate-500">{order.items.length} items</td><td className="px-5 py-4 font-medium text-slate-700">₹{Number(order.total).toLocaleString("en-IN")}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClasses[order.status] || "bg-slate-100 text-slate-600"}`}>{order.status}</span></td></tr>)}</tbody></table></div></section>
-        <section className="rounded-xl border border-slate-200 bg-white"><div className="border-b border-slate-100 px-5 py-4"><h2 className="font-semibold text-slate-900">Store health</h2><p className="mt-1 text-xs text-slate-500">Live items that need your attention</p></div><div className="space-y-5 p-5"><div className="flex gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600"><Package className="h-4 w-4" /></span><div className="flex-1"><p className="text-sm font-semibold">Low stock products</p><p className="mt-1 text-xs text-slate-500">{overview ? `${overview.lowStock?.length || 0} products have 10 or fewer units.` : "Checking inventory levels..."}{overview?.lowStock?.slice(0, 2).map((product) => <span key={product._id} className="mt-1 block text-amber-700">{product.name} · {product.stock} left</span>)}</p></div><Link to="/admin/products" className="text-xs font-semibold text-primary">Review</Link></div><div className="flex gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Clock3 className="h-4 w-4" /></span><div className="flex-1"><p className="text-sm font-semibold">Orders awaiting dispatch</p><p className="mt-1 text-xs text-slate-500">{overview ? `${overview.awaitingDispatch || 0} processing orders need action.` : "Checking order queue..."}</p></div><Link to="/admin/orders" className="text-xs font-semibold text-primary">Open</Link></div><div className="flex gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-primary"><Users className="h-4 w-4" /></span><div className="flex-1"><p className="text-sm font-semibold">New customer signups</p><p className="mt-1 text-xs text-slate-500">{overview ? `${overview.newCustomers || 0} new customers joined in the last 7 days.` : "Checking customer activity..."}</p></div><Link to="/admin/customers" className="text-xs font-semibold text-primary">View</Link></div></div></section>
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <p className="text-sm font-medium text-primary">{todayLabel}</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{greeting}</h1>
+          <p className="mt-2 text-sm text-slate-500">Here&apos;s what&apos;s happening with your store today.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link to="/admin/reports" className="inline-flex w-fit items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-primary hover:text-primary">
+            <BarChart3 className="h-4 w-4" />View reports
+          </Link>
+          <Link to="/admin/products" className="inline-flex w-fit items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-primary/20 transition hover:bg-primary-dark">
+            <Package className="h-4 w-4" />Manage products
+          </Link>
+        </div>
       </div>
-      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5"><div className="flex flex-col justify-between gap-4 border-b border-slate-100 pb-5 sm:flex-row sm:items-start"><div><div className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 text-primary"><BarChart3 className="h-4 w-4" /></span><h2 className="font-semibold text-slate-900">Revenue overview</h2></div><p className="mt-2 text-xs text-slate-500">Live store sales for the last 6 months</p></div><Link to="/admin/reports" className="flex items-center gap-1 text-sm font-medium text-primary">Full reports <ArrowUpRight className="h-4 w-4" /></Link></div><div className="mt-5 grid gap-3 sm:grid-cols-4"><div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">6-month revenue</p><p className="mt-1 text-lg font-bold text-slate-900">{overview ? `₹${revenueTotal.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` : "..."}</p></div><div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Paid orders</p><p className="mt-1 text-lg font-bold text-slate-900">{overview ? orderTotal.toLocaleString("en-IN") : "..."}</p></div><div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Average / month</p><p className="mt-1 text-lg font-bold text-slate-900">{overview ? `₹${averageRevenue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` : "..."}</p></div><div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Month growth</p><p className={`mt-1 text-lg font-bold ${revenueGrowth >= 0 ? "text-emerald-600" : "text-red-600"}`}>{overview ? `${revenueGrowth >= 0 ? "+" : ""}${revenueGrowth.toFixed(1)}%` : "..."}</p></div></div><div className="mt-6 grid gap-6 lg:grid-cols-[1fr_210px]"><div><div className="flex h-48 items-end gap-2 border-b border-l border-slate-100 px-2 pb-0 sm:gap-4">{revenueTrend.length ? revenueTrend.map((item, index) => <div key={item._id} className="group relative flex h-full flex-1 flex-col items-center justify-end gap-2"><div className="pointer-events-none absolute bottom-full z-10 mb-2 hidden -translate-y-1 rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-lg group-hover:block">₹{Number(item.revenue || 0).toLocaleString("en-IN")} · {item.orders} orders</div><div className={`w-full max-w-16 rounded-t-md transition-all ${index === revenueTrend.length - 1 ? "bg-primary" : "bg-teal-100 hover:bg-teal-200"}`} style={{ height: `${Math.max(8, Number(item.revenue || 0) / maxRevenue * 100)}%` }} /><span className="text-[11px] text-slate-400">{formatMonth(item._id)}</span></div>) : <p className="w-full self-center text-center text-sm text-slate-500">No revenue data available yet.</p>}</div></div><div className="rounded-xl bg-emerald-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Best month</p><p className="mt-2 text-xl font-bold text-emerald-900">{bestMonth ? formatMonth(bestMonth._id) : "-"}</p><p className="mt-1 text-sm text-emerald-700">{bestMonth ? `₹${Number(bestMonth.revenue || 0).toLocaleString("en-IN")}` : "No sales yet"}</p><div className="mt-5 border-t border-emerald-200 pt-4"><p className="text-xs text-emerald-700">Current month</p><p className="mt-1 text-lg font-bold text-emerald-900">{latestMonth ? `₹${Number(latestMonth.revenue || 0).toLocaleString("en-IN")}` : "-"}</p><p className="mt-1 text-xs text-emerald-700">{latestMonth?.orders || 0} orders</p></div></div></div></section>
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {liveStats.map(({ label, value, change, icon: Icon, tone }) => (
+          <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm text-slate-500">{label}</p>
+                <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
+              </div>
+              <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${toneClasses[tone]}`}>
+                <Icon className="h-5 w-5" />
+              </span>
+            </div>
+            <p className="mt-4 text-xs font-semibold text-emerald-600">{change || "Live"} <span className="font-normal text-slate-400">from store data</span></p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 grid gap-6 xl:grid-cols-[1.35fr_1fr]">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+            <div>
+              <h2 className="font-semibold text-slate-900">Recent orders</h2>
+              <p className="mt-1 text-xs text-slate-500">Latest activity across your store</p>
+            </div>
+            <Link to="/admin/orders" className="text-sm font-semibold text-primary hover:text-primary-dark">View all</Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[620px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th className="px-5 py-3 font-semibold">Order</th>
+                  <th className="px-5 py-3 font-semibold">Customer</th>
+                  <th className="px-5 py-3 font-semibold">Items</th>
+                  <th className="px-5 py-3 font-semibold">Amount</th>
+                  <th className="px-5 py-3 font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {liveOrders.map((order) => (
+                  <tr key={order._id || order.orderNumber} className="hover:bg-slate-50">
+                    <td className="px-5 py-4 font-semibold text-slate-700">#{order.orderNumber}</td>
+                    <td className="px-5 py-4 text-slate-600">{order.customer?.name}</td>
+                    <td className="px-5 py-4 text-slate-500">{order.items.length} items</td>
+                    <td className="px-5 py-4 font-medium text-slate-700">₹{Number(order.total).toLocaleString("en-IN")}</td>
+                    <td className="px-5 py-4">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClasses[order.status] || "bg-slate-100 text-slate-600"}`}>{order.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-5 py-4">
+            <h2 className="font-semibold text-slate-900">Store health</h2>
+            <p className="mt-1 text-xs text-slate-500">Live items that need your attention</p>
+          </div>
+          <div className="space-y-5 p-5">
+            <div className="flex gap-3 rounded-xl bg-amber-50/60 p-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600"><Package className="h-4 w-4" /></span>
+              <div className="flex-1">
+                <p className="text-sm font-semibold">Low stock products</p>
+                <p className="mt-1 text-xs text-slate-500">{overview ? `${overview.lowStock?.length || 0} products have 10 or fewer units.` : "Checking inventory levels..."}{overview?.lowStock?.slice(0, 2).map((product) => <span key={product._id} className="mt-1 block text-amber-700">{product.name} · {product.stock} left</span>)}</p>
+              </div>
+              <Link to="/admin/products" className="text-xs font-semibold text-primary">Review</Link>
+            </div>
+            <div className="flex gap-3 rounded-xl bg-blue-50/60 p-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Clock3 className="h-4 w-4" /></span>
+              <div className="flex-1">
+                <p className="text-sm font-semibold">Orders awaiting dispatch</p>
+                <p className="mt-1 text-xs text-slate-500">{overview ? `${overview.awaitingDispatch || 0} processing orders need action.` : "Checking order queue..."}</p>
+              </div>
+              <Link to="/admin/orders" className="text-xs font-semibold text-primary">Open</Link>
+            </div>
+            <div className="flex gap-3 rounded-xl bg-teal-50/60 p-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-primary"><Users className="h-4 w-4" /></span>
+              <div className="flex-1">
+                <p className="text-sm font-semibold">New customer signups</p>
+                <p className="mt-1 text-xs text-slate-500">{overview ? `${overview.newCustomers || 0} new customers joined in the last 7 days.` : "Checking customer activity..."}</p>
+              </div>
+              <Link to="/admin/customers" className="text-xs font-semibold text-primary">View</Link>
+            </div>
+          </div>
+        </section>
+      </div>
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col justify-between gap-4 border-b border-slate-100 pb-5 sm:flex-row sm:items-start">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 text-primary"><BarChart3 className="h-4 w-4" /></span>
+              <h2 className="font-semibold text-slate-900">Revenue overview</h2>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">Live store sales for the last 6 months</p>
+          </div>
+          <Link to="/admin/reports" className="flex items-center gap-1 text-sm font-medium text-primary">Full reports <ArrowUpRight className="h-4 w-4" /></Link>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-4">
+          <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">6-month revenue</p><p className="mt-1 text-lg font-bold text-slate-900">{overview ? `₹${revenueTotal.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` : "..."}</p></div>
+          <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Paid orders</p><p className="mt-1 text-lg font-bold text-slate-900">{overview ? orderTotal.toLocaleString("en-IN") : "..."}</p></div>
+          <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Average / month</p><p className="mt-1 text-lg font-bold text-slate-900">{overview ? `₹${averageRevenue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` : "..."}</p></div>
+          <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Month growth</p><p className={`mt-1 text-lg font-bold ${revenueGrowth >= 0 ? "text-emerald-600" : "text-red-600"}`}>{overview ? `${revenueGrowth >= 0 ? "+" : ""}${revenueGrowth.toFixed(1)}%` : "..."}</p></div>
+        </div>
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_210px]">
+          <div>
+            <div className="flex h-48 items-end gap-2 border-b border-l border-slate-100 px-2 pb-0 sm:gap-4">
+              {revenueTrend.length ? revenueTrend.map((item, index) => (
+                <div key={item._id} className="group relative flex h-full flex-1 flex-col items-center justify-end gap-2">
+                  <div className="pointer-events-none absolute bottom-full z-10 mb-2 hidden -translate-y-1 rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-lg group-hover:block">₹{Number(item.revenue || 0).toLocaleString("en-IN")} · {item.orders} orders</div>
+                  <div className={`w-full max-w-16 rounded-t-md transition-all ${index === revenueTrend.length - 1 ? "bg-primary" : "bg-teal-100 hover:bg-teal-200"}`} style={{ height: `${Math.max(8, Number(item.revenue || 0) / maxRevenue * 100)}%` }} />
+                  <span className="text-[11px] text-slate-400">{formatMonth(item._id)}</span>
+                </div>
+              )) : <p className="w-full self-center text-center text-sm text-slate-500">No revenue data available yet.</p>}
+            </div>
+          </div>
+          <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Best month</p>
+            <p className="mt-2 text-xl font-bold text-emerald-900">{bestMonth ? formatMonth(bestMonth._id) : "-"}</p>
+            <p className="mt-1 text-sm text-emerald-700">{bestMonth ? `₹${Number(bestMonth.revenue || 0).toLocaleString("en-IN")}` : "No sales yet"}</p>
+            <div className="mt-5 border-t border-emerald-200 pt-4">
+              <p className="text-xs text-emerald-700">Current month</p>
+              <p className="mt-1 text-lg font-bold text-emerald-900">{latestMonth ? `₹${Number(latestMonth.revenue || 0).toLocaleString("en-IN")}` : "-"}</p>
+              <p className="mt-1 text-xs text-emerald-700">{latestMonth?.orders || 0} orders</p>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };

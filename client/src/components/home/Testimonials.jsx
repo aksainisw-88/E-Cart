@@ -41,12 +41,14 @@ const Testimonials = () => {
         </div>
 
         {/* Testimonials */}
-        <div className="grid grid-cols-1 divide-y divide-slate-200 border-y border-slate-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {testimonials.map((benefit, index) => {
             const Icon = [Clock3, Tag, ShoppingBasket, ShieldCheck][index] || ShieldCheck;
             return (
-            <div key={benefit.id} className="p-5 sm:p-6">
-              <Icon className="h-7 w-7 text-primary" strokeWidth={1.7} />
+            <div key={benefit.id} className="rounded-2xl border border-slate-200 bg-[#f8faf8] p-5 shadow-sm sm:p-6">
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white text-primary shadow-sm">
+                <Icon className="h-5 w-5" strokeWidth={1.7} />
+              </span>
               <h3 className="mt-4 font-semibold text-slate-900">{benefit.name}</h3>
               <p className="mt-2 text-sm leading-6 text-slate-500">{benefit.message}</p>
             </div>

@@ -19,7 +19,7 @@ const CategoryNav = () => {
   return (
     <nav className="border-b border-slate-200 bg-white text-slate-700">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-[52px] items-center">
+        <div className="flex h-[50px] items-center">
           <button
             type="button"
             className="mr-3 flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 md:hidden"
@@ -31,7 +31,7 @@ const CategoryNav = () => {
           </button>
           <span className="text-sm font-semibold text-slate-700 md:hidden">Shop categories</span>
 
-          <NavLink to="/products" className="mr-5 hidden items-center gap-2 text-sm font-semibold text-primary md:flex">
+          <NavLink to="/products" className="mr-4 hidden items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-primary md:flex">
             <Store size={17} /> Shop all
           </NavLink>
 
@@ -41,12 +41,17 @@ const CategoryNav = () => {
                 key={item.path}
                 to={item.path}
                 className={({ isActive }) =>
-                  `flex h-full items-center px-3 text-sm transition ${
+                  `relative flex h-full items-center px-3 text-sm transition ${
                     isActive ? "font-semibold text-primary" : "text-slate-500 hover:text-primary"
                   }`
                 }
               >
-                {item.label}
+                {({ isActive }) => (
+                  <>
+                    {item.label}
+                    {isActive && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-primary" />}
+                  </>
+                )}
               </NavLink>
             ))}
           </div>

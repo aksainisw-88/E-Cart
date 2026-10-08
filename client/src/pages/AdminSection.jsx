@@ -137,7 +137,7 @@ const AdminSection = ({ section }) => {
       </div>
 
       {config.columns.length > 0 ? (
-        <section className="mt-8 rounded-xl border border-slate-200 bg-white">
+        <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 sm:w-72">
               <Search className="h-4 w-4 text-slate-400" />

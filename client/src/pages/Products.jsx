@@ -110,8 +110,8 @@ const Products = () => {
 
   return (
     <>
-      <main className="bg-gray-50">
-        <section className="border-b bg-white">
+      <main className="bg-[#f4f7f4]">
+        <section className="border-b border-emerald-100 bg-gradient-to-br from-white via-white to-emerald-50/70">
           <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
             <p className="text-sm font-semibold uppercase tracking-wide text-primary">Our Products</p>
             <h1 className="mt-2 text-3xl font-bold text-gray-900 sm:text-4xl">Healthcare for every day</h1>
@@ -125,7 +125,7 @@ const Products = () => {
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Search products or categories"
-                className="h-12 w-full rounded-xl border border-gray-200 bg-gray-50 pl-12 pr-4 text-sm outline-none transition focus:border-primary focus:bg-white"
+                className="h-12 w-full rounded-2xl border border-gray-200 bg-white pl-12 pr-4 text-sm shadow-sm outline-none transition focus:border-primary"
               />
             </div>
           </div>
@@ -161,7 +161,7 @@ const Products = () => {
           </div>
 
           <div className="mt-6 grid gap-8 lg:grid-cols-[220px_1fr]">
-            <aside className={`${filtersOpen ? "block" : "hidden"} rounded-xl border border-gray-200 bg-white p-5 lg:block`}>
+            <aside className={`${filtersOpen ? "block" : "hidden"} rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:block`}>
               <div className="flex items-center justify-between">
                 <h2 className="flex items-center gap-2 font-semibold text-gray-900">
                   <Filter className="h-4 w-4 text-primary" />
@@ -180,7 +180,7 @@ const Products = () => {
                       key={productCategory}
                       type="button"
                       onClick={() => setSelectedCategory(productCategory)}
-                      className={`block w-full text-left text-sm transition ${selectedCategory === productCategory ? "font-semibold text-primary" : "text-gray-500 hover:text-gray-900"}`}
+                      className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition ${selectedCategory === productCategory ? "bg-emerald-50 font-semibold text-primary" : "text-gray-500 hover:bg-slate-50 hover:text-gray-900"}`}
                     >
                       {productCategory}
                     </button>

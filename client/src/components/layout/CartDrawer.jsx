@@ -18,7 +18,7 @@ const CartDrawer = () => {
         type="button"
         aria-label="Close cart"
         onClick={() => setDrawerOpen(false)}
-        className="pointer-events-none fixed inset-0 z-40 bg-slate-950/10"
+        className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-[2px]"
       />
       <aside className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">

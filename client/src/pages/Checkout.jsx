@@ -88,7 +88,7 @@ const Checkout = () => {
 
   return (
     <>
-      <main className="bg-gray-50 py-12 sm:py-16">
+      <main className="bg-[#f4f7f4] py-12 sm:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <p className="text-sm font-semibold uppercase tracking-wide text-primary">
             Step 1 of 2

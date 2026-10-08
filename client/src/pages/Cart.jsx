@@ -28,7 +28,7 @@ const Cart = () => {
   const delivery = subtotal >= Number(store.freeDeliveryAbove ?? 999) ? 0 : Number(store.deliveryFee ?? 49);
   return (
     <>
-      <main className="bg-gray-50 py-12 sm:py-16">
+      <main className="bg-[#f4f7f4] py-12 sm:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <p className="text-sm font-semibold uppercase tracking-wide text-primary">
             Your selection
@@ -46,7 +46,7 @@ const Cart = () => {
                 {items.map((item) => (
                   <article
                     key={item.id}
-                    className="flex gap-4 rounded-xl border border-gray-200 bg-white p-4 sm:p-5"
+                    className="flex gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5"
                   >
                     <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-lg bg-gray-50">
                       {item.image ? (
@@ -118,7 +118,7 @@ const Cart = () => {
                 </Link>
               </section>
             )}
-            <aside className="h-fit rounded-xl border border-gray-200 bg-white p-6">
+            <aside className="h-fit rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
               <h2 className="text-lg font-bold text-gray-900">Order summary</h2>
               <div className="mt-6 space-y-4 text-sm">
                 <div className="flex justify-between text-gray-500">
@@ -140,7 +140,7 @@ const Cart = () => {
               <Link
                 to={checkingStock ? "/cart" : items.length ? "/checkout" : "/products"}
                 aria-disabled={checkingStock || !items.length}
-                className={`mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary font-semibold text-white hover:bg-primary-dark ${checkingStock || !items.length ? "pointer-events-none opacity-60" : ""}`}
+                className={`mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary font-semibold text-white hover:bg-primary-dark ${checkingStock || !items.length ? "pointer-events-none opacity-60" : ""}`}
               >
                 {checkingStock ? "Checking stock..." : items.length ? "Checkout" : "Browse products"}
                 <ArrowRight className="h-4 w-4" />

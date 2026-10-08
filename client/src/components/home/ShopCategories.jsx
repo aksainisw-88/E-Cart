@@ -8,6 +8,7 @@ import {
   Apple,
   BriefcaseMedical,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const categories = [
   { id: 1, name: "Medicines", icon: Pill, path: "/medicines" },
@@ -22,16 +23,18 @@ const categories = [
 
 const ShopCategories = () => {
   return (
-    <section className="bg-[#f7f8f5] py-12 md:py-16">
+    <section className="bg-[#f4f7f4] py-12 md:py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mb-8 flex items-end justify-between">
           <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Shop by department</p>
-          <h2 className="mt-2 text-2xl font-semibold text-gray-900 md:text-3xl">
-            Shop by Categories
-          </h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Shop by department</p>
+            <h2 className="mt-2 text-2xl font-semibold text-gray-900 md:text-3xl">
+              Shop by Categories
+            </h2>
           </div>
-          <a href="/products" className="hidden text-sm font-semibold text-primary hover:text-primary-dark sm:block">View all categories →</a>
+          <Link to="/products" className="hidden text-sm font-semibold text-primary hover:text-primary-dark sm:block">
+            View all categories →
+          </Link>
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
@@ -39,23 +42,23 @@ const ShopCategories = () => {
             const Icon = category.icon;
 
             return (
-              <a
+              <Link
                 key={category.id}
-                href={category.path}
-                className="group flex min-h-[148px] flex-col items-center justify-center rounded-xl border border-slate-200 bg-white px-2 py-4 transition hover:-translate-y-1 hover:border-emerald-200 hover:shadow-md"
+                to={category.path}
+                className="group flex min-h-[148px] flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white px-2 py-4 shadow-sm transition hover:-translate-y-1 hover:border-emerald-200 hover:shadow-md"
               >
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 transition-all duration-300 group-hover:bg-emerald-100">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 transition-all duration-300 group-hover:bg-primary group-hover:text-white">
                   <Icon
                     size={28}
                     strokeWidth={1.5}
-                    className="text-primary transition-transform duration-300 group-hover:scale-110"
+                    className="text-primary transition-transform duration-300 group-hover:scale-110 group-hover:text-white"
                   />
                 </div>
 
                 <h3 className="mt-3 text-center text-xs font-semibold text-gray-700 transition-colors group-hover:text-primary sm:text-sm">
                   {category.name}
                 </h3>
-              </a>
+              </Link>
             );
           })}
         </div>

@@ -50,10 +50,10 @@ const SpecialOffers = () => {
             </p>
           </div>
 
-          <button className="hidden items-center gap-1 text-sm font-semibold text-primary transition hover:text-primary-dark sm:flex">
+          <Link to="/offers" className="hidden items-center gap-1 text-sm font-semibold text-primary transition hover:text-primary-dark sm:flex">
             View All
             <ArrowRight size={16} />
-          </button>
+          </Link>
         </div>
 
         {/* Offers */}
@@ -61,7 +61,7 @@ const SpecialOffers = () => {
           {offers.map((offer) => (
             <div
               key={offer.id}
-              className={`group relative min-h-[245px] overflow-hidden rounded-xl p-6 text-white transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${offer.id === 1 ? "bg-[#196848]" : offer.id === 2 ? "bg-[#c87045]" : "bg-[#4d6d72]"}`}
+              className={`group relative min-h-[245px] overflow-hidden rounded-2xl p-6 text-white shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${offer.id === 1 ? "bg-gradient-to-br from-[#196848] to-[#0f4d34]" : offer.id === 2 ? "bg-gradient-to-br from-[#c87045] to-[#a3522e]" : "bg-gradient-to-br from-[#4d6d72] to-[#33484c]"}`}
             >
               {/* Decorative Circle */}
               <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/10" />
@@ -101,10 +101,10 @@ const SpecialOffers = () => {
 
         {/* Mobile View All */}
         <div className="mt-6 text-center sm:hidden">
-          <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary">
+          <Link to="/offers" className="inline-flex items-center gap-1 text-sm font-semibold text-primary">
             View All
             <ArrowRight size={16} />
-          </button>
+          </Link>
         </div>
 
       </div>

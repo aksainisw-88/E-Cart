@@ -14,12 +14,16 @@
 :root {
   font-family: "DM Sans", sans-serif;
   color: #1f2937;
-  background: #f7f8f5;
+  background: #f4f7f4;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   min-width: 320px;
-  background: #f7f8f5;
+  background: #f4f7f4;
 }
 
 h1,
@@ -31,8 +35,67 @@ h6 {
   font-family: "Outfit", sans-serif;
 }
 
+::selection {
+  background: #bbf7d0;
+  color: #064e3b;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(22, 138, 91, 0.45);
+  outline-offset: 2px;
+}
+
+input,
+select,
+textarea {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(22, 138, 91, 0.12);
+}
+
+.hero-slider .swiper-pagination-bullet {
+  background: rgba(255, 255, 255, 0.55);
+  opacity: 1;
+  width: 8px;
+  height: 8px;
+}
+
+.hero-slider .swiper-pagination-bullet-active {
+  background: #fff;
+  width: 22px;
+  border-radius: 999px;
+}
+
+.hero-slider .swiper-button-next,
+.hero-slider .swiper-button-prev {
+  color: #fff;
+  width: 42px;
+  height: 42px;
+  background: rgba(16, 63, 50, 0.35);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+}
+
+.hero-slider .swiper-button-next::after,
+.hero-slider .swiper-button-prev::after {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .hero-slider .swiper-button-next,
+  .hero-slider .swiper-button-prev {
+    display: none;
+  }
+}
+
 .admin-dark {
-  background: #111827;
+  background: #0f172a;
   color: #e5e7eb;
 }
 

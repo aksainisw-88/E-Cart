@@ -30,7 +30,7 @@ const ProductCard = ({ product }) => {
           openProduct();
         }
       }}
-      className="group relative cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white transition-all duration-300 hover:-translate-y-1 hover:border-emerald-200 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
+      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-200 hover:shadow-xl hover:shadow-emerald-900/5 focus:outline-none focus:ring-2 focus:ring-primary/40"
     >
       <button
         type="button"
@@ -51,7 +51,7 @@ const ProductCard = ({ product }) => {
       )}
       {outOfStock && <span className="absolute left-3 top-10 z-10 rounded bg-slate-800 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">Out of stock</span>}
 
-      <div className="flex h-48 items-center justify-center bg-[#f8faf7] p-5">
+      <div className="flex h-48 items-center justify-center bg-gradient-to-b from-[#f3f8f4] to-white p-5">
         <img
           src={product.image}
           alt={product.name}
@@ -99,7 +99,7 @@ const ProductCard = ({ product }) => {
             addToCart(product);
           }}
           disabled={outOfStock}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-primary px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-primary px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
         >
           <ShoppingCart size={17} />
           {outOfStock ? "Out of stock" : "Add to Cart"}

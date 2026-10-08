@@ -164,7 +164,7 @@ const CustomerOrders = () => {
 
   return (
     <>
-      <main className="min-h-[55vh] bg-gray-50 py-12 sm:py-16">
+      <main className="min-h-[55vh] bg-[#f4f7f4] py-12 sm:py-16">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
           <p className="text-sm font-semibold uppercase tracking-wide text-primary">Order tracking</p>
           <h1 className="mt-2 text-3xl font-bold text-gray-900">Your orders</h1>

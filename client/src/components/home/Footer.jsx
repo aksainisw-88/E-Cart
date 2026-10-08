@@ -129,7 +129,7 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 pt-6 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-t border-slate-200 pt-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <p>© 2026 {store.name}. All rights reserved.</p>
           <div className="flex gap-5">
             <Link className="transition hover:text-primary" to="/contact">Privacy Policy</Link>

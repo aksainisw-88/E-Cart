@@ -32,7 +32,7 @@ const ContactUs = () => {
   };
   return (
     <>
-      <main className="bg-gray-50 py-12 sm:py-16">
+      <main className="bg-[#f4f7f4] py-12 sm:py-16">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
           <p className="text-sm font-semibold uppercase tracking-wide text-primary">
             We are here to help
@@ -44,7 +44,7 @@ const ContactUs = () => {
             Send a message and our support team will receive it in the admin
             panel.
           </p>
-          <section className="mt-10 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-10">
+          <section className="mt-10 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-10">
             {sent ? (
               <div className="py-14 text-center">
                 <MessageCircle className="mx-auto h-12 w-12 text-primary" />

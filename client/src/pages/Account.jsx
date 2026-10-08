@@ -148,9 +148,9 @@ const Account = ({ initialMode = "login" }) => {
 
   return (
     <>
-      <main className="bg-gray-50 py-12 sm:py-16">
+      <main className="bg-[#f4f7f4] py-12 sm:py-16">
         <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[1fr_1.1fr] lg:px-8">
-          <section className="rounded-2xl bg-primary p-8 text-white sm:p-10">
+          <section className="rounded-3xl bg-gradient-to-br from-primary to-primary-dark p-8 text-white shadow-lg shadow-primary/20 sm:p-10">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15">
               <UserRound className="h-6 w-6" />
             </div>
@@ -167,7 +167,7 @@ const Account = ({ initialMode = "login" }) => {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-10">
+          <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-10">
             {!checkingSession && !currentUser && <div className="flex items-center justify-between border-b border-gray-200">
               <div className="flex">{[["login", "Sign in"], ["signup", "Create account"]].map(([value, label]) => (
                 <button key={value} type="button" onClick={() => { setMode(value); setSubmitted(false); }} className={`border-b-2 px-2 pb-4 text-sm font-semibold transition sm:px-4 ${mode === value ? "border-primary text-primary" : "border-transparent text-gray-400 hover:text-gray-700"}`}>
@@ -197,7 +197,7 @@ const Account = ({ initialMode = "login" }) => {
                       <p className="mt-3 text-sm font-semibold text-gray-900">Your orders</p>
                       <p className="mt-1 text-xs text-gray-500">Track recent purchases.</p>
                     </button>
-                    <button type="button" className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-primary hover:bg-white">
+                    <button type="button" onClick={() => navigate("/wishlist")} className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-primary hover:bg-white">
                       <Heart className="h-5 w-5 text-primary" />
                       <p className="mt-3 text-sm font-semibold text-gray-900">Saved products</p>
                       <p className="mt-1 text-xs text-gray-500">View your wishlist.</p>

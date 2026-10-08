@@ -63,7 +63,7 @@ const HeroSlider = () => {
       >
         {activeSlides.map((slide, index) => (
           <SwiperSlide key={slide.id || index}>
-            <div className="relative h-[360px] w-full overflow-hidden sm:h-[430px]">
+            <div className="relative h-[380px] w-full overflow-hidden sm:h-[460px] lg:h-[520px]">
               <img
                 src={slide.image?.startsWith("/") ? `${API_URL}${slide.image}` : slide.image}
                 alt={slide.title}
@@ -88,7 +88,7 @@ const HeroSlider = () => {
 
                   <Link
                     to={slide.to}
-                    className="mt-7 inline-flex rounded-lg bg-white px-6 py-3 text-sm font-semibold text-[#126b49] transition hover:bg-emerald-50"
+                    className="mt-7 inline-flex rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#126b49] shadow-lg shadow-black/10 transition hover:bg-emerald-50"
                   >
                     {slide.button}
                   </Link>

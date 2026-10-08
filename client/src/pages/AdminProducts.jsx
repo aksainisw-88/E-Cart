@@ -230,7 +230,7 @@ const AdminProducts = () => {
           <button
             type="button"
             onClick={() => csvInput.current?.click()}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             <FileUp className="h-4 w-4" />
             Import CSV
@@ -238,7 +238,7 @@ const AdminProducts = () => {
           <button
             type="button"
             onClick={downloadSampleCsv}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             <FileDown className="h-4 w-4" />
             Download sample CSV
@@ -246,7 +246,7 @@ const AdminProducts = () => {
           <button
             type="button"
             onClick={openCreate}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark"
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-primary/20 hover:bg-primary-dark"
           >
             <Plus className="h-4 w-4" />
             Add product
@@ -271,7 +271,7 @@ const AdminProducts = () => {
           </button>
         </div>
       )}
-      <section className="mt-8 rounded-xl border border-slate-200 bg-white">
+      <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-100 p-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 sm:w-80">
             <Search className="h-4 w-4 text-slate-400" />

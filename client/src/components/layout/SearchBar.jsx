@@ -48,7 +48,7 @@ const SearchBar = () => {
   };
   return (
     <div className="mx-auto max-w-[560px]">
-      <form onSubmit={submit} className="flex h-11 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 transition focus-within:border-primary focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/10">
+      <form onSubmit={submit} className="flex h-12 items-center rounded-2xl border border-slate-200 bg-slate-50 px-3.5 shadow-sm transition focus-within:border-primary focus-within:bg-white focus-within:ring-4 focus-within:ring-primary/10">
         <input
           ref={inputRef}
           type="text"
