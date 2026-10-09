@@ -63,7 +63,7 @@ const HeroSlider = () => {
       >
         {activeSlides.map((slide, index) => (
           <SwiperSlide key={slide.id || index}>
-            <div className="relative h-[380px] w-full overflow-hidden sm:h-[460px] lg:h-[520px]">
+            <div className="relative h-[250px] w-full overflow-hidden sm:h-[300px] lg:h-[340px]">
               <img
                 src={slide.image?.startsWith("/") ? `${API_URL}${slide.image}` : slide.image}
                 alt={slide.title}
@@ -74,21 +74,21 @@ const HeroSlider = () => {
 
               <div className="relative mx-auto flex h-full max-w-7xl items-center px-6 lg:px-8">
                 <div className="max-w-xl text-white">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-emerald-200">
                     {slide.eyebrow}
                   </p>
 
-                  <h2 className="max-w-lg text-4xl font-semibold leading-[1.08] md:text-6xl">
+                  <h2 className="max-w-lg text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">
                     {slide.title}
                   </h2>
 
-                  <p className="mt-5 max-w-md text-base leading-7 text-white/85 md:text-lg">
+                  <p className="mt-3 max-w-md text-sm leading-6 text-white/85 sm:text-base">
                     {slide.description}
                   </p>
 
                   <Link
                     to={slide.to}
-                    className="mt-7 inline-flex rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#126b49] shadow-lg shadow-black/10 transition hover:bg-emerald-50"
+                    className="mt-5 inline-flex rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-[#126b49] shadow-sm transition hover:bg-emerald-50"
                   >
                     {slide.button}
                   </Link>

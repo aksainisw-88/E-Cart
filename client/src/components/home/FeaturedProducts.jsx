@@ -46,21 +46,17 @@ const FeaturedProducts = () => {
   }, []);
 
   return (
-    <section className="bg-white py-12 md:py-16">
+    <section className="bg-white py-8 md:py-10">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-5 flex items-end justify-between border-b border-slate-100 pb-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-              Customer favourites
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">
+              Selected for your wellbeing
             </p>
 
-            <h2 className="mt-1 text-2xl font-bold text-gray-900 md:text-3xl">
-              Popular products
+            <h2 className="mt-1 text-xl font-bold text-gray-900 md:text-2xl">
+              Popular healthcare essentials
             </h2>
-
-            <p className="mt-2 text-sm text-gray-500">
-              Everyday essentials, picked for quality and value.
-            </p>
           </div>
 
           <Link
@@ -72,7 +68,7 @@ const FeaturedProducts = () => {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
             {[1, 2, 3, 4].map((item) => (
               <div key={item} className="h-80 animate-pulse rounded-2xl border border-slate-200 bg-white">
                 <div className="h-48 rounded-t-2xl bg-slate-100" />
@@ -85,7 +81,7 @@ const FeaturedProducts = () => {
             ))}
           </div>
         ) : products.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
             {products.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}

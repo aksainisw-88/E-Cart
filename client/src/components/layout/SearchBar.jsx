@@ -47,8 +47,8 @@ const SearchBar = () => {
     setImageSearchError("");
   };
   return (
-    <div className="mx-auto max-w-[560px]">
-      <form onSubmit={submit} className="flex h-12 items-center rounded-2xl border border-slate-200 bg-slate-50 px-3.5 shadow-sm transition focus-within:border-primary focus-within:bg-white focus-within:ring-4 focus-within:ring-primary/10">
+    <div className="mx-auto max-w-[620px]">
+      <form onSubmit={submit} className="flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 transition focus-within:border-primary focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/10 sm:h-11">
         <input
           ref={inputRef}
           type="text"

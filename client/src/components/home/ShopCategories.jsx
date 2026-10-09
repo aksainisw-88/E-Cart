@@ -23,21 +23,21 @@ const categories = [
 
 const ShopCategories = () => {
   return (
-    <section className="bg-[#f4f7f4] py-12 md:py-16">
+    <section className="bg-slate-50 py-8 md:py-10">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-8 flex items-end justify-between">
+        <div className="mb-5 flex items-end justify-between border-b border-slate-200 pb-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Shop by department</p>
-            <h2 className="mt-2 text-2xl font-semibold text-gray-900 md:text-3xl">
-              Shop by Categories
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">Find what you need</p>
+            <h2 className="mt-1 text-xl font-bold text-gray-900 md:text-2xl">
+              Shop top categories
             </h2>
           </div>
-          <Link to="/products" className="hidden text-sm font-semibold text-primary hover:text-primary-dark sm:block">
-            View all categories →
+          <Link to="/products" className="text-xs font-semibold text-primary hover:text-primary-dark sm:text-sm">
+            View all →
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+        <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-4 sm:gap-4 sm:px-0 lg:grid-cols-8">
           {categories.map((category) => {
             const Icon = category.icon;
 
@@ -45,17 +45,17 @@ const ShopCategories = () => {
               <Link
                 key={category.id}
                 to={category.path}
-                className="group flex min-h-[148px] flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white px-2 py-4 shadow-sm transition hover:-translate-y-1 hover:border-emerald-200 hover:shadow-md"
+                className="group flex w-[86px] shrink-0 flex-col items-center text-center sm:w-auto"
               >
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 transition-all duration-300 group-hover:bg-primary group-hover:text-white">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full border border-slate-200 bg-white transition group-hover:border-primary group-hover:bg-emerald-50 sm:h-[72px] sm:w-[72px]">
                   <Icon
                     size={28}
                     strokeWidth={1.5}
-                    className="text-primary transition-transform duration-300 group-hover:scale-110 group-hover:text-white"
+                    className="text-primary transition-transform duration-200 group-hover:scale-110"
                   />
                 </div>
 
-                <h3 className="mt-3 text-center text-xs font-semibold text-gray-700 transition-colors group-hover:text-primary sm:text-sm">
+                <h3 className="mt-2.5 text-center text-[11px] font-medium leading-4 text-gray-700 transition-colors group-hover:text-primary sm:text-xs">
                   {category.name}
                 </h3>
               </Link>

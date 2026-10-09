@@ -84,7 +84,6 @@ const ProductDetails = () => {
   const handleAddToCart = () => {
     if (!product) return;
     addToCart(product, quantity);
-    navigate("/cart");
   };
 
   const saved = product ? isSaved(product) : false;

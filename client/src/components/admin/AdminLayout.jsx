@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Bell, LogOut, Menu, Moon, Search, Sun, X } from "lucide-react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Bell, ChevronDown, LogOut, Menu, Moon, Search, Sun, X } from "lucide-react";
+import { Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import {
   adminNavigation,
@@ -10,13 +10,19 @@ import { useStore } from "../../context/storeContext";
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [storeMenuOpen, setStoreMenuOpen] = useState(() => {
+    const path = window.location.pathname;
+    return path === "/admin/store" || path.startsWith("/admin/store/") || ["/admin/stores", "/admin/testimonials", "/admin/hero-slider"].includes(path);
+  });
   const [authState, setAuthState] = useState("checking");
   const [adminUser, setAdminUser] = useState(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [newOrderNotification, setNewOrderNotification] = useState(null);
   const [orderCount, setOrderCount] = useState(0);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("e-mart-admin-dark") === "true");
   const navigate = useNavigate();
+  const location = useLocation();
   const store = useStore();
   const logout = async () => { await fetch("/api/auth/logout", { method: "POST", credentials: "include" }); navigate("/account", { replace: true }); };
   const toggleDarkMode = () => setDarkMode((current) => { const next = !current; localStorage.setItem("e-mart-admin-dark", String(next)); return next; });
@@ -48,8 +54,51 @@ const AdminLayout = () => {
 
   useEffect(() => {
     if (!adminUser) return;
-    fetch("/api/admin/orders", { credentials: "include" }).then((response) => response.json()).then((result) => { const orders = result.data || []; setOrderCount(orders.length); setNotifications(orders.slice(0, 5)); }).catch(() => {});
+    let active = true;
+    let initialized = false;
+    let knownOrderIds = new Set();
+
+    const loadOrders = async () => {
+      try {
+        const response = await fetch("/api/admin/orders", { credentials: "include" });
+        const result = await response.json();
+        if (!active || !response.ok) return;
+        const orders = result.data || [];
+        setOrderCount(orders.length);
+        setNotifications(orders.slice(0, 5));
+
+        if (initialized) {
+          const newOrders = orders.filter((order) => !knownOrderIds.has(order._id));
+          if (newOrders.length) {
+            try {
+              const preferences = JSON.parse(localStorage.getItem("e-mart-admin-preferences") || "{}");
+              if (preferences.orderAlerts !== false) setNewOrderNotification(newOrders[0]);
+            } catch {
+              setNewOrderNotification(newOrders[0]);
+            }
+          }
+        }
+
+        knownOrderIds = new Set(orders.map((order) => order._id));
+        initialized = true;
+      } catch {
+        return;
+      }
+    };
+
+    loadOrders();
+    const intervalId = window.setInterval(loadOrders, 15000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
   }, [adminUser]);
+
+  useEffect(() => {
+    if (!newOrderNotification) return undefined;
+    const timeoutId = window.setTimeout(() => setNewOrderNotification(null), 8000);
+    return () => window.clearTimeout(timeoutId);
+  }, [newOrderNotification]);
 
   if (authState === "checking") {
     return (
@@ -64,11 +113,38 @@ const AdminLayout = () => {
 
   if (authState !== "authorized") return null;
 
-  const visibleNavigation = adminNavigation.filter((item) => item.roles.includes(adminUser.role));
-  const visibleSecondaryNavigation = adminSecondaryNavigation.filter((item) => item.roles.includes(adminUser.role));
+  const hasMenuAccess = (item) => item.roles.includes(adminUser.role)
+    && (!Array.isArray(adminUser.menuPermissions) || adminUser.menuPermissions.includes(item.to));
+  const visibleNavigation = adminNavigation.filter(hasMenuAccess);
+  const visibleSecondaryNavigation = adminSecondaryNavigation.filter(hasMenuAccess);
+  const navigationItems = adminNavigation.flatMap((item) => [item, ...(item.children || [])]);
+  const availableMenus = [...navigationItems, ...adminSecondaryNavigation];
+  const currentMenu = availableMenus
+    .filter((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`))
+    .sort((first, second) => second.to.length - first.to.length)[0];
+  const canAccessCurrentRoute = currentMenu && hasMenuAccess(currentMenu);
+  if (!canAccessCurrentRoute && visibleNavigation.length > 0) {
+    return <Navigate to={visibleNavigation[0].to} replace />;
+  }
   const initials = adminUser.name.split(" ").map((part) => part[0]).join("").slice(0, 2);
   const renderNavItem = (item) => {
     const Icon = item.icon;
+
+    if (item.children) {
+      const childActive = item.children.some((child) => location.pathname === child.to || location.pathname.startsWith(`${child.to}/`));
+      const active = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`) || childActive;
+      return (
+        <div key={item.to}>
+          <div className={`flex items-center rounded-xl transition ${active ? "bg-primary/5 text-primary" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}>
+            <NavLink to={item.to} end className={({ isActive }) => `group flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium ${isActive ? "text-primary" : ""}`} onClick={() => setSidebarOpen(false)}>
+              <Icon className="h-[18px] w-[18px] shrink-0" /><span className="truncate">{item.label}</span>
+            </NavLink>
+            <button type="button" aria-label={`${storeMenuOpen ? "Collapse" : "Expand"} ${item.label}`} aria-expanded={storeMenuOpen} onClick={() => setStoreMenuOpen((open) => !open)} className="mr-2 rounded-md p-1.5 hover:bg-white/80"><ChevronDown className={`h-4 w-4 transition-transform ${storeMenuOpen ? "rotate-180" : ""}`} /></button>
+          </div>
+          {storeMenuOpen && <div className="ml-5 mt-1 space-y-1 border-l border-slate-200 pl-3">{item.children.filter(hasMenuAccess).map((child) => <NavLink key={child.to} to={child.to} onClick={() => setSidebarOpen(false)} className={({ isActive }) => `block rounded-lg px-3 py-2 text-xs font-medium transition ${isActive ? "bg-primary text-white" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}>{child.label}</NavLink>)}</div>}
+        </div>
+      );
+    }
 
     return (
       <NavLink
@@ -101,6 +177,19 @@ const AdminLayout = () => {
 
   return (
     <div className={`admin-shell min-h-screen bg-[#f3f6f4] text-slate-900 ${darkMode ? "admin-dark" : ""}`}>
+      {newOrderNotification && (
+        <div role="status" aria-live="polite" className="fixed right-4 top-24 z-60 w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-emerald-200 bg-white p-4 shadow-xl">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700"><Bell className="h-4 w-4" /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-slate-900">New customer order</p>
+              <p className="mt-1 truncate text-xs text-slate-600">#{newOrderNotification.orderNumber} · {newOrderNotification.customer?.name || "Customer"} · ₹{newOrderNotification.total}</p>
+              <NavLink to="/admin/orders" onClick={() => setNewOrderNotification(null)} className="mt-2 inline-block text-xs font-semibold text-primary hover:underline">View order</NavLink>
+            </div>
+            <button type="button" aria-label="Dismiss order notification" onClick={() => setNewOrderNotification(null)} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-4 w-4" /></button>
+          </div>
+        </div>
+      )}
       {sidebarOpen && (
         <button
           type="button"
@@ -115,7 +204,7 @@ const AdminLayout = () => {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex h-20 items-center justify-between border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-white px-5">
+        <div className="admin-brand-header flex h-20 items-center justify-between border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-white px-5">
           <NavLink to="/admin" className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary to-primary-dark text-xl font-bold text-white shadow-md shadow-primary/20">
               {store.logoUrl ? <img src={store.logoUrl} alt="" className="h-full w-full object-contain" /> : "+"}
@@ -197,7 +286,14 @@ const AdminLayout = () => {
             </div>
           </div>
         </header>
-        <main className="p-4 sm:p-8"><Outlet /></main>
+        <main className="p-4 sm:p-8">
+          {canAccessCurrentRoute ? <Outlet /> : (
+            <div className="mx-auto max-w-2xl rounded-xl border border-slate-200 bg-white p-8 text-center">
+              <h1 className="text-xl font-bold text-slate-900">Access restricted</h1>
+              <p className="mt-2 text-sm text-slate-500">Your account does not have access to this admin menu.</p>
+            </div>
+          )}
+        </main>
       </div>
     </div>
   );

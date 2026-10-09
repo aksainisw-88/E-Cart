@@ -19,7 +19,7 @@ const CategoryNav = () => {
   return (
     <nav className="border-b border-slate-200 bg-white text-slate-700">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-[50px] items-center">
+        <div className="flex h-[42px] items-center">
           <button
             type="button"
             className="mr-3 flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 md:hidden"
@@ -41,7 +41,7 @@ const CategoryNav = () => {
                 key={item.path}
                 to={item.path}
                 className={({ isActive }) =>
-                  `relative flex h-full items-center px-3 text-sm transition ${
+                  `relative flex h-full items-center px-3 text-xs font-medium transition ${
                     isActive ? "font-semibold text-primary" : "text-slate-500 hover:text-primary"
                   }`
                 }

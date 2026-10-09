@@ -109,6 +109,10 @@ textarea:focus {
   border-color: #374151;
 }
 
+.admin-dark .admin-brand-header {
+  background-image: none;
+}
+
 .admin-dark .bg-white,
 .admin-dark .bg-slate-50,
 .admin-dark .bg-gray-50 {

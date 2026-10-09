@@ -10,6 +10,9 @@ import AdminStore from "./AdminStore";
 import AdminOffers from "./AdminOffers";
 import AdminSupport from "./AdminSupport";
 import AdminSettings from "./AdminSettings";
+import AdminPos from "./AdminPos";
+import AdminPurchaseEntry from "./AdminPurchaseEntry";
+import AdminVendors from "./AdminVendors";
 
 const sectionConfig = {
   products: {
@@ -94,6 +97,27 @@ const sectionConfig = {
     columns: [],
     rows: [],
   },
+  pos: {
+    title: "POS sales counter",
+    description: "Process quick in-store sales, print invoices, and track cart totals.",
+    action: "New sale",
+    columns: [],
+    rows: [],
+  },
+  "purchase-entry": {
+    title: "Purchase entry",
+    description: "Record supplier purchases to update inventory stock and purchase history.",
+    action: "Add purchase",
+    columns: [],
+    rows: [],
+  },
+  vendors: {
+    title: "Vendors",
+    description: "Manage suppliers and settle pending purchase balances.",
+    action: "Create vendor",
+    columns: [],
+    rows: [],
+  },
 };
 
 const AdminSection = ({ section }) => {
@@ -116,6 +140,9 @@ const AdminSection = ({ section }) => {
   if (section === "offers") return <AdminOffers />;
   if (section === "support") return <AdminSupport />;
   if (section === "settings") return <AdminSettings />;
+  if (section === "pos") return <AdminPos />;
+  if (section === "purchase-entry") return <AdminPurchaseEntry />;
+  if (section === "vendors") return <AdminVendors />;
 
   return (
     <div className="mx-auto max-w-[1500px]">

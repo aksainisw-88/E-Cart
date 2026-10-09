@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const User = require("../models/User");
 
 const getTokenFromRequest = (request) => request.cookies.accessToken;
 
@@ -47,4 +48,20 @@ const requireAnyRole = (...roles) => (request, response, next) => {
   return next();
 };
 
-module.exports = { requireAuth, requireRole, requireAnyRole, requireOptionalAuth };
+const requireAnyMenuPermission = (...permissions) => async (request, response, next) => {
+  try {
+    const user = await User.findById(request.user.id).select("menuPermissions").lean();
+    if (!user) return response.status(401).json({ success: false, message: "Account no longer exists." });
+    const requiredPermissions = permissions.length === 1 && typeof permissions[0] === "function"
+      ? permissions[0](request)
+      : permissions;
+    if (requiredPermissions && Array.isArray(user.menuPermissions) && !requiredPermissions.some((permission) => user.menuPermissions.includes(permission))) {
+      return response.status(403).json({ success: false, message: "You do not have permission to access this admin menu." });
+    }
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+};
+
+module.exports = { requireAuth, requireRole, requireAnyRole, requireOptionalAuth, requireAnyMenuPermission };

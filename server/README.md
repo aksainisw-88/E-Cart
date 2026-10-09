@@ -18,6 +18,23 @@ RAZORPAY_KEY_SECRET=your-razorpay-key-secret
 
 The secret stays on the server. The client opens Razorpay Checkout with the public key, and the server verifies the returned signature before marking an order as paid. The admin Payments page shows the Razorpay order and payment IDs.
 
+## Signup email verification
+
+Customer signup requires a six-digit email verification code. Configure SMTP in the server `.env` to deliver codes:
+
+```text
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-smtp-username
+SMTP_PASS=your-smtp-password
+SMTP_FROM=E-Mart <accounts@example.com>
+```
+
+Use your provider's SMTP host, port, TLS mode, and credentials. In development only, when SMTP is unset, the code is returned to the signup screen for local testing. Production signup fails closed until SMTP is configured. Codes expire after 10 minutes and are limited to five verification attempts.
+
+Forgot-password requests use the same SMTP settings. Reset links expire after one hour and can only be used once. When SMTP is unset in development, the reset screen displays a local-only link for testing.
+
 ## Promotions and POS integrations
 
 Active offer codes can be claimed from the customer Offers page and applied during checkout. The server validates the code, dates, minimum order, and discount again when the order is created.

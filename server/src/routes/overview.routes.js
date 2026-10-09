@@ -10,7 +10,8 @@ router.get("/", async (request, response, next) => {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const weekStart = new Date(now);
     weekStart.setDate(now.getDate() - 6);
-    const [orders, customers, products, recentOrders, monthOrders, lowStock, awaitingDispatch, newCustomers, revenueTrend] = await Promise.all([
+    weekStart.setHours(0, 0, 0, 0);
+    const [orders, customers, products, recentOrders, monthOrders, lowStock, awaitingDispatch, newCustomers, revenueTrend, weeklyOrders, orderStatuses, topProducts, customerFrequency] = await Promise.all([
       Order.find({ status: { $ne: "Cancelled" } }).select("total").lean(),
       User.countDocuments({ role: "customer" }),
       Product.countDocuments(),
@@ -23,6 +24,26 @@ router.get("/", async (request, response, next) => {
         { $match: { status: { $ne: "Cancelled" }, createdAt: { $gte: new Date(now.getFullYear(), now.getMonth() - 5, 1) } } },
         { $group: { _id: { $dateToString: { format: "%Y-%m", date: "$createdAt" } }, revenue: { $sum: "$total" }, orders: { $sum: 1 } } },
         { $sort: { _id: 1 } },
+      ]),
+      Order.aggregate([
+        { $match: { status: { $ne: "Cancelled" }, createdAt: { $gte: weekStart } } },
+        { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, orders: { $sum: 1 }, revenue: { $sum: "$total" } } },
+        { $sort: { _id: 1 } },
+      ]),
+      Order.aggregate([
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+      Order.aggregate([
+        { $match: { status: { $ne: "Cancelled" } } },
+        { $unwind: "$items" },
+        { $group: { _id: "$items.product", name: { $first: "$items.name" }, image: { $first: "$items.image" }, sold: { $sum: "$items.quantity" }, revenue: { $sum: { $multiply: ["$items.price", "$items.quantity"] } } } },
+        { $sort: { sold: -1, revenue: -1 } },
+        { $limit: 5 },
+      ]),
+      Order.aggregate([
+        { $match: { status: { $ne: "Cancelled" } } },
+        { $group: { _id: "$customer", orders: { $sum: 1 } } },
+        { $group: { _id: null, customerCount: { $sum: 1 }, repeatCustomers: { $sum: { $cond: [{ $gt: ["$orders", 1] }, 1, 0] } } } },
       ]),
     ]);
     response.json({ success: true, data: {
@@ -37,6 +58,10 @@ router.get("/", async (request, response, next) => {
       awaitingDispatch,
       newCustomers,
       revenueTrend,
+      weeklyOrders,
+      orderStatuses: Object.fromEntries(orderStatuses.map((item) => [item._id, item.count])),
+      topProducts,
+      repeatCustomerRate: customerFrequency[0]?.customerCount ? Math.round(customerFrequency[0].repeatCustomers / customerFrequency[0].customerCount * 100) : 0,
     } });
   } catch (error) { next(error); }
 });

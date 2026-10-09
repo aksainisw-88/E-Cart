@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState } from "react";
-import { Check, Clock3, Package, Truck, XCircle } from "lucide-react";
+import { Check, Clock3, Package, X, XCircle } from "lucide-react";
+import CustomerAccountNav from "../components/customer/CustomerAccountNav";
 import Footer from "../components/home/Footer";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -53,6 +54,10 @@ const CustomerOrders = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [cancelingOrder, setCancelingOrder] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  const [cancelSaving, setCancelSaving] = useState(false);
 
   const load = () =>
     fetch(`${API_URL}/api/orders/mine`, { credentials: "include" })
@@ -68,24 +73,39 @@ const CustomerOrders = () => {
     load();
   }, []);
 
-  const cancel = async (order) => {
-    if (!window.confirm(`Cancel order #${order.orderNumber}?`)) return;
+  const cancel = (order) => {
+    setCancelingOrder(order);
+    setCancelReason("");
+    setCancelError("");
+  };
 
-    const response = await fetch(`${API_URL}/api/orders/${order._id}/cancel`, {
-      method: "PATCH",
-      credentials: "include",
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      setError(result.message);
+  const submitCancellation = async (event) => {
+    event.preventDefault();
+    const reason = cancelReason.trim();
+    if (reason.length < 3) {
+      setCancelError("Please enter a reason (at least 3 characters).");
       return;
     }
+    if (!cancelingOrder) return;
 
-    setOrders((current) =>
-      current.map((item) => (item._id === order._id ? result.data : item)),
-    );
+    setCancelSaving(true);
+    setCancelError("");
+    try {
+      const response = await fetch(`${API_URL}/api/orders/${cancelingOrder._id}/cancel`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to cancel this order.");
+      setOrders((current) => current.map((item) => (item._id === cancelingOrder._id ? result.data : item)));
+      setCancelingOrder(null);
+    } catch (requestError) {
+      setCancelError(requestError.message);
+    } finally {
+      setCancelSaving(false);
+    }
   };
 
   const downloadPdf = (order) => {
@@ -165,23 +185,26 @@ const CustomerOrders = () => {
   return (
     <>
       <main className="min-h-[55vh] bg-[#f4f7f4] py-12 sm:py-16">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-          <p className="text-sm font-semibold uppercase tracking-wide text-primary">Order tracking</p>
-          <h1 className="mt-2 text-3xl font-bold text-gray-900">Your orders</h1>
-          <p className="mt-2 text-gray-500">Follow or cancel eligible orders.</p>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+            <CustomerAccountNav />
+            <section className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-wider text-primary">Customer account</p>
+              <h1 className="mt-1 text-2xl font-bold text-gray-900 sm:text-3xl">Your orders</h1>
+              <p className="mt-2 text-sm text-gray-500">Track deliveries, review purchases, and manage eligible orders.</p>
 
           {loading ? (
-            <div className="mt-8 rounded-xl bg-white p-12 text-center text-sm text-gray-500">
+            <div className="mt-6 rounded-xl border border-slate-200 bg-white p-12 text-center text-sm text-gray-500">
               Loading your orders...
             </div>
           ) : error ? (
-            <div className="mt-8 rounded-xl bg-red-50 p-6 text-sm text-red-700">{error}</div>
+            <div className="mt-6 rounded-xl bg-red-50 p-6 text-sm text-red-700">{error}</div>
           ) : orders.length ? (
-            <div className="mt-8 space-y-5">
+            <div className="mt-6 space-y-4">
               {orders.map((order) => (
                 <article
                   key={order._id}
-                  className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6"
+                  className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6"
                 >
                   <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                     <div>
@@ -189,6 +212,7 @@ const CustomerOrders = () => {
                       <p className="mt-1 text-xs text-gray-500">
                         Placed {new Date(order.createdAt).toLocaleString()}
                       </p>
+                      {order.store?.name && <p className="mt-1 text-xs font-medium text-slate-500">Store: {order.store.name}{order.store.city ? ` · ${order.store.city}` : ""}</p>}
                     </div>
 
                     <div className="flex items-center gap-3 text-sm font-semibold">
@@ -223,9 +247,10 @@ const CustomerOrders = () => {
                   </div>
 
                   {order.status === "Cancelled" ? (
-                    <p className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-                      This order was cancelled.
-                    </p>
+                    <div className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                      <p>This order was cancelled.</p>
+                      {order.cancelReason && <p className="mt-1 text-red-800"><span className="font-semibold">Reason:</span> {order.cancelReason}</p>}
+                    </div>
                   ) : (
                     <OrderTimeline status={order.status} />
                   )}
@@ -251,13 +276,35 @@ const CustomerOrders = () => {
               ))}
             </div>
           ) : (
-            <div className="mt-8 rounded-xl border border-dashed border-gray-300 bg-white p-16 text-center">
+            <div className="mt-6 rounded-xl border border-dashed border-gray-300 bg-white p-16 text-center">
               <Package className="mx-auto h-10 w-10 text-gray-300" />
               <h2 className="mt-4 font-semibold text-gray-900">No orders yet</h2>
             </div>
           )}
+            </section>
+          </div>
         </div>
       </main>
+      {cancelingOrder && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+        <form onSubmit={submitCancellation} role="dialog" aria-modal="true" aria-labelledby="cancel-order-title" className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl sm:p-7">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-red-600">Cancel order</p>
+              <h2 id="cancel-order-title" className="mt-1 text-xl font-bold text-slate-900">Order #{cancelingOrder.orderNumber}</h2>
+              <p className="mt-2 text-sm text-slate-500">Please tell us why you want to cancel. This will be visible to our support team.</p>
+            </div>
+            <button type="button" onClick={() => setCancelingOrder(null)} aria-label="Close cancellation dialog" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+          </div>
+          <label htmlFor="cancellation-reason" className="mt-5 block text-sm font-semibold text-slate-700">Cancellation reason</label>
+          <textarea id="cancellation-reason" required minLength={3} maxLength={500} rows={4} value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} placeholder="For example: I ordered the wrong item..." className="mt-2 w-full resize-y rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-primary" />
+          <p className="mt-1 text-right text-xs text-slate-400">{cancelReason.length}/500</p>
+          {cancelError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{cancelError}</p>}
+          <div className="mt-5 flex justify-end gap-2">
+            <button type="button" onClick={() => setCancelingOrder(null)} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Keep order</button>
+            <button type="submit" disabled={cancelSaving} className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60">{cancelSaving ? "Cancelling..." : "Confirm cancellation"}</button>
+          </div>
+        </form>
+      </div>}
       <Footer />
     </>
   );

@@ -36,10 +36,17 @@ const userSchema = new mongoose.Schema(
       enum: ["customer", "admin", "manager", "user"],
       default: "customer",
     },
+    customerType: { type: String, enum: ["B2C", "B2B"], default: "B2C" },
+    businessName: { type: String, trim: true, maxlength: 120, default: "" },
+    gstin: { type: String, trim: true, uppercase: true, maxlength: 15, default: "" },
     status: {
       type: String,
       enum: ["Active", "Blocked"],
       default: "Active",
+    },
+    menuPermissions: {
+      type: [String],
+      default: undefined,
     },
     addresses: { type: [addressSchema], default: [] },
   },

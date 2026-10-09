@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Eye, Search } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const statuses = ["Processing", "Shipped", "Delivered", "Cancelled"];
@@ -12,13 +13,29 @@ const AdminOrders = () => {
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState("");
   useEffect(() => {
-    fetch(`${API_URL}/api/admin/orders`, { credentials: "include" })
+    let active = true;
+    const refreshOrders = () => {
+      if (document.visibilityState !== "visible") return;
+      fetch(`${API_URL}/api/admin/orders`, { credentials: "include" })
       .then(async (response) => {
         const result = await response.json();
         if (!response.ok) throw new Error(result.message);
-        setOrders(result.data);
+        if (active) {
+          setOrders(result.data);
+          setSelected((current) => current ? result.data.find((order) => order._id === current._id) || current : current);
+          setError("");
+        }
       })
-      .catch((requestError) => setError(requestError.message));
+      .catch((requestError) => { if (active) setError(requestError.message); });
+    };
+    refreshOrders();
+    const intervalId = window.setInterval(refreshOrders, 10000);
+    window.addEventListener("focus", refreshOrders);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshOrders);
+    };
   }, []);
   const updateStatus = async (order, status) => {
     const response = await fetch(
@@ -154,6 +171,7 @@ const AdminOrders = () => {
                 {[
                   "Order",
                   "Customer",
+                  "Store",
                   "Items",
                   "Amount",
                   "Payment",
@@ -176,6 +194,9 @@ const AdminOrders = () => {
                     {order.customer?.name || "Customer"}
                   </td>
                   <td className="px-5 py-4 text-slate-500">
+                    {order.store?.name || "Main store"}
+                  </td>
+                  <td className="px-5 py-4 text-slate-500">
                     {order.items.length}
                   </td>
                   <td className="px-5 py-4 font-medium text-slate-700">
@@ -190,7 +211,8 @@ const AdminOrders = () => {
                       onChange={(event) =>
                         updateStatus(order, event.target.value)
                       }
-                      className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold outline-none focus:border-primary"
+                      title={order.cancelReason ? `Customer cancellation reason: ${order.cancelReason}` : undefined}
+                      className={`rounded-lg border px-2 py-1.5 text-xs font-semibold outline-none focus:border-primary ${order.status === "Cancelled" ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-700"}`}
                     >
                       {statuses.map((status) => (
                         <option key={status}>{status}</option>
@@ -198,14 +220,7 @@ const AdminOrders = () => {
                     </select>
                   </td>
                   <td className="px-5 py-4">
-                    <button
-                      type="button"
-                      onClick={() => setSelected(order)}
-                      aria-label={`View ${order.orderNumber}`}
-                      className="rounded-lg p-2 text-slate-400 hover:bg-teal-50 hover:text-primary"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
+                    <Link to={`/admin/orders/${order._id}`} aria-label={`Order details for ${order.orderNumber}`} title="Order details" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50"><Eye className="h-4 w-4" />Details</Link>
                   </td>
                 </tr>
               ))}
@@ -258,8 +273,17 @@ const AdminOrders = () => {
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Payment</p>
                 <p className="mt-2 font-medium text-slate-800">{selected.paymentMethod || "-"} / {selected.paymentStatus || "-"}</p>
                 <p className="text-slate-500">Order status: {selected.status || "Processing"}</p>
+                <p className="mt-2 text-xs text-slate-500">Fulfilled by: <span className="font-semibold text-slate-700">{selected.store?.name || "Main store"}</span></p>
               </div>
             </div>
+
+            {selected.status === "Cancelled" && selected.cancelReason && (
+              <section className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Customer cancellation reason</p>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-red-900">{selected.cancelReason}</p>
+                {selected.cancelledAt && <p className="mt-2 text-xs text-red-700">Cancelled {new Date(selected.cancelledAt).toLocaleString()}</p>}
+              </section>
+            )}
 
             <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-center justify-between">

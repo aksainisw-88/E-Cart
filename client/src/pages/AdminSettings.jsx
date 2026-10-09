@@ -12,12 +12,13 @@ const readPreferences = () => {
   }
 };
 const paymentProviders = [
+  { key: "razorpay", name: "Razorpay", description: "Accept and confirm secure online payments with Razorpay Checkout and webhooks." },
   { key: "phonepe", name: "PhonePe POS", description: "Connect your PhonePe merchant terminal." },
   { key: "paytm", name: "Paytm POS", description: "Accept payments through your Paytm device." },
   { key: "fingpay", name: "Fingpay", description: "Connect Fingpay assisted payment services." },
   { key: "pinelab", name: "Pine Labs", description: "Connect your Pine Labs payment terminal." },
 ];
-const emptyIntegrations = Object.fromEntries(paymentProviders.map(({ key }) => [key, { enabled: false, mode: "test", merchantId: "", terminalId: "", deviceId: "", apiKey: "", apiSecret: "", apiKeyConfigured: false, apiSecretConfigured: false }]));
+const emptyIntegrations = Object.fromEntries(paymentProviders.map(({ key }) => [key, { enabled: false, mode: "test", merchantId: "", terminalId: "", deviceId: "", apiKey: "", apiSecret: "", webhookSecret: "", apiKeyConfigured: false, apiSecretConfigured: false, webhookSecretConfigured: false }]));
 
 const AdminSettings = () => {
   const [profile, setProfile] = useState({ id: "", name: "", email: "", role: "" });
@@ -110,13 +111,24 @@ const AdminSettings = () => {
               return <article key={provider.key} className="rounded-xl border border-slate-200 p-5">
                 <div className="flex items-start justify-between gap-4"><div><h3 className="font-semibold text-slate-900">{provider.name}</h3><p className="mt-1 text-xs text-slate-500">{provider.description}</p></div><label className="flex shrink-0 items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={integration.enabled} onChange={updateIntegration(provider.key, "enabled")} className="h-4 w-4 accent-teal-600" /> Enabled</label></div>
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                  <label className="text-xs font-semibold text-slate-600">Connection mode<select value={integration.mode} onChange={updateIntegration(provider.key, "mode")} className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-primary"><option value="test">Test / sandbox</option><option value="live">Live</option></select></label>
+                  {provider.key !== "razorpay" && <label className="text-xs font-semibold text-slate-600">Connection mode<select value={integration.mode} onChange={updateIntegration(provider.key, "mode")} className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-primary"><option value="test">Test / sandbox</option><option value="live">Live</option></select></label>}
+                  {provider.key === "razorpay" ? <>
+                    <label className="text-xs font-semibold text-slate-600">Key ID<input value={integration.apiKey} onChange={updateIntegration(provider.key, "apiKey")} placeholder={integration.apiKeyConfigured ? "Saved Key ID (leave blank to keep)" : "rzp_test_... or rzp_live_..."} className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal outline-none focus:border-primary" /></label>
+                    <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Key Secret<input type="password" value={integration.apiSecret} onChange={updateIntegration(provider.key, "apiSecret")} placeholder={integration.apiSecretConfigured ? "Saved Key Secret (leave blank to keep)" : "Razorpay Key Secret"} className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal outline-none focus:border-primary" /></label>
+                    <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Webhook secret<input type="password" value={integration.webhookSecret} onChange={updateIntegration(provider.key, "webhookSecret")} placeholder={integration.webhookSecretConfigured ? "Saved webhook secret (leave blank to keep)" : "Secret configured for this webhook in Razorpay"} className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal outline-none focus:border-primary" /></label>
+                  </> : <>
                   <label className="text-xs font-semibold text-slate-600">Merchant ID<input value={integration.merchantId} onChange={updateIntegration(provider.key, "merchantId")} placeholder="Merchant ID" className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal outline-none focus:border-primary" /></label>
                   <label className="text-xs font-semibold text-slate-600">Terminal ID<input value={integration.terminalId} onChange={updateIntegration(provider.key, "terminalId")} placeholder="Terminal ID" className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal outline-none focus:border-primary" /></label>
                   <label className="text-xs font-semibold text-slate-600">Device ID<input value={integration.deviceId} onChange={updateIntegration(provider.key, "deviceId")} placeholder="POS device ID" className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal outline-none focus:border-primary" /></label>
                   <label className="text-xs font-semibold text-slate-600">API key<input value={integration.apiKey} onChange={updateIntegration(provider.key, "apiKey")} placeholder={integration.apiKeyConfigured ? "Saved key (leave blank to keep)" : "API key"} className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal outline-none focus:border-primary" /></label>
                   <label className="text-xs font-semibold text-slate-600">API secret<input type="password" value={integration.apiSecret} onChange={updateIntegration(provider.key, "apiSecret")} placeholder={integration.apiSecretConfigured ? "Saved secret (leave blank to keep)" : "API secret"} className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal outline-none focus:border-primary" /></label>
+                  </>}
                 </div>
+                {provider.key === "razorpay" && <div className="mt-5 border-t border-slate-100 pt-4">
+                  <p className="text-xs font-semibold text-slate-700">Payment flow</p>
+                  <p className="mt-2 text-xs leading-6 text-slate-600">Customer → Your Website/App → Razorpay Checkout → Payment → Razorpay → Webhook/API → Your Server → Order/Invoice Updated</p>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">Webhook URL: <code className="break-all">/api/webhooks/razorpay</code>. Subscribe to the <code>payment.captured</code> event and use the same webhook secret above.</p>
+                </div>}
                 <p className="mt-4 flex items-center gap-1.5 text-xs text-slate-500"><CheckCircle2 className={`h-3.5 w-3.5 ${integration.apiKeyConfigured || integration.apiSecretConfigured ? "text-emerald-600" : "text-slate-300"}`} /> Credentials are stored securely and never returned.</p>
               </article>;
             })}

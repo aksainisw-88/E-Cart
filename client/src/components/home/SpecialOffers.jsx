@@ -27,27 +27,23 @@ const offers = [
 
 const SpecialOffers = () => {
   return (
-    <section className="bg-[#f7f8f5] py-12 md:py-16">
+    <section className="bg-white py-8 md:py-10">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
-        {/* Section Header */}
-        <div className="mb-8 flex items-end justify-between">
+        <div className="mb-5 flex items-end justify-between border-b border-slate-100 pb-3">
           <div>
             <div className="mb-2 flex items-center gap-2">
               <Tag size={18} className="text-primary" />
 
-              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-primary">
                 Save more today
               </span>
             </div>
 
-            <h2 className="text-2xl font-bold text-gray-900 md:text-3xl">
-              Deals of the week
+            <h2 className="text-xl font-bold text-gray-900 md:text-2xl">
+              Offers for your everyday care
             </h2>
 
-            <p className="mt-2 text-sm text-gray-500 md:text-base">
-              Save more on your favorite healthcare products
-            </p>
           </div>
 
           <Link to="/offers" className="hidden items-center gap-1 text-sm font-semibold text-primary transition hover:text-primary-dark sm:flex">
@@ -56,45 +52,22 @@ const SpecialOffers = () => {
           </Link>
         </div>
 
-        {/* Offers */}
-        <div className="grid gap-5 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-3">
           {offers.map((offer) => (
             <div
               key={offer.id}
-              className={`group relative min-h-[245px] overflow-hidden rounded-2xl p-6 text-white shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${offer.id === 1 ? "bg-gradient-to-br from-[#196848] to-[#0f4d34]" : offer.id === 2 ? "bg-gradient-to-br from-[#c87045] to-[#a3522e]" : "bg-gradient-to-br from-[#4d6d72] to-[#33484c]"}`}
+              className={`flex min-h-[170px] flex-col items-start justify-between rounded-lg p-4 sm:p-5 ${offer.id === 1 ? "bg-emerald-50 text-emerald-950" : offer.id === 2 ? "bg-sky-50 text-sky-950" : "bg-amber-50 text-amber-950"}`}
             >
-              {/* Decorative Circle */}
-              <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/10" />
-
-              <div className="absolute -bottom-16 -right-6 h-40 w-40 rounded-full bg-white/5" />
-
-              {/* Content */}
-              <div className="relative z-10">
-                <span className="inline-block rounded-full bg-white/15 px-3 py-1 text-xs font-medium">
-                  Limited Time
-                </span>
-
-                <h3 className="mt-5 text-3xl font-extrabold">
-                  {offer.title}
-                </h3>
-
-                <h4 className="mt-2 text-lg font-semibold">
-                  {offer.subtitle}
-                </h4>
-
-                <p className="mt-2 max-w-sm text-sm leading-6 text-white/80">
-                  {offer.description}
-                </p>
-
-                <Link to="/offers" className="mt-6 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-gray-100">
-                  {offer.button}
-
-                  <ArrowRight
-                    size={16}
-                    className="transition-transform duration-300 group-hover:translate-x-1"
-                  />
-                </Link>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">Limited time</span>
+                <h3 className="mt-1 text-2xl font-bold">{offer.title}</h3>
+                <h4 className="mt-0.5 text-sm font-semibold">{offer.subtitle}</h4>
+                <p className="mt-1 text-xs opacity-75">{offer.description}</p>
               </div>
+              <Link to="/offers" className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold underline underline-offset-4 transition hover:gap-2.5">
+                  {offer.button}
+                <ArrowRight size={14} />
+              </Link>
             </div>
           ))}
         </div>

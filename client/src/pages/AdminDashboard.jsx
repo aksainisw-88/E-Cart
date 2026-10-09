@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, BarChart3, CircleDollarSign, Clock3, Package, ShoppingCart, Users } from "lucide-react";
+import { ArrowUpRight, BarChart3, CircleDollarSign, Clock3, Package, Plus, ShoppingCart, Tag, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const stats = [
@@ -38,7 +38,7 @@ const AdminDashboard = () => {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   return (
-    <div className="mx-auto max-w-[1500px]">
+    <div className="w-full min-w-0">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="text-sm font-medium text-primary">{todayLabel}</p>
@@ -70,6 +70,18 @@ const AdminDashboard = () => {
           </div>
         ))}
       </div>
+      <section className="mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+        <h2 className="mr-2 text-sm font-semibold text-slate-700">Quick actions</h2>
+        <Link to="/admin/products" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-primary hover:text-primary">
+          <Plus className="h-4 w-4" />Add product
+        </Link>
+        <Link to="/admin/offers" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-primary hover:text-primary">
+          <Tag className="h-4 w-4" />Create offer
+        </Link>
+        <Link to="/admin/pos" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-primary hover:text-primary">
+          <ShoppingCart className="h-4 w-4" />Start POS sale
+        </Link>
+      </section>
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.35fr_1fr]">
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">

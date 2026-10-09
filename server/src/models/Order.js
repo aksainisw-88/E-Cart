@@ -4,6 +4,7 @@ const orderSchema = new mongoose.Schema(
   {
     orderNumber: { type: String, unique: true, required: true },
     customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    store: { type: mongoose.Schema.Types.ObjectId, ref: "StoreLocation" },
     items: [{ product: mongoose.Schema.Types.ObjectId, name: String, price: Number, costPrice: Number, originalPrice: Number, discount: Number, discountAmount: Number, quantity: Number, image: String }],
     shipping: { name: String, phone: String, address: String, city: String, pincode: String },
     subtotal: { type: Number, required: true },
@@ -21,6 +22,7 @@ const orderSchema = new mongoose.Schema(
     razorpaySignature: { type: String, trim: true, default: "" },
     paidAt: { type: Date },
     status: { type: String, enum: ["Processing", "Shipped", "Delivered", "Cancelled"], default: "Processing" },
+    cancelReason: { type: String, trim: true, maxlength: 500, default: "" },
     cancelledAt: { type: Date },
   },
   { timestamps: true },

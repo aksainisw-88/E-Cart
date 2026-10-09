@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   Edit3,
+  Eye,
   Plus,
   Search,
   ShieldCheck,
@@ -9,9 +10,15 @@ import {
   UserX,
   X,
 } from "lucide-react";
+import {
+  adminNavigation,
+  adminSecondaryNavigation,
+} from "../data/adminNavigation";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
-const emptyForm = { name: "", email: "", password: "", role: "user" };
+const emptyForm = { name: "", email: "", password: "", role: "user", menuPermissions: [] };
+const allAdminMenus = [...adminNavigation, ...adminSecondaryNavigation];
+const permissionsForRole = (role) => allAdminMenus.filter((item) => item.roles.includes(role)).map((item) => item.to);
 
 const AdminUsers = () => {
   const [users, setUsers] = useState([]);
@@ -19,6 +26,7 @@ const AdminUsers = () => {
   const [roleFilter, setRoleFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [form, setForm] = useState(emptyForm);
+  const [selectedUser, setSelectedUser] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState("");
@@ -38,7 +46,7 @@ const AdminUsers = () => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
   const openCreate = () => {
     setEditingId(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, menuPermissions: permissionsForRole(emptyForm.role) });
     setError("");
     setFormOpen(true);
   };
@@ -49,6 +57,7 @@ const AdminUsers = () => {
       email: user.email,
       password: "",
       role: user.role,
+      menuPermissions: user.menuPermissions ?? permissionsForRole(user.role),
     });
     setError("");
     setFormOpen(true);
@@ -56,7 +65,7 @@ const AdminUsers = () => {
   const saveUser = async (event) => {
     event.preventDefault();
     const payload = editingId
-      ? { name: form.name, email: form.email, role: form.role }
+      ? { name: form.name, email: form.email, role: form.role, menuPermissions: form.menuPermissions }
       : form;
     const response = await fetch(
       `${API_URL}/api/users${editingId ? `/${editingId}` : ""}`,
@@ -92,12 +101,7 @@ const AdminUsers = () => {
     });
     const result = await response.json();
     if (!response.ok) setError(result.message);
-    else
-      setUsers((current) =>
-        current.map((item) =>
-          item._id === user._id ? { ...item, status } : item,
-        ),
-      );
+    else setUsers((current) => current.map((item) => item._id === user._id ? { ...item, status } : item));
   };
   const removeUser = async (user) => {
     if (!window.confirm(`Delete ${user.name}?`)) return;
@@ -205,6 +209,14 @@ const AdminUsers = () => {
                     <div className="flex gap-2">
                       <button
                         type="button"
+                        onClick={() => setSelectedUser(user)}
+                        aria-label={`View ${user.name}`}
+                        className="rounded-lg p-2 text-slate-400 hover:bg-teal-50 hover:text-primary"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => openEdit(user)}
                         aria-label={`Edit ${user.name}`}
                         className="rounded-lg p-2 text-slate-400 hover:bg-teal-50 hover:text-primary"
@@ -243,6 +255,71 @@ const AdminUsers = () => {
           </table>
         </div>
       </section>
+      {selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="user-details-title"
+            className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl sm:p-8"
+          >
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">User details</p>
+                <h2 id="user-details-title" className="mt-1 text-xl font-bold text-slate-900">{selectedUser.name}</h2>
+                <p className="mt-1 text-sm text-slate-500">{selectedUser.email}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedUser(null)}
+                aria-label="Close user details"
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg bg-slate-50 p-4">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Role</dt>
+                <dd className="mt-1 capitalize font-semibold text-slate-800">{selectedUser.role}</dd>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-4">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Status</dt>
+                <dd className={`mt-1 font-semibold ${selectedUser.status === "Active" ? "text-emerald-700" : "text-red-700"}`}>
+                  {selectedUser.status || "Active"}
+                </dd>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-4">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Created</dt>
+                <dd className="mt-1 font-medium text-slate-700">
+                  {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleString() : "Not available"}
+                </dd>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-4">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Last updated</dt>
+                <dd className="mt-1 font-medium text-slate-700">
+                  {selectedUser.updatedAt ? new Date(selectedUser.updatedAt).toLocaleString() : "Not available"}
+                </dd>
+              </div>
+            </dl>
+            <div className="mt-5">
+              <h3 className="text-sm font-semibold text-slate-800">Admin menu access</h3>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {allAdminMenus
+                  .filter((item) => (selectedUser.menuPermissions ?? permissionsForRole(selectedUser.role)).includes(item.to))
+                  .map((item) => (
+                    <span key={item.to} className="rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-teal-800">
+                      {item.label}
+                    </span>
+                  ))}
+                {!selectedUser.menuPermissions?.length && selectedUser.role !== "admin" && (
+                  <p className="text-sm text-slate-500">No additional menu access assigned.</p>
+                )}
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
       {formOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
           <form
@@ -291,7 +368,7 @@ const AdminUsers = () => {
                 <select
                   required
                   value={form.role}
-                  onChange={updateForm("role")}
+                  onChange={(event) => setForm((current) => ({ ...current, role: event.target.value, menuPermissions: permissionsForRole(event.target.value) }))}
                   className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 capitalize outline-none focus:border-primary"
                 >
                   <option value="user">User</option>
@@ -299,6 +376,31 @@ const AdminUsers = () => {
                   <option value="admin">Admin</option>
                 </select>
               </label>
+                <fieldset className="rounded-lg border border-slate-200 p-4">
+                  <legend className="px-1 text-sm font-semibold text-slate-700">Admin menu access</legend>
+                  <div className="mb-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setForm((current) => ({ ...current, menuPermissions: permissionsForRole(current.role) }))}
+                      className="text-xs font-semibold text-primary hover:underline"
+                    >
+                      Enable all available
+                    </button>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {allAdminMenus.filter((item) => item.roles.includes(form.role)).map((item) => (
+                      <label key={item.to} className="flex items-center gap-2 text-sm text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={form.menuPermissions.includes(item.to)}
+                          onChange={(event) => setForm((current) => ({ ...current, menuPermissions: event.target.checked ? [...current.menuPermissions, item.to] : current.menuPermissions.filter((permission) => permission !== item.to) }))}
+                          className="h-4 w-4 accent-teal-700"
+                        />
+                        {item.label}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
               {!editingId && (
                 <label className="block text-sm font-medium text-slate-700">
                   Temporary password

@@ -30,7 +30,7 @@ const ProductCard = ({ product }) => {
           openProduct();
         }
       }}
-      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-200 hover:shadow-xl hover:shadow-emerald-900/5 focus:outline-none focus:ring-2 focus:ring-primary/40"
+      className="group relative cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-white transition-all duration-200 hover:border-emerald-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/40"
     >
       <button
         type="button"
@@ -51,7 +51,7 @@ const ProductCard = ({ product }) => {
       )}
       {outOfStock && <span className="absolute left-3 top-10 z-10 rounded bg-slate-800 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">Out of stock</span>}
 
-      <div className="flex h-48 items-center justify-center bg-gradient-to-b from-[#f3f8f4] to-white p-5">
+      <div className="flex h-32 items-center justify-center bg-slate-50 p-3 sm:h-40 sm:p-4">
         <img
           src={product.image}
           alt={product.name}
@@ -59,10 +59,10 @@ const ProductCard = ({ product }) => {
         />
       </div>
 
-      <div className="p-4">
-        <p className="text-xs text-gray-500">{product.brand ? `${product.brand} · ` : ""}{product.category}</p>
+      <div className="p-3 sm:p-4">
+        <p className="truncate text-[10px] text-gray-500 sm:text-xs">{product.brand ? `${product.brand} · ` : ""}{product.category}</p>
 
-        <h3 className="mt-1 line-clamp-2 min-h-[40px] text-[15px] font-semibold text-gray-900">
+        <h3 className="mt-1 line-clamp-2 min-h-[36px] text-xs font-semibold text-gray-900 sm:text-sm">
           {product.name}
         </h3>
 
@@ -83,7 +83,7 @@ const ProductCard = ({ product }) => {
         </div>
 
         <div className="mt-3 flex items-center gap-2">
-          <span className="text-lg font-bold text-slate-900">₹{product.price}</span>
+          <span className="text-base font-bold text-slate-900">₹{product.price}</span>
 
           {product.originalPrice && (
             <span className="text-sm text-gray-400 line-through">₹{product.originalPrice}</span>
@@ -99,7 +99,7 @@ const ProductCard = ({ product }) => {
             addToCart(product);
           }}
           disabled={outOfStock}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-primary px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-primary px-3 py-2 text-xs font-semibold text-primary transition hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 sm:text-sm"
         >
           <ShoppingCart size={17} />
           {outOfStock ? "Out of stock" : "Add to Cart"}

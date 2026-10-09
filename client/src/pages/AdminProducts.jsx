@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  ArrowLeft,
   Edit3,
   FileDown,
   FileUp,
@@ -9,17 +10,18 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { productCategories } from "../data/products";
 
 const emptyProduct = {
   name: "",
   brand: "",
+  unit: "unit",
   category: "",
   price: "",
   costPrice: "",
   originalPrice: "",
   discount: "0",
-  stock: "0",
   rating: "0",
   reviews: "0",
   status: "Published",
@@ -33,11 +35,13 @@ const AdminProducts = () => {
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [stockFilter, setStockFilter] = useState("All");
+  const [categories, setCategories] = useState(productCategories.filter((category) => category !== "All Products").map((name) => ({ name, parentCategory: null })));
   const [form, setForm] = useState(emptyProduct);
   const [images, setImages] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const imageInput = useRef(null);
@@ -74,6 +78,17 @@ const AdminProducts = () => {
     };
   }, []);
 
+  useEffect(() => {
+    fetch(`${apiUrl}/api/products/categories`, { credentials: "include" })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "Unable to load categories.");
+        return result.data || [];
+      })
+      .then(setCategories)
+      .catch((requestError) => setError(requestError.message));
+  }, []);
+
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyProduct);
@@ -88,12 +103,12 @@ const AdminProducts = () => {
     setForm({
       name: product.name,
       brand: product.brand || "",
+      unit: product.unit || "unit",
       category: product.category,
       price: product.price,
       costPrice: product.costPrice || "",
       originalPrice: product.originalPrice || "",
       discount: product.discount || 0,
-      stock: product.stock,
       rating: product.rating || 0,
       reviews: product.reviews || 0,
       status: product.status,
@@ -124,6 +139,7 @@ const AdminProducts = () => {
   const saveProduct = async (event) => {
     event.preventDefault();
     setError("");
+    setSaving(true);
     const body = new FormData();
     Object.entries(form).forEach(([key, value]) => body.append(key, value));
     images.forEach((file) => body.append("images", file));
@@ -144,6 +160,8 @@ const AdminProducts = () => {
       await loadProducts();
     } catch (requestError) {
       setError(requestError.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -186,9 +204,9 @@ const AdminProducts = () => {
 
   const downloadSampleCsv = () => {
     const rows = [
-      ["name", "brand", "category", "price", "costPrice", "originalPrice", "discount", "stock", "rating", "reviews", "status", "description"],
-      ["Paracetamol 500mg", "Example Pharma", "Medicines", "55", "35", "70", "10", "100", "4.5", "25", "Published", "Pain relief tablets"],
-      ["Digital Thermometer", "Example Health", "Medical Devices", "249", "150", "299", "17", "20", "4", "10", "Published", "Fast and accurate temperature readings"],
+      ["name", "brand", "unit", "category", "price", "costPrice", "originalPrice", "discount", "rating", "reviews", "status", "description"],
+      ["Paracetamol 500mg", "Example Pharma", "strip", "Medicines", "55", "35", "70", "10", "4.5", "25", "Published", "Pain relief tablets"],
+      ["Digital Thermometer", "Example Health", "piece", "Medical Devices", "249", "150", "299", "17", "4", "10", "Published", "Fast and accurate temperature readings"],
     ];
     const csv = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\n");
     const link = document.createElement("a");
@@ -282,7 +300,7 @@ const AdminProducts = () => {
               className="w-full bg-transparent text-sm outline-none"
             />
           </div>
-          <div className="flex flex-wrap items-center gap-3"><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"><option value="All">All categories</option>{productCategories.filter((category) => category !== "All Products").map((category) => <option key={category}>{category}</option>)}</select><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"><option value="All">All statuses</option><option>Published</option><option>Draft</option></select><select value={stockFilter} onChange={(event) => setStockFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"><option value="All">All stock</option><option>In stock</option><option>Out of stock</option></select><span className="text-sm text-slate-500">{visibleProducts.length} products</span></div>
+          <div className="flex flex-wrap items-center gap-3"><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"><option value="All">All categories</option>{categories.map((category) => <option key={category._id || category.name} value={category.name}>{category.parentCategory ? `${category.parentCategory.name} / ${category.name}` : category.name}</option>)}</select><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"><option value="All">All statuses</option><option>Published</option><option>Draft</option></select><select value={stockFilter} onChange={(event) => setStockFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"><option value="All">All stock</option><option>In stock</option><option>Out of stock</option></select><span className="text-sm text-slate-500">{visibleProducts.length} products</span></div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left text-sm">
@@ -293,6 +311,8 @@ const AdminProducts = () => {
                   "Category",
                   "Price",
                   "Stock",
+                  "Vendor",
+                  "Purchase date",
                   "Rating",
                   "Status",
                   "Actions",
@@ -322,6 +342,7 @@ const AdminProducts = () => {
                       <div>
                         <span className="block font-semibold text-slate-700">{product.name}</span>
                         {product.brand && <span className="mt-1 block text-xs text-slate-400">{product.brand}</span>}
+                        <span className="mt-1 block text-xs text-slate-400">Unit: {product.unit || "unit"}</span>
                       </div>
                     </div>
                   </td>
@@ -335,9 +356,11 @@ const AdminProducts = () => {
                     {product.stock === 0 ? (
                       <span className="text-red-600">Out of stock</span>
                     ) : (
-                      `${product.stock} in stock`
+                      `${product.stock} ${product.unit || "unit"} in stock`
                     )}
                   </td>
+                  <td className="px-5 py-4 text-slate-500">{product.vendorName || "-"}</td>
+                  <td className="px-5 py-4 text-slate-500">{product.purchaseDate ? new Date(product.purchaseDate).toLocaleDateString() : "-"}</td>
                   <td className="px-5 py-4 text-slate-500">
                     {Number(product.rating || 0).toFixed(1)} / 5 (
                     {product.reviews || 0})
@@ -381,194 +404,86 @@ const AdminProducts = () => {
         </div>
       </section>
       {formOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+        <div className="fixed inset-0 z-30 overflow-y-auto bg-slate-100 p-3 sm:p-6 lg:left-64">
           <form
             onSubmit={saveProduct}
-            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl sm:p-8"
+            className="mx-auto min-h-full w-full max-w-7xl overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-xl"
           >
-            <div className="flex items-start justify-between">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
               <div>
-                <h2 className="text-xl font-bold text-slate-900">
+                <p className="text-xs font-semibold uppercase tracking-wider text-primary">Product catalogue</p>
+                <h2 className="mt-0.5 text-lg font-bold text-slate-900 sm:text-xl">
                   {editingId ? "Edit product" : "Add product"}
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Product details shown in your storefront.
-                </p>
               </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Link to="/admin/categories" className="hidden rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-primary hover:text-primary sm:inline-flex">Manage categories</Link>
+                <button type="button" onClick={() => setFormOpen(false)} aria-label="Close product form" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-5 w-5" /></button>
+              </div>
+            </div>
+            <div className="grid gap-5 p-4 sm:p-7 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="space-y-5">
+                <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+                  <h3 className="text-sm font-semibold text-slate-800">Product information</h3>
+                  <p className="mt-1 text-xs text-slate-500">Name, brand, category, and customer-facing description.</p>
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <label className="text-sm font-medium text-slate-700 sm:col-span-2">Product name<input required value={form.name} onChange={updateField("name")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+                    <label className="text-sm font-medium text-slate-700">Brand<input value={form.brand} onChange={updateField("brand")} placeholder="e.g. Philips" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+                    <label className="text-sm font-medium text-slate-700">Unit<input required list="product-unit-options" maxLength="40" value={form.unit} onChange={updateField("unit")} placeholder="e.g. piece, kg, bottle" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /><datalist id="product-unit-options">{["unit", "piece", "pack", "box", "bottle", "strip", "tablet", "capsule", "kg", "g", "l", "ml"].map((unit) => <option key={unit} value={unit} />)}</datalist></label>
+                    <label className="text-sm font-medium text-slate-700">Category<select required value={form.category} onChange={updateField("category")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-primary"><option value="">Select a category</option>{categories.map((category) => <option key={category._id || category.name} value={category.name}>{category.parentCategory ? `${category.parentCategory.name} / ${category.name}` : category.name}</option>)}</select><Link to="/admin/categories" className="mt-2 inline-block text-xs font-semibold text-primary hover:underline">Manage categories</Link></label>
+                    <label className="text-sm font-medium text-slate-700 sm:col-span-2">Description<textarea value={form.description} onChange={updateField("description")} rows="4" className="mt-2 w-full resize-y rounded-lg border border-slate-200 p-3 outline-none focus:border-primary" /></label>
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+                  <h3 className="text-sm font-semibold text-slate-800">Pricing and inventory</h3>
+                  <p className="mt-1 text-xs text-slate-500">Set customer pricing. Stock is received in Purchase Entry or adjusted in Inventory.</p>
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <label className="text-sm font-medium text-slate-700">Selling price<input required type="number" min="0" value={form.price} onChange={updateField("price")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+                    <label className="text-sm font-medium text-slate-700">Original price<input type="number" min="0" value={form.originalPrice} onChange={updateField("originalPrice")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+                    <label className="text-sm font-medium text-slate-700">Cost price<input type="number" min="0" value={form.costPrice} onChange={updateField("costPrice")} placeholder="Used for profit reports" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+                    <label className="text-sm font-medium text-slate-700">Discount %<input type="number" min="0" max="100" value={form.discount} onChange={updateField("discount")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="text-sm font-medium text-slate-700">Rating<input required type="number" min="0" max="5" step="0.1" value={form.rating} onChange={updateField("rating")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+                      <label className="text-sm font-medium text-slate-700">Reviews<input required type="number" min="0" value={form.reviews} onChange={updateField("reviews")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <aside className="space-y-5">
+                <section className="rounded-xl border border-slate-200 bg-white p-5">
+                  <h3 className="text-sm font-semibold text-slate-800">Product images</h3>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">Up to six JPG, PNG, WEBP, or GIF images. Maximum 5 MB each.</p>
+                  {imagePreviews.length > 0 && <div className="mt-4 grid grid-cols-3 gap-2">{imagePreviews.slice(0, 6).map((preview) => <div key={preview} className="flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50"><img src={preview} alt="Product preview" className="h-full w-full object-contain p-1" /></div>)}</div>}
+                  <label className="mt-4 flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-xs text-slate-500 transition hover:border-primary hover:bg-emerald-50/40">
+                    <ImagePlus className="h-5 w-5 text-primary" />
+                    <span>{images.length ? `${images.length} new images selected` : imagePreviews.length ? "Choose new images to replace current images" : "Click to upload product images"}</span>
+                    <input ref={imageInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple onChange={selectImage} className="hidden" />
+                  </label>
+                </section>
+
+                <section className="rounded-xl border border-slate-200 bg-white p-5">
+                  <h3 className="text-sm font-semibold text-slate-800">Visibility</h3>
+                  <label className="mt-4 block text-sm font-medium text-slate-700">Product status<select value={form.status} onChange={updateField("status")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-primary"><option>Published</option><option>Draft</option></select></label>
+                  <div className="mt-4 rounded-lg bg-slate-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Current stock</p><p className="mt-1 text-xl font-bold text-slate-900">{products.find((product) => product._id === editingId)?.stock || 0}<span className="ml-1 text-sm font-medium text-slate-500">{form.unit || "unit"}</span></p><p className="mt-1 text-xs leading-5 text-slate-500">Stock changes are recorded through Purchase Entry or Inventory.</p></div>
+                </section>
+              </aside>
+            </div>
+            <div className="sticky bottom-0 flex justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:px-8">
               <button
                 type="button"
                 onClick={() => setFormOpen(false)}
-                aria-label="Close product form"
-                className="text-slate-400 hover:text-slate-700"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
               >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="mt-6 grid gap-5 sm:grid-cols-2">
-              <label className="text-sm font-medium text-slate-700 sm:col-span-2">
-                Product name
-                <input
-                  required
-                  value={form.name}
-                  onChange={updateField("name")}
-                  className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary"
-                />
-              </label>
-              <label className="text-sm font-medium text-slate-700">
-                Brand
-                <input
-                  value={form.brand}
-                  onChange={updateField("brand")}
-                  placeholder="e.g. Philips"
-                  className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary"
-                />
-              </label>
-              <label className="text-sm font-medium text-slate-700">
-                Category
-                <select
-                  required
-                  value={form.category}
-                  onChange={updateField("category")}
-                  className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-primary"
-                >
-                  <option value="">Select a category</option>
-                  {productCategories
-                    .filter((category) => category !== "All Products")
-                    .map((category) => (
-                      <option key={category} value={category}>
-                        {category}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <label className="text-sm font-medium text-slate-700">
-                Status
-                <select
-                  value={form.status}
-                  onChange={updateField("status")}
-                  className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-primary"
-                >
-                  <option>Published</option>
-                  <option>Draft</option>
-                </select>
-              </label>
-              <label className="text-sm font-medium text-slate-700">
-                Selling price
-                <input
-                  required
-                  type="number"
-                  min="0"
-                  value={form.price}
-                  onChange={updateField("price")}
-                  className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary"
-                />
-              </label>
-              <label className="text-sm font-medium text-slate-700">
-                Original price
-                <input
-                  type="number"
-                  min="0"
-                  value={form.originalPrice}
-                  onChange={updateField("originalPrice")}
-                  className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary"
-                />
-              </label>
-              <label className="text-sm font-medium text-slate-700">
-                Cost price
-                <input
-                  type="number"
-                  min="0"
-                  value={form.costPrice}
-                  onChange={updateField("costPrice")}
-                  placeholder="Used for profit reports"
-                  className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary"
-                />
-              </label>
-              <label className="text-sm font-medium text-slate-700">
-                Discount %
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={form.discount}
-                  onChange={updateField("discount")}
-                  className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary"
-                />
-              </label>
-              <label className="text-sm font-medium text-slate-700">
-                Stock quantity
-                <input
-                  required
-                  type="number"
-                  min="0"
-                  value={form.stock}
-                  onChange={updateField("stock")}
-                  className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary"
-                />
-              </label>
-              <label className="text-sm font-medium text-slate-700">
-                Rating (0-5)
-                <input
-                  required
-                  type="number"
-                  min="0"
-                  max="5"
-                  step="0.1"
-                  value={form.rating}
-                  onChange={updateField("rating")}
-                  className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary"
-                />
-              </label>
-              <label className="text-sm font-medium text-slate-700">
-                Review count
-                <input
-                  required
-                  type="number"
-                  min="0"
-                  value={form.reviews}
-                  onChange={updateField("reviews")}
-                  className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary"
-                />
-              </label>
-              <label className="text-sm font-medium text-slate-700 sm:col-span-2">
-                Description
-                <textarea
-                  value={form.description}
-                  onChange={updateField("description")}
-                  rows="3"
-                  className="mt-2 w-full resize-none rounded-lg border border-slate-200 p-3 outline-none focus:border-primary"
-                />
-              </label>
-              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-500 sm:col-span-2">
-                {imagePreviews.length ? <div className="flex gap-2">{imagePreviews.slice(0, 4).map((preview) => <img key={preview} src={preview} alt="Product preview" className="h-14 w-14 rounded-lg object-contain" />)}</div> : (
-                  <ImagePlus className="h-5 w-5 text-primary" />
-                )}
-                <span>
-                  {images.length ? `${images.length} images selected` : imagePreviews.length ? "Current images (choose new files to replace them)" : "Upload up to 6 product images (JPG, PNG, WEBP, max 5 MB each)"}
-                </span>
-                <input
-                  ref={imageInput}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif"
-                  multiple
-                  onChange={selectImage}
-                  className="hidden"
-                />
-              </label>
-            </div>
-            <div className="mt-7 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setFormOpen(false)}
-                className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600"
-              >
-                Cancel
+                <ArrowLeft className="h-4 w-4" />Back to products
               </button>
               <button
                 type="submit"
-                className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark"
+                disabled={saving}
+                className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-60"
               >
-                {editingId ? "Update product" : "Create product"}
+                {saving ? "Saving..." : editingId ? "Save changes" : "Create product"}
               </button>
             </div>
           </form>

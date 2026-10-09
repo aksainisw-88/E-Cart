@@ -29,21 +29,21 @@ const supportLinks = [
 const Footer = () => {
   const store = useStore();
   return (
-    <footer className="border-t border-slate-200 bg-white text-slate-600">
-      <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
-        <div className="grid gap-10 lg:grid-cols-[1.35fr_1fr_1fr_1.1fr]">
+      <footer className="border-t border-[#1d6478] bg-[#0e5268] text-sky-50">
+      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-[1.35fr_1fr_1fr_1.1fr]">
           <div>
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg bg-primary text-white">
                 {store.logoUrl ? <img src={store.logoUrl} alt="" className="h-full w-full object-contain" /> : <HeartPulse className="h-6 w-6" />}
               </div>
               <div>
-                <p className="text-lg font-bold text-slate-900">{store.name}</p>
-                <p className="text-xs text-slate-400">{store.tagline}</p>
+                <p className="text-lg font-bold text-white">{store.name}</p>
+                <p className="text-xs text-sky-100/70">{store.tagline}</p>
               </div>
             </div>
 
-            <p className="mt-5 max-w-sm text-sm leading-7 text-slate-500">
+            <p className="mt-4 max-w-sm text-sm leading-6 text-sky-100/80">
               Trusted healthcare products delivered to your doorstep with care,
               speed, and confidence.
             </p>
@@ -56,7 +56,7 @@ const Footer = () => {
                   target="_blank"
                   rel="noreferrer"
                   aria-label={["Facebook", "Instagram", "Twitter"][index]}
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-400 transition hover:border-primary hover:text-primary"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 text-sky-100/80 transition hover:border-white hover:text-white"
                 >
                   <Icon className="h-4 w-4" />
                 </a>
@@ -65,11 +65,11 @@ const Footer = () => {
           </div>
 
           <div>
-            <h2 className="font-semibold text-slate-900">Shop</h2>
-            <ul className="mt-5 space-y-3 text-sm">
+            <h2 className="font-semibold text-white">Shop</h2>
+            <ul className="mt-4 space-y-2.5 text-sm text-sky-100/75">
               {shopLinks.map((link) => (
                 <li key={link.label}>
-                  <Link className="transition hover:text-primary" to={link.to}>
+                  <Link className="transition hover:text-white" to={link.to}>
                     {link.label}
                   </Link>
                 </li>
@@ -78,11 +78,11 @@ const Footer = () => {
           </div>
 
           <div>
-            <h2 className="font-semibold text-slate-900">Customer Care</h2>
-            <ul className="mt-5 space-y-3 text-sm">
+            <h2 className="font-semibold text-white">Customer Care</h2>
+            <ul className="mt-4 space-y-2.5 text-sm text-sky-100/75">
               {supportLinks.map((link) => (
                 <li key={link.label}>
-                  <Link className="transition hover:text-primary" to={link.to}>
+                  <Link className="transition hover:text-white" to={link.to}>
                     {link.label}
                   </Link>
                 </li>
@@ -91,8 +91,8 @@ const Footer = () => {
           </div>
 
           <div>
-            <h2 className="font-semibold text-slate-900">Stay connected</h2>
-            <p className="mt-5 text-sm leading-6 text-slate-500">
+            <h2 className="font-semibold text-white">Stay connected</h2>
+            <p className="mt-4 text-sm leading-6 text-sky-100/80">
               Get wellness tips and exclusive offers in your inbox.
             </p>
             <form className="mt-4 flex max-w-sm" onSubmit={(event) => event.preventDefault()}>
@@ -101,12 +101,12 @@ const Footer = () => {
                 id="footer-email"
                 type="email"
                 placeholder="Your email address"
-                className="min-w-0 flex-1 rounded-l-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-primary"
+                className="min-w-0 flex-1 rounded-l-lg border border-white/20 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-300"
               />
               <button
                 type="submit"
                 aria-label="Subscribe to newsletter"
-                className="flex items-center justify-center rounded-r-lg bg-primary px-4 text-white transition hover:bg-primary-dark"
+                className="flex items-center justify-center rounded-r-lg bg-amber-300 px-4 text-slate-900 transition hover:bg-amber-200"
               >
                 <Mail className="h-4 w-4" />
               </button>
@@ -114,26 +114,26 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="mt-12 grid gap-4 border-y border-slate-200 py-5 text-sm sm:grid-cols-3">
+        <div className="mt-8 grid gap-4 border-y border-white/20 py-5 text-sm text-sky-100/85 sm:grid-cols-3">
           <div className="flex items-center gap-3">
-            <Truck className="h-5 w-5 text-primary" />
+            <Truck className="h-5 w-5 text-emerald-300" />
             <span>Fast, reliable delivery</span>
           </div>
           <div className="flex items-center gap-3">
-            <ShieldCheck className="h-5 w-5 text-primary" />
+            <ShieldCheck className="h-5 w-5 text-emerald-300" />
             <span>100% genuine products</span>
           </div>
           <div className="flex items-center gap-3">
-            <Phone className="h-5 w-5 text-primary" />
+            <Phone className="h-5 w-5 text-emerald-300" />
             <span>Support: {store.phone || "-"}</span>
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-slate-200 pt-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-t border-white/20 pt-5 text-xs text-sky-100/70 sm:flex-row sm:items-center sm:justify-between">
           <p>© 2026 {store.name}. All rights reserved.</p>
           <div className="flex gap-5">
-            <Link className="transition hover:text-primary" to="/contact">Privacy Policy</Link>
-            <Link className="transition hover:text-primary" to="/contact">Terms of Service</Link>
+            <Link className="transition hover:text-white" to="/contact">Privacy Policy</Link>
+            <Link className="transition hover:text-white" to="/contact">Terms of Service</Link>
           </div>
           <div className="flex items-center gap-1">
             <MapPin className="h-3.5 w-3.5" />

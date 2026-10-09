@@ -9,7 +9,7 @@ import Wishlist from "./pages/Wishlist";
 import Cart from "./pages/Cart";
 import ContactUs from "./pages/ContactUs";
 import AdminLayout from "./components/admin/AdminLayout";
-import AdminDashboard from "./pages/AdminDashboard";
+import AdminDashboardOverview from "./pages/AdminDashboardOverview";
 import AdminSection from "./pages/AdminSection";
 import Checkout from "./pages/Checkout";
 import Payment from "./pages/Payment";
@@ -21,6 +21,11 @@ import AdminReports from "./pages/AdminReports";
 import AdminDeliveryArea from "./pages/AdminDeliveryArea";
 import AdminTestimonials from "./pages/AdminTestimonials";
 import AdminHeroSlider from "./pages/AdminHeroSlider";
+import AdminStores from "./pages/AdminStores";
+import AdminCategories from "./pages/AdminCategories";
+import AdminOrderDetails from "./pages/AdminOrderDetails";
+import AdminInventory from "./pages/AdminInventory";
+import ResetPassword from "./pages/ResetPassword";
 
 const RequireCustomerAuth = ({ children }) => {
   const location = useLocation();
@@ -50,11 +55,12 @@ const RequireCustomerAuth = ({ children }) => {
 function App() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith("/admin");
+  const isAuthRoute = ["/account", "/login", "/register", "/reset-password"].includes(location.pathname);
 
   return (
     <>
-      {!isAdminRoute && <Navbar />}
-      {!isAdminRoute && <CartDrawer />}
+      {!isAdminRoute && !isAuthRoute && <Navbar />}
+      {!isAdminRoute && !isAuthRoute && <CartDrawer />}
 
       <Routes>
         <Route path="/" element={<Home />} />
@@ -63,6 +69,7 @@ function App() {
         <Route path="/account" element={<Account initialMode="login" />} />
         <Route path="/login" element={<Account initialMode="login" />} />
         <Route path="/register" element={<Account initialMode="signup" />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/account/orders" element={<RequireCustomerAuth><CustomerOrders /></RequireCustomerAuth>} />
         <Route path="/wishlist" element={<RequireCustomerAuth><Wishlist /></RequireCustomerAuth>} />
         <Route path="/cart" element={<Cart />} />
@@ -71,14 +78,21 @@ function App() {
         <Route path="/contact" element={<ContactUs />} />
         <Route path="/offers" element={<Offers />} />
         <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<AdminDashboard />} />
+          <Route index element={<AdminDashboardOverview />} />
           <Route path="reports" element={<AdminReports />} />
           <Route path="products" element={<AdminSection section="products" />} />
+          <Route path="inventory" element={<AdminInventory />} />
+          <Route path="categories" element={<AdminCategories />} />
           <Route path="users" element={<AdminSection section="users" />} />
           <Route path="customers" element={<AdminSection section="customers" />} />
           <Route path="orders" element={<AdminSection section="orders" />} />
+          <Route path="orders/:orderId" element={<AdminOrderDetails />} />
+          <Route path="pos" element={<AdminSection section="pos" />} />
+          <Route path="purchase-entry" element={<AdminSection section="purchase-entry" />} />
+          <Route path="vendors" element={<AdminSection section="vendors" />} />
           <Route path="payments" element={<AdminSection section="payments" />} />
           <Route path="store" element={<AdminSection section="store" />} />
+          <Route path="stores" element={<AdminStores />} />
           <Route path="testimonials" element={<AdminTestimonials />} />
           <Route path="hero-slider" element={<AdminHeroSlider />} />
           <Route path="store/delivery" element={<AdminDeliveryArea />} />
