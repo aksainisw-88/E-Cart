@@ -44,8 +44,12 @@ const AdminPos = () => {
   const [selectedOfferId, setSelectedOfferId] = useState("");
   const [appliedPromotion, setAppliedPromotion] = useState(null);
   const [selectedProductId, setSelectedProductId] = useState("");
+  const [batchData, setBatchData] = useState({ key: "", data: [] });
+  const [selectedBatchId, setSelectedBatchId] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [freeQuantity, setFreeQuantity] = useState(0);
+  const [rate, setRate] = useState("");
+  const [discount, setDiscount] = useState(0);
   const [cart, setCart] = useState([]);
   const [recentInvoices, setRecentInvoices] = useState([]);
   const [lastReceipt, setLastReceipt] = useState(null);
@@ -80,6 +84,7 @@ const AdminPos = () => {
         setLocations(availableLocations);
         setSelectedLocationId(initialLocation?._id || "");
         setSelectedProductId(nextInventory[0]?.id || "");
+        setRate(String(nextInventory[0]?.price ?? ""));
         setOffers(offerResult.data || []);
         setRecentInvoices((salesResult.data || []).map((sale) => ({
           id: sale.invoiceNumber,
@@ -103,7 +108,35 @@ const AdminPos = () => {
   }, []);
 
   const selectedProduct = inventory.find((product) => product.id === selectedProductId);
+  const batchKey = `${selectedProductId}:${selectedLocationId}`;
+  const batches = batchData.key === batchKey ? batchData.data : [];
+  const batchLoading = Boolean(selectedProductId && selectedLocationId && batchData.key !== batchKey);
+  const selectedBatch = batches.find((batch) => batch._id === selectedBatchId);
   const selectedLocation = locations.find((location) => location._id === selectedLocationId);
+
+  useEffect(() => {
+    let active = true;
+    if (!selectedProductId || !selectedLocationId) {
+      return () => { active = false; };
+    }
+
+    const key = `${selectedProductId}:${selectedLocationId}`;
+    fetch(`${API_URL}/api/pos/batches?productId=${encodeURIComponent(selectedProductId)}&locationId=${encodeURIComponent(selectedLocationId)}`, { credentials: "include" })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "Unable to load product batches.");
+        return result;
+      })
+      .then((result) => { if (active) setBatchData({ key, data: result.data || [] }); })
+      .catch((batchError) => {
+        if (!active) return;
+        setBatchData({ key, data: [] });
+        setError(batchError.message);
+      });
+
+    return () => { active = false; };
+  }, [selectedProductId, selectedLocationId]);
+
   const filteredInvoices = useMemo(() => recentInvoices.filter((invoice) => `${invoice.id} ${invoice.customer} ${invoice.location || ""} ${invoice.paymentMode}`.toLowerCase().includes(historyQuery.trim().toLowerCase())), [recentInvoices, historyQuery]);
   const stockAtSelectedLocation = (product) => {
     const entry = product?.locationStock?.find((stock) => String(stock.location?._id || stock.location) === selectedLocationId);
@@ -173,18 +206,40 @@ const AdminPos = () => {
       setError("Select a store location and product before adding to the invoice.");
       return;
     }
+    if (batchLoading) {
+      setError("Wait for the product batches to finish loading.");
+      return;
+    }
+    if (batches.length && !selectedBatch) {
+      setError("Select a batch before adding this product.");
+      return;
+    }
 
     const nextQty = Number(quantity) || 1;
     const nextFreeQty = Number(freeQuantity) || 0;
-    const existingItem = cart.find((item) => item.id === selectedProduct.id);
-    const requestedStock = nextQty + nextFreeQty + (existingItem?.qty || 0) + (existingItem?.freeQty || 0);
+    const nextRate = Number(rate);
+    const nextDiscount = Number(discount) || 0;
+    const existingItem = cart.find((item) => item.id === selectedProduct.id && item.batchId === (selectedBatch?._id || ""));
+    const productQuantityInCart = cart.filter((item) => item.id === selectedProduct.id).reduce((sum, item) => sum + item.qty + item.freeQty, 0);
+    const requestedStock = nextQty + nextFreeQty + productQuantityInCart;
     const availableStock = stockAtSelectedLocation(selectedProduct);
-    if (nextQty <= 0 || nextFreeQty < 0) {
-      setError("Quantity must be greater than zero.");
+    if (!Number.isFinite(nextRate) || nextRate < 0 || nextQty <= 0 || nextFreeQty < 0 || nextDiscount < 0) {
+      setError("Enter a valid rate, quantity, free quantity, and discount.");
+      return;
+    }
+    if (nextDiscount > nextRate * nextQty) {
+      setError("Discount cannot exceed the line amount.");
       return;
     }
     if (requestedStock > availableStock) {
       setError(`Only ${availableStock} ${selectedProduct.unit || "unit"} available at ${selectedLocation.name}.`);
+      return;
+    }
+    const batchQuantityInCart = selectedBatch
+      ? cart.filter((item) => item.batchId === selectedBatch._id).reduce((sum, item) => sum + item.qty + item.freeQty, 0)
+      : 0;
+    if (selectedBatch && batchQuantityInCart + nextQty + nextFreeQty > Number(selectedBatch.remainingQuantity)) {
+      setError(`Only ${selectedBatch.remainingQuantity} units remain in batch ${selectedBatch.batchNumber || selectedBatch.invoiceNumber}.`);
       return;
     }
 
@@ -192,44 +247,84 @@ const AdminPos = () => {
     if (existingItem) {
       setCart((current) =>
         current.map((item) =>
-          item.id === selectedProduct.id
-            ? applyAutomaticPromotions([{ ...item, qty: item.qty + nextQty, freeQty: item.freeQty + nextFreeQty }], offers)[0]
+          item.lineId === existingItem.lineId
+            ? applyAutomaticPromotions([{ ...item, qty: item.qty + nextQty, freeQty: item.freeQty + nextFreeQty, discount: item.discount + nextDiscount }], offers)[0]
             : item
         )
       );
     } else {
+      const lineId = `${selectedProduct.id}:${selectedBatch?._id || "unbatched"}`;
       setCart((current) => [
         ...current,
-        ...applyAutomaticPromotions([{ id: selectedProduct.id, name: selectedProduct.name, price: selectedProduct.price, qty: nextQty, freeQty: nextFreeQty, discount: 0 }], offers),
+        ...applyAutomaticPromotions([{
+          lineId,
+          id: selectedProduct.id,
+          batchId: selectedBatch?._id || "",
+          batchNumber: selectedBatch?.batchNumber || "",
+          expiryDate: selectedBatch?.expiryDate || "",
+          mrp: Number(selectedBatch?.mrp) || 0,
+          batchStock: Number(selectedBatch?.remainingQuantity) || 0,
+          name: selectedProduct.name,
+          price: nextRate,
+          qty: nextQty,
+          freeQty: nextFreeQty,
+          discount: nextDiscount,
+        }], offers),
       ]);
     }
 
+    setQuantity(1);
+    setFreeQuantity(0);
+    setDiscount(0);
     setMessage(`${selectedProduct.name} added to the invoice.`);
   };
 
-  const updateCartItem = (productId, field, value) => {
+  const updateCartItem = (lineId, field, value) => {
     const nextValue = Math.max(Number(value) || 0, 0);
     if (field === "qty" || field === "freeQty") {
-      const item = cart.find((cartItem) => cartItem.id === productId);
-      const product = inventory.find((inventoryItem) => inventoryItem.id === productId);
+      const item = cart.find((cartItem) => cartItem.lineId === lineId);
+      const product = inventory.find((inventoryItem) => inventoryItem.id === item?.id);
+      if (field === "qty" && nextValue < 1) {
+        setError("Quantity must be at least one.");
+        return;
+      }
       const nextQuantity = field === "qty" ? nextValue : item?.qty || 0;
       const nextFreeQuantity = field === "freeQty" ? nextValue : item?.freeQty || 0;
-      if (nextQuantity + nextFreeQuantity > stockAtSelectedLocation(product)) {
+      const otherProductQuantity = cart.filter((cartItem) => cartItem.id === item?.id && cartItem.lineId !== lineId).reduce((sum, cartItem) => sum + cartItem.qty + cartItem.freeQty, 0);
+      if (nextQuantity + nextFreeQuantity + otherProductQuantity > stockAtSelectedLocation(product)) {
         setError(`Only ${stockAtSelectedLocation(product)} ${product?.unit || "unit"} available at ${selectedLocation?.name || "this location"}.`);
+        return;
+      }
+      if (item?.batchId && nextQuantity + nextFreeQuantity > item.batchStock) {
+        setError(`Only ${item.batchStock} units remain in batch ${item.batchNumber || "selected batch"}.`);
+        return;
+      }
+    }
+    if (field === "discount") {
+      const item = cart.find((cartItem) => cartItem.lineId === lineId);
+      if (item && nextValue > item.qty * item.price) {
+        setError("Discount cannot exceed the line amount.");
+        return;
+      }
+    }
+    if (field === "price") {
+      const item = cart.find((cartItem) => cartItem.lineId === lineId);
+      if (item && item.discount > item.qty * nextValue) {
+        setError("Rate cannot be lower than the current line discount.");
         return;
       }
     }
     setError("");
     setCart((current) => current.map((item) => {
-      if (item.id !== productId) return item;
+      if (item.lineId !== lineId) return item;
       const updatedItem = { ...item, [field]: nextValue };
       if (field === "qty" && item.automaticOffer) return applyAutomaticPromotions([updatedItem], offers)[0];
       return updatedItem;
     }));
   };
 
-  const removeFromCart = (productId) => {
-    setCart((current) => current.filter((item) => item.id !== productId));
+  const removeFromCart = (lineId) => {
+    setCart((current) => current.filter((item) => item.lineId !== lineId));
     setMessage("Item removed from the cart.");
   };
 
@@ -264,7 +359,7 @@ const AdminPos = () => {
           locationId: selectedLocationId,
           paymentMode,
           promotionDiscount: appliedPromotion?.discountAmount || 0,
-          items: cart.map((item) => ({ productId: item.id, quantity: item.qty, freeQuantity: item.freeQty, discount: item.discount || 0 })),
+          items: cart.map((item) => ({ productId: item.id, purchaseId: item.batchId || undefined, rate: item.price, quantity: item.qty, freeQuantity: item.freeQty, discount: item.discount || 0 })),
         }),
       });
       const result = await response.json();
@@ -279,12 +374,19 @@ const AdminPos = () => {
         totals: { subtotal: sale.subtotal, discount: sale.discount, tax: sale.tax, total: sale.total },
         promotion: appliedPromotion,
       };
+      const soldByBatch = new Map();
+      cart.forEach((item) => {
+        if (item.batchId) soldByBatch.set(item.batchId, (soldByBatch.get(item.batchId) || 0) + item.qty + item.freeQty);
+      });
+      setBatchData((current) => current.key === batchKey ? {
+        ...current,
+        data: current.data.map((batch) => ({ ...batch, remainingQuantity: batch.remainingQuantity - (soldByBatch.get(batch._id) || 0) })).filter((batch) => batch.remainingQuantity > 0),
+      } : current);
       setLastReceipt(receipt);
       setRecentInvoices((current) => [{ id: sale.invoiceNumber, customer: sale.customerName, items: sale.items.length, total: sale.total, paymentMode: sale.paymentMode, status: sale.paymentStatus, date: new Date(sale.createdAt).toLocaleDateString(), location: sale.location?.name || selectedLocation?.name || "-", sale }, ...current]);
       setInventory((current) => current.map((product) => {
-        const soldItem = cart.find((item) => item.id === product.id);
-        if (!soldItem) return product;
-        const quantitySold = soldItem.qty + soldItem.freeQty;
+        const quantitySold = cart.filter((item) => item.id === product.id).reduce((sum, item) => sum + item.qty + item.freeQty, 0);
+        if (!quantitySold) return product;
         return {
           ...product,
           stock: Math.max(0, product.stock - quantitySold),
@@ -295,6 +397,8 @@ const AdminPos = () => {
       setCart([]);
       setQuantity(1);
       setFreeQuantity(0);
+      setDiscount(0);
+      setSelectedBatchId("");
       setPaymentMode("Cash");
       setAppliedPromotion(null);
       setSelectedOfferId("");
@@ -321,7 +425,7 @@ const AdminPos = () => {
     }
 
     const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
-    const itemRows = receiptToPrint.items.map((item) => `<tr><td>${escapeHtml(item.name)}<small>${item.freeQty ? `${item.freeQty} free` : ""}</small></td><td>${item.qty}</td><td>${formatCurrency(Math.max(item.qty * item.price - item.discount, 0))}</td></tr>`).join("");
+    const itemRows = receiptToPrint.items.map((item) => `<tr><td>${escapeHtml(item.name)}<small>${item.batchNumber ? `Batch ${escapeHtml(item.batchNumber)}` : ""}${item.expiryDate ? ` · Exp ${escapeHtml(new Date(item.expiryDate).toLocaleDateString())}` : ""}${item.freeQty ? ` · ${item.freeQty} free` : ""}</small></td><td>${item.qty}</td><td>${formatCurrency(Math.max(item.qty * item.price - item.discount, 0))}</td></tr>`).join("");
     printWindow.document.write(`<!doctype html><html><head><title>${escapeHtml(receiptToPrint.invoiceNumber)}</title><style>body{font-family:Arial,sans-serif;color:#17202a;padding:24px;max-width:390px;margin:auto}h1{font-size:20px;margin:0 0 4px}p{margin:5px 0;color:#5b6670;font-size:13px}.meta{border-bottom:1px solid #dfe4e8;padding-bottom:14px;margin-bottom:14px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 0;border-bottom:1px solid #edf0f2;text-align:left}th:last-child,td:last-child{text-align:right}td:nth-child(2){text-align:center}small{display:block;color:#008f68;margin-top:3px}.totals{margin-top:14px}.line{display:flex;justify-content:space-between;padding:5px 0;font-size:13px}.total{border-top:2px solid #17202a;margin-top:6px;padding-top:10px;font-size:18px;font-weight:bold}.thanks{text-align:center;margin-top:28px}@media print{body{padding:0}}</style></head><body><div class="meta"><h1>Sales Invoice</h1><p><strong>${escapeHtml(receiptToPrint.invoiceNumber)}</strong></p><p>Customer: ${escapeHtml(receiptToPrint.customerName)}</p><p>Payment: ${escapeHtml(receiptToPrint.paymentMode)}</p><p>${new Date().toLocaleString()}</p></div><table><thead><tr><th>Product</th><th>Qty</th><th>Amount</th></tr></thead><tbody>${itemRows}</tbody></table><div class="totals"><div class="line"><span>Subtotal</span><span>${formatCurrency(receiptToPrint.totals.subtotal)}</span></div><div class="line"><span>Discount</span><span>-${formatCurrency(receiptToPrint.totals.discount)}</span></div>${receiptToPrint.promotion ? `<div class="line"><span>Offer</span><span>${escapeHtml(receiptToPrint.promotion.title)}</span></div>` : ""}<div class="line"><span>GST (5%)</span><span>${formatCurrency(receiptToPrint.totals.tax)}</span></div><div class="line total"><span>Total</span><span>${formatCurrency(receiptToPrint.totals.total)}</span></div></div><p class="thanks">Thank you for shopping with us.</p><script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();};</script></body></html>`);
     printWindow.document.close();
   };
@@ -345,7 +449,7 @@ const AdminPos = () => {
       customerName: invoice.customer,
       paymentMode: invoice.paymentMode,
       locationName: invoice.location,
-      items: sale.items.map((item) => ({ name: item.productName, qty: item.quantity, freeQty: item.freeQuantity, price: item.unitPrice, discount: item.discount })),
+      items: sale.items.map((item) => ({ name: item.productName, batchNumber: item.batchNumber, expiryDate: item.expiryDate, qty: item.quantity, freeQty: item.freeQuantity, price: item.unitPrice, discount: item.discount })),
       totals: { subtotal: sale.subtotal, discount: sale.discount, tax: sale.tax, total: sale.total },
     });
   };
@@ -363,24 +467,28 @@ const AdminPos = () => {
         <div className="border-b border-slate-100 px-5 py-4 sm:px-6"><p className="text-xs font-semibold uppercase tracking-wide text-primary">Invoice details</p><h2 className="mt-1 text-lg font-bold text-slate-900">Customer and location</h2></div>
         <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
           <label className="text-sm font-medium text-slate-700">Customer<input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in customer" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
-          <label className="text-sm font-medium text-slate-700"><span className="flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" />Stock location</span><select value={selectedLocationId} onChange={(event) => { if (cart.length && !window.confirm("Changing location will clear the current invoice. Continue?")) return; setCart([]); setSelectedLocationId(event.target.value); setError(""); }} disabled={loading || saving} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:opacity-60"><option value="">Select a store location</option>{locations.map((location) => <option key={location._id} value={location._id}>{location.name}</option>)}</select></label>
+          <label className="text-sm font-medium text-slate-700"><span className="flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" />Stock location</span><select value={selectedLocationId} onChange={(event) => { if (cart.length && !window.confirm("Changing location will clear the current invoice. Continue?")) return; setCart([]); setSelectedLocationId(event.target.value); setSelectedBatchId(""); setError(""); }} disabled={loading || saving} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:opacity-60"><option value="">Select a store location</option>{locations.map((location) => <option key={location._id} value={location._id}>{location.name}</option>)}</select></label>
         </div>
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white">
         <div className="border-b border-slate-100 px-5 py-4 sm:px-6"><p className="text-xs font-semibold uppercase tracking-wide text-primary">Sales invoice</p><h2 className="mt-1 text-lg font-bold text-slate-900">Add products</h2><p className="mt-1 text-sm text-slate-500">Available quantities reflect the selected location.</p></div>
-        <div className="grid items-end gap-4 p-5 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1.6fr)_120px_120px_150px_auto] sm:p-6">
-          <SearchableSelect label="Product" value={selectedProductId} onChange={setSelectedProductId} placeholder="Search products..." options={inventory.map((product) => ({ value: product.id, label: product.name, description: `${product.category || "Product"} · ${stockAtSelectedLocation(product)} ${product.unit || "unit"} at location · ${formatCurrency(product.price)}` }))} />
+        <div className="grid items-end gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4 sm:p-6">
+          <SearchableSelect label="Product" value={selectedProductId} onChange={(productId) => { setSelectedProductId(productId); setSelectedBatchId(""); setRate(String(inventory.find((product) => product.id === productId)?.price ?? "")); }} placeholder="Search products..." options={inventory.map((product) => ({ value: product.id, label: product.name, description: `${product.category || "Product"} · ${stockAtSelectedLocation(product)} ${product.unit || "unit"} at location · ${formatCurrency(product.price)}` }))} />
+          <label className="text-sm font-medium text-slate-700">Batch<select value={selectedBatchId} onChange={(event) => setSelectedBatchId(event.target.value)} disabled={!selectedProduct || !selectedLocationId || batchLoading || saving} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:bg-slate-50 disabled:opacity-70"><option value="">{batchLoading ? "Loading batches..." : batches.length ? "Select a batch" : "No batch records"}</option>{batches.map((batch) => <option key={batch._id} value={batch._id}>{batch.batchNumber || batch.invoiceNumber} · {batch.remainingQuantity} available</option>)}</select></label>
+          <label className="text-sm font-medium text-slate-700">Expiry<input type="date" readOnly value={selectedBatch?.expiryDate ? new Date(selectedBatch.expiryDate).toISOString().slice(0, 10) : ""} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600" /></label>
+          <label className="text-sm font-medium text-slate-700">MRP<input type="number" readOnly value={selectedBatch?.mrp ?? ""} placeholder="Select batch" className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600" /></label>
+          <label className="text-sm font-medium text-slate-700">Rate<input type="number" min="0" step="0.01" value={rate} onChange={(event) => setRate(event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
           <label className="text-sm font-medium text-slate-700">Qty<input type="number" min="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
           <label className="text-sm font-medium text-slate-700">Free qty<input type="number" min="0" value={freeQuantity} onChange={(event) => setFreeQuantity(event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
-          <div className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-[10px] font-semibold uppercase text-slate-400">Rate / available</p><p className="truncate text-sm font-semibold text-slate-800">{selectedProduct ? `${formatCurrency(selectedProduct.price)} · ${stockAtSelectedLocation(selectedProduct)} ${selectedProduct.unit || "unit"}` : "Select product"}</p></div>
-          <button type="button" onClick={addToCart} disabled={!selectedProduct || !selectedLocationId || loading || saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"><Plus className="h-4 w-4" />Add line</button>
+          <label className="text-sm font-medium text-slate-700">Discount<input type="number" min="0" step="0.01" value={discount} onChange={(event) => setDiscount(event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+          <div className="flex justify-end xl:col-span-4"><button type="button" onClick={addToCart} disabled={!selectedProduct || !selectedLocationId || batchLoading || loading || saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"><Plus className="h-4 w-4" />Add line</button></div>
         </div>
         <div className="overflow-x-auto border-t border-slate-100">
-          <table className="w-full min-w-190 text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Product</th><th className="px-4 py-3">Qty</th><th className="px-4 py-3">Free</th><th className="px-4 py-3">Rate</th><th className="px-4 py-3">Discount</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3" /></tr></thead>
+          <table className="w-full min-w-300 text-left text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Product</th><th className="px-4 py-3">Batch</th><th className="px-4 py-3">Expiry</th><th className="px-4 py-3">MRP</th><th className="px-4 py-3">Qty</th><th className="px-4 py-3">Free qty</th><th className="px-4 py-3">Rate</th><th className="px-4 py-3">Discount</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3" /></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {cart.length ? cart.map((item) => <tr key={item.id}><td className="px-5 py-3 font-medium text-slate-800">{item.name}{item.automaticOffer && <span className="mt-1 block text-xs text-primary">{item.automaticOffer}</span>}</td><td className="px-4 py-3"><input aria-label={`${item.name} quantity`} type="number" min="1" value={item.qty} onChange={(event) => updateCartItem(item.id, "qty", event.target.value)} className="w-16 rounded-md border border-slate-200 px-2 py-1" /></td><td className="px-4 py-3"><input aria-label={`${item.name} free quantity`} type="number" min="0" value={item.freeQty} onChange={(event) => updateCartItem(item.id, "freeQty", event.target.value)} className="w-16 rounded-md border border-slate-200 px-2 py-1" /></td><td className="px-4 py-3 text-slate-600">{formatCurrency(item.price)}</td><td className="px-4 py-3"><input aria-label={`${item.name} discount`} type="number" min="0" value={item.discount} onChange={(event) => updateCartItem(item.id, "discount", event.target.value)} className="w-20 rounded-md border border-slate-200 px-2 py-1" /></td><td className="px-4 py-3 font-semibold text-slate-800">{formatCurrency(Math.max(item.qty * item.price - item.discount, 0))}</td><td className="px-4 py-3"><button type="button" onClick={() => removeFromCart(item.id)} aria-label={`Remove ${item.name}`} className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button></td></tr>) : <tr><td colSpan="7" className="px-5 py-12 text-center text-sm text-slate-500">{loading ? "Loading products..." : "No items yet. Search for a product to start this invoice."}</td></tr>}
+              {cart.length ? cart.map((item) => <tr key={item.lineId}><td className="px-5 py-3 font-medium text-slate-800">{item.name}{item.automaticOffer && <span className="mt-1 block text-xs text-primary">{item.automaticOffer}</span>}</td><td className="px-4 py-3 text-slate-600">{item.batchNumber || "-"}</td><td className="px-4 py-3 text-slate-600">{item.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : "-"}</td><td className="px-4 py-3 text-slate-600">{item.mrp ? formatCurrency(item.mrp) : "-"}</td><td className="px-4 py-3"><input aria-label={`${item.name} quantity`} type="number" min="1" value={item.qty} onChange={(event) => updateCartItem(item.lineId, "qty", event.target.value)} className="w-16 rounded-md border border-slate-200 px-2 py-1" /></td><td className="px-4 py-3"><input aria-label={`${item.name} free quantity`} type="number" min="0" value={item.freeQty} onChange={(event) => updateCartItem(item.lineId, "freeQty", event.target.value)} className="w-16 rounded-md border border-slate-200 px-2 py-1" /></td><td className="px-4 py-3"><input aria-label={`${item.name} rate`} type="number" min="0" step="0.01" value={item.price} onChange={(event) => updateCartItem(item.lineId, "price", event.target.value)} className="w-24 rounded-md border border-slate-200 px-2 py-1" /></td><td className="px-4 py-3"><input aria-label={`${item.name} discount`} type="number" min="0" value={item.discount} onChange={(event) => updateCartItem(item.lineId, "discount", event.target.value)} className="w-20 rounded-md border border-slate-200 px-2 py-1" /></td><td className="px-4 py-3 font-semibold text-slate-800">{formatCurrency(Math.max(item.qty * item.price - item.discount, 0))}</td><td className="px-4 py-3"><button type="button" onClick={() => removeFromCart(item.lineId)} aria-label={`Remove ${item.name}`} className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button></td></tr>) : <tr><td colSpan="10" className="px-5 py-12 text-center text-sm text-slate-500">{loading ? "Loading products..." : "No items yet. Search for a product to start this invoice."}</td></tr>}
             </tbody>
           </table>
         </div>

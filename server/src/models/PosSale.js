@@ -2,7 +2,11 @@ const mongoose = require("mongoose");
 
 const saleItemSchema = new mongoose.Schema({
   product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
+  purchase: { type: mongoose.Schema.Types.ObjectId, ref: "Purchase" },
   productName: { type: String, required: true, trim: true },
+  batchNumber: { type: String, trim: true, default: "" },
+  expiryDate: { type: Date },
+  mrp: { type: Number, min: 0, default: 0 },
   unit: { type: String, trim: true, default: "unit" },
   unitPrice: { type: Number, required: true, min: 0 },
   quantity: { type: Number, required: true, min: 1 },

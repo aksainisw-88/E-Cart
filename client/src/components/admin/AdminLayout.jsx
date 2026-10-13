@@ -12,7 +12,7 @@ const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [storeMenuOpen, setStoreMenuOpen] = useState(() => {
     const path = window.location.pathname;
-    return path === "/admin/store" || path.startsWith("/admin/store/") || ["/admin/stores", "/admin/testimonials", "/admin/hero-slider"].includes(path);
+    return path.startsWith("/admin/store/") || ["/admin/stores", "/admin/testimonials", "/admin/hero-slider"].includes(path);
   });
   const [authState, setAuthState] = useState("checking");
   const [adminUser, setAdminUser] = useState(null);
@@ -135,12 +135,10 @@ const AdminLayout = () => {
       const active = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`) || childActive;
       return (
         <div key={item.to}>
-          <div className={`flex items-center rounded-xl transition ${active ? "bg-primary/5 text-primary" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}>
-            <NavLink to={item.to} end className={({ isActive }) => `group flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium ${isActive ? "text-primary" : ""}`} onClick={() => setSidebarOpen(false)}>
-              <Icon className="h-[18px] w-[18px] shrink-0" /><span className="truncate">{item.label}</span>
-            </NavLink>
-            <button type="button" aria-label={`${storeMenuOpen ? "Collapse" : "Expand"} ${item.label}`} aria-expanded={storeMenuOpen} onClick={() => setStoreMenuOpen((open) => !open)} className="mr-2 rounded-md p-1.5 hover:bg-white/80"><ChevronDown className={`h-4 w-4 transition-transform ${storeMenuOpen ? "rotate-180" : ""}`} /></button>
-          </div>
+          <button type="button" aria-expanded={storeMenuOpen} onClick={() => setStoreMenuOpen((open) => !open)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${active ? "bg-primary/5 text-primary" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}>
+            <Icon className="h-[18px] w-[18px] shrink-0" /><span className="min-w-0 flex-1 truncate">{item.label}</span>
+            <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 transition-transform ${storeMenuOpen ? "rotate-180" : ""}`} />
+          </button>
           {storeMenuOpen && <div className="ml-5 mt-1 space-y-1 border-l border-slate-200 pl-3">{item.children.filter(hasMenuAccess).map((child) => <NavLink key={child.to} to={child.to} onClick={() => setSidebarOpen(false)} className={({ isActive }) => `block rounded-lg px-3 py-2 text-xs font-medium transition ${isActive ? "bg-primary text-white" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}>{child.label}</NavLink>)}</div>}
         </div>
       );

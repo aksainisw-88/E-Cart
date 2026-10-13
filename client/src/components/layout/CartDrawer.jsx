@@ -21,7 +21,7 @@ const CartDrawer = () => {
         className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-[2px]"
       />
       <aside className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Your cart</h2>
             <p className="text-xs text-gray-500">{items.length} products</p>
@@ -35,7 +35,7 @@ const CartDrawer = () => {
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
           {items.length ? (
             <div className="space-y-4">
               {items.map((item) => (
@@ -99,7 +99,7 @@ const CartDrawer = () => {
           )}
         </div>
         {items.length > 0 && (
-          <div className="border-t border-gray-100 p-5">
+          <div className="shrink-0 border-t border-gray-100 p-5">
             <div className="flex justify-between text-base font-bold">
               <span>Total</span>
               <span>₹{subtotal}</span>

@@ -74,7 +74,7 @@ const createPurchase = async (input) => {
   const location = await resolveActiveLocation(data.location);
   if (data.location && !location) throw Object.assign(new Error("Select an active stock location."), { statusCode: 400 });
   const amounts = getAmounts(data);
-  const purchase = await Purchase.create({ ...data, ...amounts, invoiceNumber: createInvoiceNumber(), vendor: vendor._id, product: product._id, location: location?._id, productName: product.name });
+  const purchase = await Purchase.create({ ...data, ...amounts, remainingQuantity: data.quantity + data.freeQuantity, invoiceNumber: createInvoiceNumber(), vendor: vendor._id, product: product._id, location: location?._id, productName: product.name });
   changeProductStock(product, location?._id, data.quantity + data.freeQuantity);
   product.costPrice = data.unitCost;
   if (data.mrp > 0) product.originalPrice = data.mrp;
@@ -149,19 +149,28 @@ router.put("/:id", async (request, response, next) => {
     const sameProduct = Boolean(oldProduct && oldProduct._id.equals(product._id));
     const stockProduct = sameProduct ? oldProduct : product;
     const sameProductLocation = sameProduct && oldPurchase.location?.toString() === location?._id.toString();
+    const oldPurchasedQuantity = Number(oldPurchase.quantity) + Number(oldPurchase.freeQuantity || 0);
+    const oldRemainingQuantity = Math.min(oldPurchasedQuantity, Math.max(0, Number(oldPurchase.remainingQuantity ?? oldPurchasedQuantity)));
+    const soldQuantity = oldPurchasedQuantity - oldRemainingQuantity;
+    const newPurchasedQuantity = data.quantity + data.freeQuantity;
+    const sameExpiry = (!oldPurchase.expiryDate && !data.expiryDate) || (oldPurchase.expiryDate && data.expiryDate && oldPurchase.expiryDate.getTime() === data.expiryDate.getTime());
+    const sameBatch = sameProductLocation && oldPurchase.batchNumber === data.batchNumber && sameExpiry;
+    if (soldQuantity > 0 && !sameBatch) return response.status(400).json({ success: false, message: "A batch with sold units cannot be moved or renamed." });
+    if (newPurchasedQuantity < soldQuantity) return response.status(400).json({ success: false, message: "Purchase quantity cannot be lower than the quantity already sold." });
+    const remainingQuantity = newPurchasedQuantity - soldQuantity;
     const sameVendor = Boolean(oldVendor && oldVendor._id.equals(vendor._id));
     const balanceVendor = sameVendor ? oldVendor : vendor;
     if (sameProductLocation) {
-      changeProductStock(stockProduct, location?._id, data.quantity + data.freeQuantity - oldPurchase.quantity - oldPurchase.freeQuantity);
+      changeProductStock(stockProduct, location?._id, remainingQuantity - oldRemainingQuantity);
     } else if (oldProduct) {
-      changeProductStock(oldProduct, oldPurchase.location, -(oldPurchase.quantity + oldPurchase.freeQuantity));
+      changeProductStock(oldProduct, oldPurchase.location, -oldRemainingQuantity);
     }
     if (oldVendor) oldVendor.pendingAmount = Math.max(0, oldVendor.pendingAmount - oldPurchase.total);
     if (oldProduct && !sameProduct) await oldProduct.save();
     if (oldVendor && !sameVendor) await oldVendor.save();
     const amounts = getAmounts(data);
-    const purchase = await Purchase.findByIdAndUpdate(request.params.id, { ...data, ...amounts, invoiceNumber: oldPurchase.invoiceNumber, vendor: vendor._id, product: product._id, location: location?._id, productName: product.name }, { new: true, runValidators: true }).populate("vendor", "name").populate("product", "name stock").populate("location", "name city");
-    if (!sameProductLocation) changeProductStock(stockProduct, location?._id, data.quantity + data.freeQuantity);
+    const purchase = await Purchase.findByIdAndUpdate(request.params.id, { ...data, ...amounts, remainingQuantity, invoiceNumber: oldPurchase.invoiceNumber, vendor: vendor._id, product: product._id, location: location?._id, productName: product.name }, { new: true, runValidators: true }).populate("vendor", "name").populate("product", "name stock").populate("location", "name city");
+    if (!sameProductLocation) changeProductStock(stockProduct, location?._id, remainingQuantity);
     stockProduct.costPrice = data.unitCost;
     if (data.mrp > 0) stockProduct.originalPrice = data.mrp;
     stockProduct.vendorName = vendor.name;
@@ -179,7 +188,12 @@ router.delete("/:id", async (request, response, next) => {
     if (!purchase) return response.status(404).json({ success: false, message: "Purchase entry not found" });
     const product = await Product.findById(purchase.product);
     const vendor = await Vendor.findById(purchase.vendor);
-    if (product) { changeProductStock(product, purchase.location, -(purchase.quantity + purchase.freeQuantity)); await product.save(); }
+    if (product) {
+      const purchasedQuantity = Number(purchase.quantity) + Number(purchase.freeQuantity || 0);
+      const remainingQuantity = Math.min(purchasedQuantity, Math.max(0, Number(purchase.remainingQuantity ?? purchasedQuantity)));
+      changeProductStock(product, purchase.location, -remainingQuantity);
+      await product.save();
+    }
     if (vendor) { vendor.pendingAmount = Math.max(0, vendor.pendingAmount - purchase.total); await vendor.save(); }
     await purchase.deleteOne();
     response.json({ success: true, message: "Purchase entry deleted" });

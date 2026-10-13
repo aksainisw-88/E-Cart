@@ -15,6 +15,7 @@ const purchaseSchema = new mongoose.Schema(
     rate: { type: Number, min: 0, default: 0 },
     quantity: { type: Number, required: true, min: 1 },
     freeQuantity: { type: Number, min: 0, default: 0 },
+    remainingQuantity: { type: Number, min: 0 },
     unitCost: { type: Number, required: true, min: 0 },
     discount: { type: Number, min: 0, default: 0 },
     taxRate: { type: Number, min: 0, max: 100, default: 0 },
