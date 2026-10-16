@@ -10,7 +10,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: CLIENT_URL
-        value: https://e-cart-client-git-main-aiteam20.vercel.app
+        value: https://e-cart-client-gamma.vercel.app
       - key: MONGO_URI
         sync: false
       - key: JWT_SECRET
