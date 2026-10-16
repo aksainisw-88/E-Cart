@@ -13,6 +13,7 @@ const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 
 const purchaseSchema = z.object({
   vendor: z.string().min(1),
   product: z.string().min(1),
+  variant: z.string().trim().max(120).optional().default(""),
   vendorInvoiceNumber: z.string().trim().max(120).optional().default(""),
   referenceNumber: z.string().trim().max(120).optional().default(""),
   location: z.union([z.string().regex(/^[a-f\d]{24}$/i), z.literal("")]).optional().default(""),
@@ -36,13 +37,30 @@ const adjustmentSchema = z.object({
   adjustmentDate: z.coerce.date(),
 });
 
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const normalizeText = (value) => String(value ?? "").trim();
+const normalizeNumber = (value, fallback = 0) => {
+  if (value === null || value === undefined || value === "") return fallback;
+  const cleaned = String(value).replace(/[₹,\s]/g, "");
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
 const resolveVendor = async (value) => {
-  const existing = await Vendor.findById(value).catch(() => null) || await Vendor.findOne({ name: new RegExp(`^${String(value).trim()}$`, "i") });
-  return existing || Vendor.create({ name: String(value).trim() });
+  const input = normalizeText(value);
+  if (!input) return null;
+  const existing = await Vendor.findById(input).catch(() => null) || await Vendor.findOne({ name: { $regex: new RegExp(`^${escapeRegExp(input)}$`, "i") } });
+  return existing || Vendor.create({ name: input });
 };
 const resolveProduct = async (value) => {
-  const existing = await Product.findById(value).catch(() => null) || await Product.findOne({ name: new RegExp(`^${String(value).trim()}$`, "i") });
-  return existing;
+  const input = normalizeText(value);
+  if (!input) return null;
+  return await Product.findById(input).catch(() => null) || await Product.findOne({ name: { $regex: new RegExp(`^${escapeRegExp(input)}$`, "i") } });
+};
+const resolveLocation = async (value) => {
+  const input = normalizeText(value);
+  if (!input) return null;
+  if (/^[a-f\d]{24}$/i.test(input)) return StoreLocation.findOne({ _id: input, active: true }).select("_id").lean();
+  return StoreLocation.findOne({ name: { $regex: new RegExp(`^${escapeRegExp(input)}$`, "i") }, active: true }).select("_id").lean();
 };
 const getAmounts = (data) => {
   const rate = data.rate ?? data.unitCost;
@@ -61,13 +79,36 @@ const changeProductStock = (product, locationId, quantityChange) => {
   else if (quantityChange > 0) product.locationStock.push({ location: locationId, quantity: quantityChange });
 };
 
-const resolveActiveLocation = async (locationId) => {
-  if (!locationId) return null;
-  if (!/^[a-f\d]{24}$/i.test(locationId)) return null;
-  return StoreLocation.findOne({ _id: locationId, active: true }).select("_id").lean();
+const resolveActiveLocation = async (locationId) => resolveLocation(locationId);
+
+const findVariant = (product, variantInput) => {
+  const value = normalizeText(variantInput);
+  if (!product || !value || !Array.isArray(product.variants)) return null;
+  return product.variants.find((variant) => {
+    const variantId = String(variant?._id || "");
+    const variantName = normalizeText(variant?.name);
+    const variantSku = normalizeText(variant?.sku);
+    return variantId === value || variantName.toLowerCase() === value.toLowerCase() || variantSku.toLowerCase() === value.toLowerCase();
+  }) || null;
+};
+
+const updateVariantStock = (product, variantInput, locationId, quantityChange) => {
+  const value = normalizeText(variantInput);
+  if (!product || !value || !Array.isArray(product.variants) || !locationId) return;
+  const target = findVariant(product, value);
+  if (!target) return;
+  target.locationStock ||= [];
+  const locationEntry = target.locationStock.find((entry) => entry.location?.toString() === locationId.toString());
+  if (locationEntry) locationEntry.quantity = Math.max(0, Number(locationEntry.quantity || 0) + quantityChange);
+  else if (quantityChange > 0) target.locationStock.push({ location: locationId, quantity: quantityChange });
 };
 
 const createPurchase = async (input) => {
+  if (Array.isArray(input?.items) && input.items.length) {
+    const created = [];
+    for (const item of input.items) created.push(await createPurchase(item));
+    return created;
+  }
   const data = purchaseSchema.parse(input);
   const [vendor, product] = await Promise.all([resolveVendor(data.vendor), resolveProduct(data.product)]);
   if (!product) throw new Error("Product not found. Use the product ID or exact product name.");
@@ -75,7 +116,9 @@ const createPurchase = async (input) => {
   if (data.location && !location) throw Object.assign(new Error("Select an active stock location."), { statusCode: 400 });
   const amounts = getAmounts(data);
   const purchase = await Purchase.create({ ...data, ...amounts, remainingQuantity: data.quantity + data.freeQuantity, invoiceNumber: createInvoiceNumber(), vendor: vendor._id, product: product._id, location: location?._id, productName: product.name });
-  changeProductStock(product, location?._id, data.quantity + data.freeQuantity);
+  const purchaseQuantity = data.quantity + data.freeQuantity;
+  changeProductStock(product, location?._id, purchaseQuantity);
+  if (data.variant) updateVariantStock(product, data.variant, location?._id, purchaseQuantity);
   product.costPrice = data.unitCost;
   if (data.mrp > 0) product.originalPrice = data.mrp;
   product.vendorName = vendor.name;
@@ -128,9 +171,29 @@ router.post("/adjustment", async (request, response, next) => {
 router.post("/import", csvUpload.single("file"), async (request, response, next) => {
   try {
     if (!request.file) return response.status(400).json({ success: false, message: "CSV file is required" });
-    const rows = parse(request.file.buffer, { columns: true, skip_empty_lines: true, trim: true });
+    const rows = parse(request.file.buffer, { columns: true, skip_empty_lines: true, trim: true, bom: true });
     const imported = [];
-    for (const row of rows) imported.push(await createPurchase({ vendor: row.vendor || row.vendorName, product: row.product || row.productName, vendorInvoiceNumber: row.vendorInvoiceNumber || row.invoiceNumber, referenceNumber: row.referenceNumber, location: row.location, batchNumber: row.batchNumber, expiryDate: row.expiryDate || undefined, mrp: row.mrp || 0, rate: row.rate || row.unitCost || row.cost, quantity: row.quantity, freeQuantity: row.freeQuantity || 0, unitCost: row.unitCost || row.cost, discount: row.discount || 0, taxRate: row.taxRate || 0, purchaseDate: row.purchaseDate || new Date().toISOString() }));
+    for (const row of rows) {
+      const payload = {
+        vendor: row.vendor || row.vendorName || row.supplier || row.supplierName,
+        product: row.product || row.productName || row.itemName || row.item,
+        variant: row.variant || row.variantName || row.variantSku || "",
+        vendorInvoiceNumber: row.vendorInvoiceNumber || row.invoiceNumber || row.invoice || row.billNumber,
+        referenceNumber: row.referenceNumber || row.ref || row.reference || "",
+        location: row.location || row.locationName || row.storeLocation || row.branch || "",
+        batchNumber: row.batchNumber || row.batch || "",
+        expiryDate: row.expiryDate || row.expiry || undefined,
+        mrp: normalizeNumber(row.mrp ?? row.mrpPrice ?? row.price, 0),
+        rate: normalizeNumber(row.rate ?? row.unitCost ?? row.cost ?? row.purchaseRate, 0),
+        quantity: normalizeNumber(row.quantity, 0),
+        freeQuantity: normalizeNumber(row.freeQuantity ?? row.freeQty, 0),
+        unitCost: normalizeNumber(row.unitCost ?? row.cost ?? row.purchaseCost, 0),
+        discount: normalizeNumber(row.discount ?? row.discountAmount, 0),
+        taxRate: normalizeNumber(row.taxRate ?? row.gstRate ?? row.tax, 0),
+        purchaseDate: row.purchaseDate || row.date || new Date().toISOString(),
+      };
+      imported.push(await createPurchase(payload));
+    }
     response.status(201).json({ success: true, imported: imported.length, data: imported });
   } catch (error) { next(error); }
 });

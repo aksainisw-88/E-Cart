@@ -14,6 +14,7 @@ const AdminPurchaseEntry = () => {
   const [locations, setLocations] = useState([]);
   const [adjustments, setAdjustments] = useState([]);
   const [form, setForm] = useState(emptyForm);
+  const [purchaseItems, setPurchaseItems] = useState([]);
   const [adjustment, setAdjustment] = useState(emptyAdjustment);
   const [editingId, setEditingId] = useState(null);
   const [historyQuery, setHistoryQuery] = useState("");
@@ -81,18 +82,36 @@ const AdminPurchaseEntry = () => {
   const resetForm = () => { setEditingId(null); setForm({ ...emptyForm, location: locations.find((location) => location.isDefault)?._id || locations[0]?._id || "", purchaseDate: new Date().toISOString().slice(0, 10) }); };
   const updateAdjustment = (field) => (event) => setAdjustment((current) => ({ ...current, [field]: event.target.value }));
 
+  const addPurchaseItem = () => {
+    if (!form.vendor || !form.product || !form.location || !form.vendorInvoiceNumber.trim()) {
+      setError("Select a vendor, product, location, and invoice number before adding another entry.");
+      return;
+    }
+    setPurchaseItems((current) => [...current, { ...form, expiryDate: form.expiryDate || undefined }]);
+    setMessage("Purchase item added to the batch.");
+    resetForm();
+  };
+
   const savePurchase = async () => {
     setError("");
-    if (!form.vendor || !form.product || (!editingId && (!form.location || !form.vendorInvoiceNumber.trim()))) {
+    const itemsToSave = purchaseItems.length ? purchaseItems : [{ ...form, expiryDate: form.expiryDate || undefined }];
+    const firstItem = itemsToSave[0];
+    if (!firstItem?.vendor || !firstItem?.product || (!editingId && (!firstItem?.location || !firstItem?.vendorInvoiceNumber?.trim()))) {
       setError("Select a vendor, product, and stock location, and enter the vendor invoice number for new purchases.");
       return;
     }
     setSaving(true);
     try {
-      const response = await fetch(`${apiUrl}/api/purchases${editingId ? `/${editingId}` : ""}`, { method: editingId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ ...form, expiryDate: form.expiryDate || undefined }) });
+      const response = await fetch(`${apiUrl}/api/purchases${editingId ? `/${editingId}` : ""}`, {
+        method: editingId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(editingId ? { ...firstItem, expiryDate: firstItem.expiryDate || undefined } : { items: itemsToSave.map((item) => ({ ...item, expiryDate: item.expiryDate || undefined })) }),
+      });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Unable to save purchase entry.");
-      setMessage(editingId ? "Purchase entry updated and stock adjusted." : "Purchase entry saved and stock updated.");
+      setMessage(editingId ? "Purchase entry updated and stock adjusted." : `${itemsToSave.length} purchase ${itemsToSave.length === 1 ? "entry" : "entries"} saved and stock updated.`);
+      setPurchaseItems([]);
       resetForm();
       await refresh();
     } catch (requestError) {
@@ -182,7 +201,11 @@ const AdminPurchaseEntry = () => {
             <label className="text-sm font-medium text-slate-700">Tax (%)<input type="number" min="0" max="100" step="0.01" value={form.taxRate} onChange={updateField("taxRate")} className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3" /></label>
             <label className="text-sm font-medium text-slate-700">Discount amount<input type="number" min="0" step="0.01" value={form.discount} onChange={updateField("discount")} className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3" /></label>
           </div>
-          <div className="flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Invoice amount</p><p className="mt-1 text-xs text-slate-500">Qty × rate + tax − discount</p></div><div className="flex flex-col-reverse gap-2 sm:flex-row"><button type="button" onClick={resetForm} disabled={saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"><X className="h-4 w-4" />Cancel</button><button type="button" onClick={savePurchase} disabled={saving} className="inline-flex h-11 items-center justify-center gap-3 rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60"><span>{saving ? "Saving..." : editingId ? "Update purchase" : "Save purchase"}</span><span className="border-l border-white/30 pl-3 font-bold">{formatCurrency(calculatedAmount)}</span></button></div></div>
+          <div className="flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Invoice amount</p><p className="mt-1 text-xs text-slate-500">Qty × rate + tax − discount</p></div><div className="flex flex-col-reverse gap-2 sm:flex-row"><button type="button" onClick={resetForm} disabled={saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"><X className="h-4 w-4" />Cancel</button><button type="button" onClick={addPurchaseItem} disabled={saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 text-sm font-semibold text-primary hover:bg-primary/10 disabled:opacity-50">Add product</button><button type="button" onClick={savePurchase} disabled={saving} className="inline-flex h-11 items-center justify-center gap-3 rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60"><span>{saving ? "Saving..." : editingId ? "Update purchase" : "Save purchase"}</span><span className="border-l border-white/30 pl-3 font-bold">{formatCurrency(calculatedAmount)}</span></button></div></div>
+          {purchaseItems.length > 0 && <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Queued purchase items</p><button type="button" onClick={() => setPurchaseItems([])} className="text-xs font-semibold text-slate-500 hover:text-slate-700">Clear all</button></div>
+            <div className="mt-3 flex flex-wrap gap-2">{purchaseItems.map((item, index) => <span key={`${item.product}-${index}`} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700">{products.find((product) => product._id === item.product)?.name || item.product || "Item"} · {item.quantity}</span>)}</div>
+          </div>}
         </div></section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
