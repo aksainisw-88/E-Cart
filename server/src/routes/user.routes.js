@@ -1,13 +1,28 @@
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const express = require("express");
+const fs = require("fs/promises");
 const mongoose = require("mongoose");
+const path = require("path");
 const { z } = require("zod");
 const User = require("../models/User");
 const Product = require("../models/Product");
+const ProductCategory = require("../models/ProductCategory");
+const Order = require("../models/Order");
+const PosSale = require("../models/PosSale");
 const Purchase = require("../models/Purchase");
+const PurchaseAdjustment = require("../models/PurchaseAdjustment");
+const Vendor = require("../models/Vendor");
+const VendorPayment = require("../models/VendorPayment");
+const Offer = require("../models/Offer");
+const StoreLocation = require("../models/StoreLocation");
+const StoreSettings = require("../models/StoreSettings");
+const SupportTicket = require("../models/SupportTicket");
+const SignupOtp = require("../models/SignupOtp");
+const PasswordReset = require("../models/PasswordReset");
 const InventoryResetOtp = require("../models/InventoryResetOtp");
-const { sendInventoryResetCode } = require("../utils/email");
+const StoreResetOtp = require("../models/StoreResetOtp");
+const { sendInventoryResetCode, sendStoreResetCode } = require("../utils/email");
 
 const router = express.Router();
 const menuPermissionSchema = z.array(z.enum([
@@ -43,10 +58,25 @@ const withRoleMenuValidation = (schema) => schema.superRefine((data, context) =>
 const userSchema = withRoleMenuValidation(z.object({ name: z.string().trim().min(2).max(80), email: z.string().email(), password: z.string().min(8).max(128), role: z.enum(["admin", "manager", "user"]), menuPermissions: menuPermissionSchema }));
 const editSchema = withRoleMenuValidation(z.object({ name: z.string().trim().min(2).max(80), email: z.string().email(), role: z.enum(["admin", "manager", "user"]), menuPermissions: menuPermissionSchema }));
 const inventoryResetConfirmSchema = z.object({ otp: z.string().regex(/^\d{6}$/) });
+const storeResetConfirmSchema = z.object({ otp: z.string().regex(/^\d{6}$/) });
 const hashInventoryResetOtp = (userId, otp, secret) => crypto.createHmac("sha256", secret).update(`${userId}:${otp}`).digest("hex");
+const hashStoreResetOtp = (userId, otp, secret) => crypto.createHmac("sha256", secret).update(`store:${userId}:${otp}`).digest("hex");
 const maskEmail = (email) => {
   const [name, domain] = String(email || "").split("@");
   return name && domain ? `${name.slice(0, 1)}${"*".repeat(Math.max(2, name.length - 1))}@${domain}` : "your admin email";
+};
+const clearUploadDirectory = async (directory) => {
+  let entries;
+  try {
+    entries = await fs.readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  await Promise.all(entries.map((entry) => {
+    const target = path.join(directory, entry.name);
+    return entry.isDirectory() ? fs.rm(target, { recursive: true, force: true }) : fs.unlink(target);
+  }));
 };
 
 router.post("/inventory-reset/otp", async (request, response, next) => {
@@ -122,6 +152,28 @@ router.post("/inventory-reset/confirm", async (request, response, next) => {
     }
     response.json({ success: true, message: "Inventory quantities were reset to zero. Store records and transaction history were preserved.", data: resultCounts });
   } catch (error) { next(error); }
+});
+
+router.post("/store-reset/otp", async (request, response, next) => {
+  try {
+    const admin = await User.findOne({ _id: request.user.id, role: "admin" }).select("email status");
+    if (!admin?.email || admin.status === "Blocked") return response.status(403).json({ success: false, message: "An active admin account is required to reset store data." });
+    const existing = await StoreResetOtp.findOne({ user: admin._id }).select("createdAt").lean();
+    if (existing && Date.now() - new Date(existing.createdAt).getTime() < 60_000) {
+      return response.status(429).json({ success: false, message: "Wait one minute before requesting another store reset code." });
+    }
+    const otp = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+    const sent = await sendStoreResetCode(admin.email, otp, request.app.locals.env);
+    await StoreResetOtp.findOneAndUpdate(
+      { user: admin._id },
+      { otpHash: hashStoreResetOtp(admin._id, otp, request.app.locals.env.JWT_SECRET), attempts: 0, expiresAt: new Date(Date.now() + 10 * 60_000) },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+    response.json({ success: true, message: `Store reset code sent to ${maskEmail(admin.email)}. It expires in 10 minutes.`, ...(!sent ? { developmentOtp: otp } : {}) });
+  } catch (error) {
+    if (error.message === "Email delivery is not configured.") return response.status(503).json({ success: false, message: "Admin email delivery is not configured." });
+    next(error);
+  }
 });
 
 router.get("/", async (request, response, next) => {
