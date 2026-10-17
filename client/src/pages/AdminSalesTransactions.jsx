@@ -75,10 +75,10 @@ const AdminSalesTransactions = () => {
 
   const exportCsv = () => {
     const escape = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-    const header = ["Entry date", "Entry no", "Customer", "Customer source", "Phone", "Product", "Batch", "MRP", "Rate", "Quantity", "Free quantity", "Discount", "Amount", "Payment mode", "Payment status", "Location"];
+    const header = ["Entry date", "Entry no", "Customer", "Customer source", "Phone", "Product", "Variant / pack", "Batch", "MRP", "Rate", "Quantity", "Free quantity", "Discount", "Amount", "Payment mode", "Payment status", "Location"];
     const lines = rows.map(({ sale, item, customerName, customerPhone }) => [
       formatDate(sale.createdAt), sale.invoiceNumber, customerName, sale.customerSource || sale.customer?.customerSource || "Walk-in", customerPhone,
-      item.productName, item.batchNumber, item.mrp, item.unitPrice, item.quantity, item.freeQuantity, item.discount, item.amount,
+      item.productName, item.variant, item.batchNumber, item.mrp, item.unitPrice, item.quantity, item.freeQuantity, item.discount, item.amount,
       sale.paymentMode, sale.paymentStatus, sale.location?.name || "",
     ].map(escape).join(","));
     const blob = new Blob([[header.map(escape).join(","), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
@@ -122,7 +122,7 @@ const AdminSalesTransactions = () => {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-375 text-left text-sm">
-            <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"><tr>{["Entry date", "Entry no", "Customer", "Source", "Phone", "Product", "Batch", "MRP", "Rate", "Qty", "Free", "Discount", "Amount", "Payment", "Location"].map((heading) => <th key={heading} className="px-3 py-3 font-semibold">{heading}</th>)}</tr></thead>
+            <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"><tr>{["Entry date", "Entry no", "Customer", "Source", "Phone", "Product", "Variant / pack", "Batch", "MRP", "Rate", "Qty", "Free", "Discount", "Amount", "Payment", "Location"].map((heading) => <th key={heading} className="px-3 py-3 font-semibold">{heading}</th>)}</tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map(({ key, sale, item, customerName, customerPhone }) => <tr key={key} className="hover:bg-slate-50">
                 <td className="whitespace-nowrap px-3 py-3 text-slate-500">{formatDate(sale.createdAt)}</td>
@@ -131,6 +131,7 @@ const AdminSalesTransactions = () => {
                 <td className="px-3 py-3 text-slate-600">{sale.customerSource || sale.customer?.customerSource || "Walk-in"}</td>
                 <td className="px-3 py-3 text-slate-500">{customerPhone || "-"}</td>
                 <td className="px-3 py-3 font-medium text-slate-700">{item.productName}</td>
+                <td className="px-3 py-3 text-slate-600">{item.variant || "-"}</td>
                 <td className="px-3 py-3 text-slate-600">{item.batchNumber || "-"}</td>
                 <td className="whitespace-nowrap px-3 py-3 text-slate-600">{money(item.mrp)}</td>
                 <td className="whitespace-nowrap px-3 py-3 text-slate-700">{money(item.unitPrice)}</td>
@@ -141,7 +142,7 @@ const AdminSalesTransactions = () => {
                 <td className="px-3 py-3 text-slate-600">{sale.paymentMode}<span className="block text-xs text-slate-400">{sale.paymentStatus}</span></td>
                 <td className="px-3 py-3 text-slate-600">{sale.location?.name || "-"}</td>
               </tr>)}
-              {!loading && !rows.length && <tr><td colSpan="15" className="px-5 py-14 text-center text-sm text-slate-500">No transactions found in this date range.</td></tr>}
+              {!loading && !rows.length && <tr><td colSpan="16" className="px-5 py-14 text-center text-sm text-slate-500">No transactions found in this date range.</td></tr>}
             </tbody>
           </table>
         </div>

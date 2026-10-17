@@ -50,7 +50,7 @@ router.get("/batches", async (request, response, next) => {
       ...purchaseLocationFilter,
       remainingQuantity: { $gt: 0 },
       $or: [{ expiryDate: { $exists: false } }, { expiryDate: null }, { expiryDate: { $gte: today } }],
-    }).select("invoiceNumber batchNumber expiryDate mrp rate remainingQuantity").sort({ expiryDate: 1, purchaseDate: 1 }).lean();
+    }).select("invoiceNumber variant batchNumber expiryDate mrp rate remainingQuantity").sort({ expiryDate: 1, purchaseDate: 1 }).lean();
     response.json({ success: true, data: batches });
   } catch (error) { next(error); }
 });
@@ -86,7 +86,7 @@ router.post("/sales", async (request, response, next) => {
       { updatePipeline: true },
     );
     const purchaseIds = [...new Set(data.items.map((item) => item.purchaseId).filter(Boolean))];
-    const purchases = purchaseIds.length ? await Purchase.find({ _id: { $in: purchaseIds } }).select("product location batchNumber expiryDate mrp rate remainingQuantity") : [];
+    const purchases = purchaseIds.length ? await Purchase.find({ _id: { $in: purchaseIds } }).select("product location variant batchNumber expiryDate mrp rate remainingQuantity") : [];
     const purchaseMap = new Map(purchases.map((purchase) => [purchase._id.toString(), purchase]));
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
@@ -129,6 +129,7 @@ router.post("/sales", async (request, response, next) => {
         product: product._id,
         purchase: purchase?._id,
         productName: product.name,
+        variant: purchase?.variant || "",
         batchNumber: purchase?.batchNumber || "",
         expiryDate: purchase?.expiryDate,
         mrp: Number(purchase?.mrp) || 0,
@@ -181,6 +182,7 @@ router.post("/sales", async (request, response, next) => {
     data.items.forEach((item) => quantitiesByProduct.set(item.productId, (quantitiesByProduct.get(item.productId) || 0) + item.quantity + item.freeQuantity));
     const stockChanged = [];
     const batchStockChanged = [];
+    const variantStockChanged = [];
     const rollbackStock = async () => {
       if (!stockChanged.length) return;
       await Product.bulkWrite(stockChanged.map(({ productId, quantity }) => ({
@@ -195,6 +197,14 @@ router.post("/sales", async (request, response, next) => {
       await Purchase.bulkWrite(batchStockChanged.map(({ purchaseId, quantity }) => ({
         updateOne: { filter: { _id: purchaseId }, update: { $inc: { remainingQuantity: quantity } } },
       })));
+    };
+    const rollbackVariantStock = async () => {
+      if (!variantStockChanged.length) return;
+      await Promise.all(variantStockChanged.map(({ productId, variantName, locationId, quantity }) => Product.updateOne(
+        { _id: productId },
+        { $inc: { "variants.$[variant].locationStock.$[stock].quantity": quantity } },
+        { arrayFilters: [{ "variant.name": variantName }, { "stock.location": locationId }] },
+      )));
     };
     try {
       for (const item of data.items) {
@@ -221,6 +231,7 @@ router.post("/sales", async (request, response, next) => {
           { new: true },
         );
         if (!updatedProduct) {
+          await rollbackVariantStock();
           await rollbackBatchStock();
           await rollbackStock();
           await PosSale.findByIdAndDelete(sale._id);
@@ -228,7 +239,27 @@ router.post("/sales", async (request, response, next) => {
         }
         stockChanged.push({ productId, quantity: requiredStock });
       }
+      for (const item of data.items) {
+        if (!item.purchaseId) continue;
+        const purchase = purchaseMap.get(item.purchaseId);
+        if (!purchase?.variant) continue;
+        const requiredQuantity = item.quantity + item.freeQuantity;
+        const variantStock = await Product.findOneAndUpdate(
+          { _id: item.productId, variants: { $elemMatch: { name: purchase.variant, locationStock: { $elemMatch: { location: location._id, quantity: { $gte: requiredQuantity } } } } } },
+          { $inc: { "variants.$[variant].locationStock.$[stock].quantity": -requiredQuantity } },
+          { new: true, arrayFilters: [{ "variant.name": purchase.variant }, { "stock.location": location._id, "stock.quantity": { $gte: requiredQuantity } }] },
+        );
+        if (!variantStock) {
+          await rollbackVariantStock();
+          await rollbackBatchStock();
+          await rollbackStock();
+          await PosSale.findByIdAndDelete(sale._id);
+          return response.status(409).json({ success: false, message: `Variant stock changed while completing the sale. Review ${purchase.variant} and try again.` });
+        }
+        variantStockChanged.push({ productId: item.productId, variantName: purchase.variant, locationId: location._id, quantity: requiredQuantity });
+      }
     } catch (error) {
+      await rollbackVariantStock();
       await rollbackBatchStock();
       await rollbackStock();
       await PosSale.findByIdAndDelete(sale._id);

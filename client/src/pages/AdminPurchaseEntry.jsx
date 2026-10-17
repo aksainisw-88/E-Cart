@@ -3,7 +3,7 @@ import { FileDown, FileUp, PackagePlus, Pencil, Save, Search, Trash2, Truck, X }
 import SearchableSelect from "../components/admin/SearchableSelect";
 
 const apiUrl = import.meta.env.VITE_API_URL || "";
-const emptyForm = { vendor: "", product: "", vendorInvoiceNumber: "", referenceNumber: "", location: "", batchNumber: "", expiryDate: "", mrp: 0, rate: 0, quantity: 1, freeQuantity: 0, unitCost: 0, taxRate: 0, discount: 0, purchaseDate: new Date().toISOString().slice(0, 10) };
+const emptyForm = { vendor: "", product: "", variant: "", vendorInvoiceNumber: "", referenceNumber: "", location: "", batchNumber: "", expiryDate: "", mrp: 0, rate: 0, quantity: 1, freeQuantity: 0, unitCost: 0, taxRate: 0, discount: 0, purchaseDate: new Date().toISOString().slice(0, 10) };
 const emptyAdjustment = { vendor: "", product: "", stockAdjustment: 0, balanceAdjustment: 0, reason: "", adjustmentDate: new Date().toISOString().slice(0, 10) };
 const formatCurrency = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
 
@@ -73,6 +73,8 @@ const AdminPurchaseEntry = () => {
 
   const totalPurchase = useMemo(() => entries.reduce((sum, entry) => sum + Number(entry.total || 0), 0), [entries]);
   const filteredEntries = useMemo(() => entries.filter((entry) => `${entry.vendorInvoiceNumber || entry.invoiceNumber} ${entry.referenceNumber || ""} ${entry.vendor?.name || ""} ${entry.productName || ""} ${entry.batchNumber || ""} ${entry.location?.name || ""}`.toLowerCase().includes(historyQuery.trim().toLowerCase())), [entries, historyQuery]);
+  const selectedProduct = products.find((product) => product._id === form.product);
+  const productVariants = selectedProduct?.variants || [];
   const calculatedAmount = useMemo(() => {
     const subtotal = (Number(form.quantity) || 0) * (Number(form.rate) || 0);
     const tax = subtotal * ((Number(form.taxRate) || 0) / 100);
@@ -87,6 +89,10 @@ const AdminPurchaseEntry = () => {
       setError("Select a vendor, product, location, and invoice number before adding another entry.");
       return;
     }
+    if (productVariants.length && !form.variant) {
+      setError("Select a product variant or pack before adding this purchase item.");
+      return;
+    }
     setPurchaseItems((current) => [...current, { ...form, expiryDate: form.expiryDate || undefined }]);
     setMessage("Purchase item added to the batch.");
     resetForm();
@@ -96,7 +102,8 @@ const AdminPurchaseEntry = () => {
     setError("");
     const itemsToSave = purchaseItems.length ? purchaseItems : [{ ...form, expiryDate: form.expiryDate || undefined }];
     const firstItem = itemsToSave[0];
-    if (!firstItem?.vendor || !firstItem?.product || (!editingId && (!firstItem?.location || !firstItem?.vendorInvoiceNumber?.trim()))) {
+    const firstItemProduct = products.find((product) => product._id === firstItem?.product);
+    if (!firstItem?.vendor || !firstItem?.product || (firstItemProduct?.variants?.length && !firstItem.variant) || (!editingId && (!firstItem?.location || !firstItem?.vendorInvoiceNumber?.trim()))) {
       setError("Select a vendor, product, and stock location, and enter the vendor invoice number for new purchases.");
       return;
     }
@@ -134,7 +141,7 @@ const AdminPurchaseEntry = () => {
 
   const editEntry = (entry) => {
     setEditingId(entry._id);
-    setForm({ vendor: entry.vendor?._id || entry.vendor, product: entry.product?._id || entry.product, vendorInvoiceNumber: entry.vendorInvoiceNumber || "", referenceNumber: entry.referenceNumber || "", location: entry.location?._id || entry.location || "", batchNumber: entry.batchNumber || "", expiryDate: entry.expiryDate ? new Date(entry.expiryDate).toISOString().slice(0, 10) : "", mrp: entry.mrp || 0, rate: entry.rate ?? entry.unitCost ?? 0, quantity: entry.quantity, freeQuantity: entry.freeQuantity, unitCost: entry.unitCost, taxRate: entry.taxRate || 0, discount: entry.discount || 0, purchaseDate: new Date(entry.purchaseDate).toISOString().slice(0, 10) });
+    setForm({ vendor: entry.vendor?._id || entry.vendor, product: entry.product?._id || entry.product, variant: entry.variant || "", vendorInvoiceNumber: entry.vendorInvoiceNumber || "", referenceNumber: entry.referenceNumber || "", location: entry.location?._id || entry.location || "", batchNumber: entry.batchNumber || "", expiryDate: entry.expiryDate ? new Date(entry.expiryDate).toISOString().slice(0, 10) : "", mrp: entry.mrp || 0, rate: entry.rate ?? entry.unitCost ?? 0, quantity: entry.quantity, freeQuantity: entry.freeQuantity, unitCost: entry.unitCost, taxRate: entry.taxRate || 0, discount: entry.discount || 0, purchaseDate: new Date(entry.purchaseDate).toISOString().slice(0, 10) });
     setMessage("Purchase entry loaded for editing.");
   };
 
@@ -161,7 +168,7 @@ const AdminPurchaseEntry = () => {
   };
 
   const downloadSampleCsv = () => {
-    const rows = [["vendor", "product", "vendorInvoiceNumber", "referenceNumber", "location", "batchNumber", "expiryDate", "mrp", "rate", "unitCost", "quantity", "freeQuantity", "taxRate", "discount", "purchaseDate"], [vendors[0]?.name || "Example Vendor", products[0]?.name || "Product name", "INV-1001", "REF-1001", locations[0]?._id || "", "BATCH-01", "2027-12-31", "120", "80", "75", "10", "1", "5", "0", new Date().toISOString().slice(0, 10)]];
+    const rows = [["vendor", "product", "variant", "vendorInvoiceNumber", "referenceNumber", "location", "batchNumber", "expiryDate", "mrp", "rate", "unitCost", "quantity", "freeQuantity", "taxRate", "discount", "purchaseDate"], [vendors[0]?.name || "Example Vendor", products[0]?.name || "Product name", products[0]?.variants?.[0]?.name || "", "INV-1001", "REF-1001", locations[0]?._id || "", "BATCH-01", "2027-12-31", "120", "80", "75", "10", "1", "5", "0", new Date().toISOString().slice(0, 10)]];
     const csv = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\n");
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -189,7 +196,8 @@ const AdminPurchaseEntry = () => {
             <label className="text-sm font-medium text-slate-700">Stock location<select required value={form.location} onChange={updateField("location")} className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-primary"><option value="">Select location</option>{locations.map((location) => <option key={location._id} value={location._id}>{location.name}</option>)}</select></label>
             <label className="text-sm font-medium text-slate-700">Invoice date<input required type="date" value={form.purchaseDate} onChange={updateField("purchaseDate")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3" /></label>
             <div className="border-t border-slate-100 pt-4 sm:col-span-2 xl:col-span-4"><h3 className="text-sm font-semibold text-slate-900">Product and batch</h3><p className="mt-1 text-xs text-slate-500">Capture the product identity and traceable batch information.</p></div>
-            <SearchableSelect label="Product" value={form.product} onChange={(productId) => setForm((current) => ({ ...current, product: productId }))} placeholder="Search products by name or category" className="xl:col-span-2" options={products.map((product) => ({ value: product._id, label: product.name, description: `${product.category} · ${product.stock} ${product.unit || "unit"} in stock` }))} />
+            <SearchableSelect label="Product" value={form.product} onChange={(productId) => setForm((current) => ({ ...current, product: productId, variant: "" }))} placeholder="Search products by name or category" className="xl:col-span-2" options={products.map((product) => ({ value: product._id, label: product.name, description: `${product.category} · ${product.stock} ${product.unit || "unit"} in stock` }))} />
+            <label className="text-sm font-medium text-slate-700">Variant / pack<select required={productVariants.length > 0} disabled={!productVariants.length} value={form.variant} onChange={updateField("variant")} className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:bg-slate-50 disabled:text-slate-400"><option value="">{productVariants.length ? "Select variant / pack" : "No variants configured"}</option>{productVariants.map((variant) => <option key={variant._id || variant.name} value={variant.name}>{variant.name}{variant.sku ? ` · ${variant.sku}` : ""}</option>)}</select></label>
             <label className="text-sm font-medium text-slate-700">Batch<input value={form.batchNumber} onChange={updateField("batchNumber")} placeholder="Batch / lot number" className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3" /></label>
             <label className="text-sm font-medium text-slate-700">Expiry date<input type="date" value={form.expiryDate} onChange={updateField("expiryDate")} className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3" /></label>
             <div className="border-t border-slate-100 pt-4 sm:col-span-2 xl:col-span-4"><h3 className="text-sm font-semibold text-slate-900">Quantity and pricing</h3><p className="mt-1 text-xs text-slate-500">Enter invoice rates and quantities; amount recalculates automatically.</p></div>
@@ -204,7 +212,7 @@ const AdminPurchaseEntry = () => {
           <div className="flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Invoice amount</p><p className="mt-1 text-xs text-slate-500">Qty × rate + tax − discount</p></div><div className="flex flex-col-reverse gap-2 sm:flex-row"><button type="button" onClick={resetForm} disabled={saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"><X className="h-4 w-4" />Cancel</button><button type="button" onClick={addPurchaseItem} disabled={saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 text-sm font-semibold text-primary hover:bg-primary/10 disabled:opacity-50">Add product</button><button type="button" onClick={savePurchase} disabled={saving} className="inline-flex h-11 items-center justify-center gap-3 rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60"><span>{saving ? "Saving..." : editingId ? "Update purchase" : "Save purchase"}</span><span className="border-l border-white/30 pl-3 font-bold">{formatCurrency(calculatedAmount)}</span></button></div></div>
           {purchaseItems.length > 0 && <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
             <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Queued purchase items</p><button type="button" onClick={() => setPurchaseItems([])} className="text-xs font-semibold text-slate-500 hover:text-slate-700">Clear all</button></div>
-            <div className="mt-3 flex flex-wrap gap-2">{purchaseItems.map((item, index) => <span key={`${item.product}-${index}`} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700">{products.find((product) => product._id === item.product)?.name || item.product || "Item"} · {item.quantity}</span>)}</div>
+            <div className="mt-3 flex flex-wrap gap-2">{purchaseItems.map((item, index) => <span key={`${item.product}-${item.variant}-${index}`} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700">{products.find((product) => product._id === item.product)?.name || item.product || "Item"}{item.variant ? ` · ${item.variant}` : ""} · {item.quantity}</span>)}</div>
           </div>}
         </div></section>
 
@@ -217,7 +225,7 @@ const AdminPurchaseEntry = () => {
                 <tr key={entry._id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 font-semibold text-primary">{entry.vendorInvoiceNumber || entry.invoiceNumber}{entry.referenceNumber && <span className="mt-1 block text-xs font-normal text-slate-500">Ref: {entry.referenceNumber}</span>}</td>
                   <td className="px-4 py-3 font-medium text-slate-700">{entry.vendor?.name || "-"}</td>
-                  <td className="px-4 py-3 text-slate-600">{entry.productName}{entry.batchNumber && <span className="mt-1 block text-xs text-slate-500">Batch {entry.batchNumber}</span>}{entry.expiryDate && <span className="block text-xs text-slate-500">Exp {new Date(entry.expiryDate).toLocaleDateString()}</span>}</td>
+                  <td className="px-4 py-3 text-slate-600">{entry.productName}{entry.variant && <span className="mt-1 block text-xs font-medium text-primary">Pack {entry.variant}</span>}{entry.batchNumber && <span className="mt-1 block text-xs text-slate-500">Batch {entry.batchNumber}</span>}{entry.expiryDate && <span className="block text-xs text-slate-500">Exp {new Date(entry.expiryDate).toLocaleDateString()}</span>}</td>
                   <td className="px-4 py-3 text-slate-600">{entry.location?.name || "-"}</td>
                   <td className="px-4 py-3 text-slate-600">{entry.quantity}<span className="block text-xs text-slate-500">Free {entry.freeQuantity}</span></td>
                   <td className="px-4 py-3 text-slate-600">MRP {formatCurrency(entry.mrp)}<span className="block text-xs text-slate-500">Rate {formatCurrency(entry.rate ?? entry.unitCost)} · Cost {formatCurrency(entry.unitCost)}</span><span className="block text-xs text-slate-500">Tax {entry.taxRate || 0}% ({formatCurrency(entry.taxAmount)})</span></td>

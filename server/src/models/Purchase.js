@@ -7,6 +7,7 @@ const purchaseSchema = new mongoose.Schema(
     referenceNumber: { type: String, trim: true, default: "" },
     vendor: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor", required: true },
     product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
+    variant: { type: String, trim: true, default: "" },
     location: { type: mongoose.Schema.Types.ObjectId, ref: "StoreLocation" },
     productName: { type: String, required: true, trim: true },
     batchNumber: { type: String, trim: true, default: "" },

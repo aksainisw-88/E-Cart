@@ -112,13 +112,16 @@ const createPurchase = async (input) => {
   const data = purchaseSchema.parse(input);
   const [vendor, product] = await Promise.all([resolveVendor(data.vendor), resolveProduct(data.product)]);
   if (!product) throw new Error("Product not found. Use the product ID or exact product name.");
+  const productVariant = data.variant ? findVariant(product, data.variant) : null;
+  if (data.variant && !productVariant) throw Object.assign(new Error("Select a variant that belongs to the chosen product."), { statusCode: 400 });
   const location = await resolveActiveLocation(data.location);
   if (data.location && !location) throw Object.assign(new Error("Select an active stock location."), { statusCode: 400 });
+  if (productVariant && !location) throw Object.assign(new Error("A stock location is required for variant purchases."), { statusCode: 400 });
   const amounts = getAmounts(data);
-  const purchase = await Purchase.create({ ...data, ...amounts, remainingQuantity: data.quantity + data.freeQuantity, invoiceNumber: createInvoiceNumber(), vendor: vendor._id, product: product._id, location: location?._id, productName: product.name });
+  const purchase = await Purchase.create({ ...data, variant: productVariant?.name || "", ...amounts, remainingQuantity: data.quantity + data.freeQuantity, invoiceNumber: createInvoiceNumber(), vendor: vendor._id, product: product._id, location: location?._id, productName: product.name });
   const purchaseQuantity = data.quantity + data.freeQuantity;
   changeProductStock(product, location?._id, purchaseQuantity);
-  if (data.variant) updateVariantStock(product, data.variant, location?._id, purchaseQuantity);
+  if (productVariant) updateVariantStock(product, productVariant.name, location?._id, purchaseQuantity);
   product.costPrice = data.unitCost;
   if (data.mrp > 0) product.originalPrice = data.mrp;
   product.vendorName = vendor.name;
@@ -205,8 +208,11 @@ router.put("/:id", async (request, response, next) => {
     const data = purchaseSchema.parse(request.body);
     const [vendor, product] = await Promise.all([resolveVendor(data.vendor), resolveProduct(data.product)]);
     if (!product) return response.status(404).json({ success: false, message: "Product not found" });
+    const productVariant = data.variant ? findVariant(product, data.variant) : null;
+    if (data.variant && !productVariant) return response.status(400).json({ success: false, message: "Select a variant that belongs to the chosen product." });
     const location = await resolveActiveLocation(data.location);
     if (data.location && !location) return response.status(400).json({ success: false, message: "Select an active stock location." });
+    if (productVariant && !location) return response.status(400).json({ success: false, message: "A stock location is required for variant purchases." });
     const oldProduct = await Product.findById(oldPurchase.product);
     const oldVendor = await Vendor.findById(oldPurchase.vendor);
     const sameProduct = Boolean(oldProduct && oldProduct._id.equals(product._id));
@@ -217,7 +223,7 @@ router.put("/:id", async (request, response, next) => {
     const soldQuantity = oldPurchasedQuantity - oldRemainingQuantity;
     const newPurchasedQuantity = data.quantity + data.freeQuantity;
     const sameExpiry = (!oldPurchase.expiryDate && !data.expiryDate) || (oldPurchase.expiryDate && data.expiryDate && oldPurchase.expiryDate.getTime() === data.expiryDate.getTime());
-    const sameBatch = sameProductLocation && oldPurchase.batchNumber === data.batchNumber && sameExpiry;
+    const sameBatch = sameProductLocation && oldPurchase.batchNumber === data.batchNumber && sameExpiry && (oldPurchase.variant || "") === (productVariant?.name || "");
     if (soldQuantity > 0 && !sameBatch) return response.status(400).json({ success: false, message: "A batch with sold units cannot be moved or renamed." });
     if (newPurchasedQuantity < soldQuantity) return response.status(400).json({ success: false, message: "Purchase quantity cannot be lower than the quantity already sold." });
     const remainingQuantity = newPurchasedQuantity - soldQuantity;
@@ -228,12 +234,14 @@ router.put("/:id", async (request, response, next) => {
     } else if (oldProduct) {
       changeProductStock(oldProduct, oldPurchase.location, -oldRemainingQuantity);
     }
+    if (oldProduct) updateVariantStock(oldProduct, oldPurchase.variant, oldPurchase.location, -oldRemainingQuantity);
     if (oldVendor) oldVendor.pendingAmount = Math.max(0, oldVendor.pendingAmount - oldPurchase.total);
     if (oldProduct && !sameProduct) await oldProduct.save();
     if (oldVendor && !sameVendor) await oldVendor.save();
     const amounts = getAmounts(data);
-    const purchase = await Purchase.findByIdAndUpdate(request.params.id, { ...data, ...amounts, remainingQuantity, invoiceNumber: oldPurchase.invoiceNumber, vendor: vendor._id, product: product._id, location: location?._id, productName: product.name }, { new: true, runValidators: true }).populate("vendor", "name").populate("product", "name stock").populate("location", "name city");
+    const purchase = await Purchase.findByIdAndUpdate(request.params.id, { ...data, variant: productVariant?.name || "", ...amounts, remainingQuantity, invoiceNumber: oldPurchase.invoiceNumber, vendor: vendor._id, product: product._id, location: location?._id, productName: product.name }, { new: true, runValidators: true }).populate("vendor", "name").populate("product", "name stock").populate("location", "name city");
     if (!sameProductLocation) changeProductStock(stockProduct, location?._id, remainingQuantity);
+    if (productVariant) updateVariantStock(stockProduct, productVariant.name, location?._id, remainingQuantity);
     stockProduct.costPrice = data.unitCost;
     if (data.mrp > 0) stockProduct.originalPrice = data.mrp;
     stockProduct.vendorName = vendor.name;
@@ -255,6 +263,7 @@ router.delete("/:id", async (request, response, next) => {
       const purchasedQuantity = Number(purchase.quantity) + Number(purchase.freeQuantity || 0);
       const remainingQuantity = Math.min(purchasedQuantity, Math.max(0, Number(purchase.remainingQuantity ?? purchasedQuantity)));
       changeProductStock(product, purchase.location, -remainingQuantity);
+      updateVariantStock(product, purchase.variant, purchase.location, -remainingQuantity);
       await product.save();
     }
     if (vendor) { vendor.pendingAmount = Math.max(0, vendor.pendingAmount - purchase.total); await vendor.save(); }

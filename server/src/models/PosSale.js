@@ -4,6 +4,7 @@ const saleItemSchema = new mongoose.Schema({
   product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
   purchase: { type: mongoose.Schema.Types.ObjectId, ref: "Purchase" },
   productName: { type: String, required: true, trim: true },
+  variant: { type: String, trim: true, default: "" },
   batchNumber: { type: String, trim: true, default: "" },
   expiryDate: { type: Date },
   mrp: { type: Number, min: 0, default: 0 },

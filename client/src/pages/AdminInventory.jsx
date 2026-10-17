@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Boxes, Check, MapPin, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { Boxes, Check, MapPin, Plus, Save, Search, Trash2, X } from "lucide-react";
 
 const apiUrl = import.meta.env.VITE_API_URL || "";
 
@@ -46,7 +46,6 @@ const AdminInventory = () => {
   const [products, setProducts] = useState([]);
   const [drafts, setDrafts] = useState({});
   const [selectedLocationId, setSelectedLocationId] = useState("");
-  const [editingStockProductId, setEditingStockProductId] = useState(null);
   const [editingProductId, setEditingProductId] = useState(null);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -146,24 +145,6 @@ const AdminInventory = () => {
     setSavingAll(false);
   };
 
-  const saveStockEdit = async (productId) => {
-    if (await saveInventory(productId)) setEditingStockProductId(null);
-  };
-
-  const cancelStockEdit = (product) => {
-    const originalDraft = buildDraft(product, locations);
-    setDrafts((current) => ({
-      ...current,
-      [product._id]: { ...current[product._id], locationStock: originalDraft.locationStock },
-    }));
-    setDirtyProductIds((current) => {
-      const next = new Set(current);
-      if (JSON.stringify(drafts[product._id]?.variants) === JSON.stringify(originalDraft.variants)) next.delete(product._id);
-      return next;
-    });
-    setEditingStockProductId(null);
-  };
-
   const addVariant = () => {
     updateDraft(editingProductId, (draft) => ({
       ...draft,
@@ -208,11 +189,11 @@ const AdminInventory = () => {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <label className="block text-sm font-medium text-slate-700">
             <span className="mb-1.5 flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" />Stock location</span>
-            <select value={selectedLocationId} onChange={(event) => setSelectedLocationId(event.target.value)} disabled={!locations.length || savingAll || editingStockProductId !== null} className="h-11 min-w-56 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:opacity-60">
+            <select value={selectedLocationId} onChange={(event) => setSelectedLocationId(event.target.value)} disabled={!locations.length || savingAll || editingProductId !== null} className="h-11 min-w-56 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:opacity-60">
               {locations.map((location) => <option key={location._id} value={location._id}>{location.name}{location.active ? "" : " (inactive)"}</option>)}
             </select>
           </label>
-          <button type="button" onClick={saveAllInventory} disabled={!dirtyProductIds.size || savingAll || editingStockProductId !== null} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="button" onClick={saveAllInventory} disabled={!dirtyProductIds.size || savingAll || editingProductId !== null} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50">
             <Save className="h-4 w-4" />{savingAll ? "Saving..." : `Save changes${dirtyProductIds.size ? ` (${dirtyProductIds.size})` : ""}`}
           </button>
         </div>
@@ -224,7 +205,7 @@ const AdminInventory = () => {
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-sm font-semibold text-slate-900">Products</h2>
-            <p className="mt-1 text-xs text-slate-500">Base stock updates the product total used by the existing catalogue.</p>
+            <p className="mt-1 text-xs text-slate-500">View product variants and manage stock by location.</p>
           </div>
           <label className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 sm:w-72">
             <Search className="h-4 w-4 shrink-0 text-slate-400" />
@@ -238,15 +219,13 @@ const AdminInventory = () => {
           <p className="p-8 text-center text-sm text-slate-500">No products match this search.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-195 text-left text-sm">
+            <table className="w-full min-w-160 text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-5 py-3 font-semibold">Product</th>
-                  <th className="px-5 py-3 font-semibold">Category</th>
-                  <th className="px-5 py-3 font-semibold">Unit</th>
-                  <th className="w-44 px-5 py-3 font-semibold">{locations.find((location) => location._id === selectedLocationId)?.name || "Branch"} stock</th>
-                  <th className="px-5 py-3 font-semibold">Variants</th>
-                  <th className="px-5 py-3 text-right font-semibold">Actions</th>
+                  <th className="px-5 py-3 font-semibold">Total stock</th>
+                  <th className="px-5 py-3 font-semibold">Location</th>
+                  <th className="px-5 py-3 text-right font-semibold">View</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -255,27 +234,10 @@ const AdminInventory = () => {
                   const totalStock = draft?.locationStock.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0) || 0;
                   return (
                     <tr key={product._id}>
-                      <td className="px-5 py-4">
-                        <p className="font-semibold text-slate-900">{product.name}</p>
-                        <p className="mt-1 text-xs text-slate-500">{product.brand || "No brand"} · Total {totalStock} {product.unit || "unit"}</p>
-                      </td>
-                      <td className="px-5 py-4 text-slate-600">{product.category}</td>
-                      <td className="px-5 py-4 text-slate-600">{product.unit || "unit"}</td>
-                      <td className="px-5 py-4">
-                        {editingStockProductId === product._id ? (
-                          <div className="flex items-center gap-2"><input aria-label={`${product.name} stock in ${product.unit || "unit"} at selected location`} type="number" min="0" step="1" value={stockAt(draft?.locationStock || [], selectedLocationId)} disabled={savingId === product._id || savingAll} onChange={(event) => updateDraft(product._id, (current) => ({ ...current, locationStock: updateStock(current.locationStock, selectedLocationId, event.target.value) }))} className="h-10 w-28 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary disabled:opacity-60" /><span className="text-xs text-slate-500">{product.unit || "unit"}</span></div>
-                        ) : <span className="font-medium text-slate-700">{stockAt(draft?.locationStock || [], selectedLocationId)} <span className="text-xs font-normal text-slate-500">{product.unit || "unit"}</span></span>}
-                      </td>
-                      <td className="px-5 py-4">
-                        <button type="button" disabled={savingAll} onClick={() => setEditingProductId(product._id)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline disabled:cursor-wait disabled:opacity-50">
-                          <Plus className="h-4 w-4" />Add{draft?.variants.length ? <span className="text-xs text-slate-500">({draft.variants.length})</span> : null}
-                        </button>
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        {editingStockProductId === product._id ? (
-                          <div className="flex justify-end gap-2"><button type="button" onClick={() => cancelStockEdit(product)} disabled={savingId === product._id || savingAll} className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Cancel</button><button type="button" onClick={() => saveStockEdit(product._id)} disabled={savingId === product._id || savingAll || !dirtyProductIds.has(product._id)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-3.5 w-3.5" />{savingId === product._id ? "Saving..." : "Save"}</button></div>
-                        ) : <button type="button" onClick={() => setEditingStockProductId(product._id)} disabled={savingAll || editingStockProductId !== null} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"><Pencil className="h-3.5 w-3.5" />Edit</button>}
-                      </td>
+                      <td className="px-5 py-4 font-semibold text-slate-800">{product.name}</td>
+                      <td className="px-5 py-4 font-semibold text-slate-800">{totalStock} <span className="text-xs font-normal text-slate-500">{product.unit || "unit"}</span></td>
+                      <td className="px-5 py-4 text-slate-600">{locations.find((location) => location._id === selectedLocationId)?.name || "-"}</td>
+                      <td className="px-5 py-4 text-right"><button type="button" disabled={savingAll} onClick={() => setEditingProductId(product._id)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary disabled:cursor-wait disabled:opacity-50"><Boxes className="h-3.5 w-3.5" />View</button></td>
                     </tr>
                   );
                 })}
