@@ -40,6 +40,9 @@ const AdminPos = () => {
   const [selectedLocationId, setSelectedLocationId] = useState("");
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [selectedOrderId, setSelectedOrderId] = useState("");
+  const [selectedOrderBatches, setSelectedOrderBatches] = useState({});
+  const [orderBatchData, setOrderBatchData] = useState({ key: "", data: {} });
   const [customerFormOpen, setCustomerFormOpen] = useState(false);
   const [customerForm, setCustomerForm] = useState({ name: "", phone: "", email: "" });
   const [savingCustomer, setSavingCustomer] = useState(false);
@@ -119,6 +122,10 @@ const AdminPos = () => {
 
   const selectedProduct = inventory.find((product) => product.id === selectedProductId);
   const selectedCustomer = customers.find((customer) => customer._id === selectedCustomerId);
+  const customerOrders = openOrders.filter((order) => String(order.customer?._id || order.customer) === selectedCustomerId);
+  const selectedOrder = openOrders.find((order) => order._id === selectedOrderId);
+  const selectedOrderProductIds = [...new Set((selectedOrder?.items || []).map((item) => String(item.product?._id || item.product)).filter(Boolean))];
+  const orderBatchesLoading = Boolean(selectedOrder && selectedLocationId && (orderBatchData.key !== selectedLocationId || selectedOrderProductIds.some((productId) => !Object.hasOwn(orderBatchData.data, productId))));
   const batchKey = `${selectedProductId}:${selectedLocationId}`;
   const batches = batchData.key === batchKey ? batchData.data : [];
   const batchLoading = Boolean(selectedProductId && selectedLocationId && batchData.key !== batchKey);
@@ -147,6 +154,22 @@ const AdminPos = () => {
 
     return () => { active = false; };
   }, [selectedProductId, selectedLocationId]);
+
+  useEffect(() => {
+    const order = openOrders.find((item) => item._id === selectedOrderId);
+    if (!order || !selectedLocationId) return undefined;
+    let active = true;
+    const productIds = [...new Set(order.items.map((item) => String(item.product?._id || item.product)).filter(Boolean))];
+    Promise.all(productIds.map(async (productId) => {
+      const response = await fetch(`${API_URL}/api/pos/batches?productId=${encodeURIComponent(productId)}&locationId=${encodeURIComponent(selectedLocationId)}`, { credentials: "include" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to load batches for this customer order.");
+      return [productId, result.data || []];
+    }))
+      .then((entries) => { if (active) setOrderBatchData({ key: selectedLocationId, data: Object.fromEntries(entries) }); })
+      .catch((batchError) => { if (active) setError(batchError.message); });
+    return () => { active = false; };
+  }, [openOrders, selectedLocationId, selectedOrderId]);
 
   const filteredInvoices = useMemo(() => recentInvoices.filter((invoice) => `${invoice.id} ${invoice.customer} ${invoice.location || ""} ${invoice.paymentMode}`.toLowerCase().includes(historyQuery.trim().toLowerCase())), [recentInvoices, historyQuery]);
   const stockAtSelectedLocation = (product) => {
@@ -341,6 +364,10 @@ const AdminPos = () => {
   };
 
   const saveInvoice = async (printAfterSave = false) => {
+    if (selectedOrder) {
+      setError("Use Create invoice & mark Shipped to fulfill the selected customer order.");
+      return;
+    }
     if (!cart.length) {
       setError("Add at least one product before creating the invoice.");
       return;
@@ -431,6 +458,11 @@ const AdminPos = () => {
       setError("Select a stock location before invoicing a customer order.");
       return;
     }
+    const missingBatch = order.items.find((_, index) => !selectedOrderBatches[index]);
+    if (missingBatch) {
+      setError(`Select an available batch for ${missingBatch.name} before creating the invoice.`);
+      return;
+    }
     setClearingOrderId(order._id);
     setError("");
     setMessage("");
@@ -439,7 +471,10 @@ const AdminPos = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ locationId: selectedLocationId }),
+        body: JSON.stringify({
+          locationId: selectedLocationId,
+          items: order.items.map((_, orderItemIndex) => ({ orderItemIndex, purchaseId: selectedOrderBatches[orderItemIndex] })),
+        }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Unable to invoice this customer order.");
@@ -454,6 +489,8 @@ const AdminPos = () => {
         promotion: sale.promotionDiscount ? { title: "Order promotion" } : null,
       };
       setOpenOrders((current) => current.filter((item) => item._id !== order._id));
+      setSelectedOrderId("");
+      setSelectedOrderBatches({});
       setRecentInvoices((current) => [{
         id: sale.invoiceNumber,
         customer: sale.customerName,
@@ -561,41 +598,45 @@ const AdminPos = () => {
 
       {(error || message) && <div role={error ? "alert" : "status"} className={`rounded-lg px-4 py-3 text-sm ${error ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-800"}`}>{error || message}<button type="button" onClick={() => { setError(""); setMessage(""); }} aria-label="Dismiss message" className="float-right"><X className="h-4 w-4" /></button></div>}
 
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
-          <div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Customer fulfillment</p><h2 className="mt-1 text-lg font-bold text-slate-900">Orders to invoice <span className="ml-1 text-sm font-medium text-slate-400">{openOrders.length}</span></h2><p className="mt-1 text-xs text-slate-500">Create the sales invoice and mark each order Shipped. Checkout has already updated stock.</p></div>
-        </div>
-        {loading ? <p className="p-6 text-sm text-slate-500">Loading customer orders...</p> : openOrders.length ? (
-          <div className="divide-y divide-slate-100">
-            {openOrders.map((order) => {
-              const orderStoreId = String(order.store?._id || order.store || "");
-              const locationMatches = !orderStoreId || orderStoreId === selectedLocationId;
-              return <article key={order._id} className="flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center sm:px-6">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-slate-900">#{order.orderNumber}</p><span className="rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">Processing</span></div>
-                  <p className="mt-1 text-sm text-slate-600">{order.customer?.name || order.shipping?.name || "Customer"}{order.customer?.phone ? ` · ${order.customer.phone}` : ""}</p>
-                  <p className="mt-1 truncate text-xs text-slate-500">{(order.items || []).map((item) => `${item.name} × ${item.quantity}`).join(" · ")}</p>
-                  <p className="mt-1 text-xs text-slate-500">{order.store?.name ? `Fulfill at ${order.store.name} · ` : ""}Placed {new Date(order.createdAt).toLocaleDateString()}</p>
-                </div>
-                <div className="flex shrink-0 flex-wrap items-center gap-3 sm:justify-end">
-                  <p className="text-base font-bold text-slate-900">{formatCurrency(order.total)}</p>
-                  <button type="button" disabled={saving || Boolean(clearingOrderId) || !selectedLocationId || !locationMatches} onClick={() => clearOrderToInvoice(order)} title={!locationMatches ? `Select ${order.store?.name} to fulfill this order` : "Create invoice and mark order shipped"} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-3.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-4 w-4" />{clearingOrderId === order._id ? "Creating..." : locationMatches ? "Clear order & create invoice" : `Use ${order.store?.name}`}</button>
-                </div>
-              </article>;
-            })}
-          </div>
-        ) : <p className="p-6 text-sm text-slate-500">No processing customer orders are waiting for an invoice.</p>}
-      </section>
-
       <section className="rounded-xl border border-slate-200 bg-white">
         <div className="border-b border-slate-100 px-5 py-4 sm:px-6"><p className="text-xs font-semibold uppercase tracking-wide text-primary">Invoice details</p><h2 className="mt-1 text-lg font-bold text-slate-900">Customer and location</h2></div>
         <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
-          <div><label htmlFor="pos-customer" className="text-sm font-medium text-slate-700">Customer<select id="pos-customer" value={selectedCustomerId} onChange={(event) => setSelectedCustomerId(event.target.value)} disabled={loading || saving} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:opacity-60"><option value="">Walk-in Customer</option>{customers.map((customer) => <option key={customer._id} value={customer._id}>{customer.name}{customer.phone ? ` · ${customer.phone}` : ""}</option>)}</select></label><button type="button" onClick={() => { setCustomerForm({ name: "", phone: "", email: "" }); setCustomerFormOpen(true); }} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"><Plus className="h-3.5 w-3.5" />Add customer</button></div>
-          <label className="text-sm font-medium text-slate-700"><span className="flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" />Stock location</span><select value={selectedLocationId} onChange={(event) => { if (cart.length && !window.confirm("Changing location will clear the current invoice. Continue?")) return; setCart([]); setSelectedLocationId(event.target.value); setSelectedBatchId(""); setError(""); }} disabled={loading || saving} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:opacity-60"><option value="">Select a store location</option>{locations.map((location) => <option key={location._id} value={location._id}>{location.name}</option>)}</select></label>
+          <div>
+            <label htmlFor="pos-customer" className="text-sm font-medium text-slate-700">Customer<select id="pos-customer" value={selectedCustomerId} onChange={(event) => { setSelectedCustomerId(event.target.value); setSelectedOrderId(""); setSelectedOrderBatches({}); }} disabled={loading || saving} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:opacity-60"><option value="">Walk-in Customer</option>{customers.map((customer) => <option key={customer._id} value={customer._id}>{[customer.name, customer.phone, customer.locality, customer.pincode].filter(Boolean).join(" · ")}</option>)}</select></label>
+            {selectedCustomer && <p className="mt-2 text-xs leading-5 text-slate-500">{[selectedCustomer.phone, selectedCustomer.address, selectedCustomer.locality, selectedCustomer.pincode, selectedCustomer.district, selectedCustomer.state].filter(Boolean).join(" · ") || "No address details saved"}</p>}
+            <button type="button" onClick={() => { setCustomerForm({ name: "", phone: "", email: "" }); setCustomerFormOpen(true); }} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"><Plus className="h-3.5 w-3.5" />Add customer</button>
+          </div>
+          <label className="text-sm font-medium text-slate-700"><span className="flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" />Stock location</span><select value={selectedLocationId} onChange={(event) => { if (cart.length && !window.confirm("Changing location will clear the current invoice. Continue?")) return; setCart([]); setSelectedLocationId(event.target.value); setSelectedBatchId(""); setError(""); }} disabled={loading || saving || Boolean(selectedOrder?.store)} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:opacity-60"><option value="">Select a store location</option>{locations.map((location) => <option key={location._id} value={location._id}>{location.name}</option>)}</select>{selectedOrder?.store && <span className="mt-1 block text-xs text-slate-500">This order must be fulfilled at {selectedOrder.store.name}.</span>}</label>
         </div>
+        {selectedCustomerId && <div className="border-t border-slate-100 px-5 py-4 sm:px-6"><label htmlFor="pos-customer-order" className="block max-w-xl text-sm font-medium text-slate-700">Customer order<select id="pos-customer-order" value={selectedOrderId} onChange={(event) => {
+          const orderId = event.target.value;
+          const order = customerOrders.find((item) => item._id === orderId);
+          if (order && cart.length && !window.confirm("Selecting this order will replace the current POS invoice items. Continue?")) return;
+          if (order) {
+            setCart([]);
+            setAppliedPromotion(null);
+            if (order.store?._id) setSelectedLocationId(order.store._id);
+          }
+          setSelectedOrderId(orderId);
+          setSelectedOrderBatches({});
+        }} disabled={loading || saving || !customerOrders.length} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:opacity-60"><option value="">{loading ? "Loading orders..." : customerOrders.length ? "Select a pending order" : "No pending orders for this customer"}</option>{customerOrders.map((order) => <option key={order._id} value={order._id}>#{order.orderNumber} · {new Date(order.createdAt).toLocaleDateString()} · {formatCurrency(order.total)}</option>)}</select></label></div>}
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white">
+      {selectedOrder && <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6"><div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Order #{selectedOrder.orderNumber}</p><h2 className="mt-1 text-lg font-bold text-slate-900">Invoice items</h2><p className="mt-1 text-xs text-slate-500">Quantity, rate, and discount are copied from this order. Select an available batch for each product.</p></div><span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Processing</span></div>
+        <div className="overflow-x-auto"><table className="w-full min-w-225 text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Product</th><th className="px-4 py-3">Qty</th><th className="px-4 py-3">Rate</th><th className="px-4 py-3">Discount</th><th className="px-4 py-3">Batch</th><th className="px-4 py-3">MRP</th></tr></thead><tbody className="divide-y divide-slate-100">{selectedOrder.items.map((item, index) => {
+          const productId = String(item.product?._id || item.product);
+          const batchesForItem = orderBatchData.key === selectedLocationId ? orderBatchData.data[productId] || [] : [];
+          const selectedBatchForItem = batchesForItem.find((batch) => batch._id === selectedOrderBatches[index]);
+          const itemQuantity = Number(item.quantity) || 1;
+          const itemDiscount = Number(item.discountAmount || 0) * itemQuantity;
+          const availableBatches = batchesForItem.filter((batch) => Number(batch.remainingQuantity) >= itemQuantity);
+          return <tr key={`${selectedOrder._id}-${index}`}><td className="px-5 py-3 font-medium text-slate-800">{item.name}</td><td className="px-4 py-3 text-slate-700">{itemQuantity}</td><td className="px-4 py-3 text-slate-700">{formatCurrency(item.price)}</td><td className="px-4 py-3 text-slate-700">{formatCurrency(itemDiscount)}</td><td className="px-4 py-3"><select aria-label={`Batch for ${item.name}`} value={selectedOrderBatches[index] || ""} onChange={(event) => setSelectedOrderBatches((current) => ({ ...current, [index]: event.target.value }))} disabled={!selectedLocationId || orderBatchesLoading || saving || Boolean(clearingOrderId)} className="h-10 min-w-64 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:bg-slate-50"><option value="">{orderBatchesLoading ? "Loading batches..." : availableBatches.length ? "Select an available batch" : "No available batches"}</option>{availableBatches.map((batch) => <option key={batch._id} value={batch._id}>{batch.variant ? `${batch.variant} · ` : ""}{batch.batchNumber || batch.invoiceNumber} · {batch.remainingQuantity} available</option>)}</select></td><td className="px-4 py-3 text-slate-700">{selectedBatchForItem ? formatCurrency(selectedBatchForItem.mrp) : "-"}</td></tr>;
+        })}</tbody></table></div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><p className="text-xs text-slate-500">Order total {formatCurrency(selectedOrder.total)} · Checkout already deducted stock; invoicing updates the selected batch stock.</p><button type="button" disabled={!selectedLocationId || orderBatchesLoading || Boolean(clearingOrderId) || saving || selectedOrder.items.some((_, index) => !selectedOrderBatches[index])} onClick={() => clearOrderToInvoice(selectedOrder)} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-4 w-4" />{clearingOrderId === selectedOrder._id ? "Creating invoice..." : "Create invoice & mark Shipped"}</button></div>
+      </section>}
+
+      <section className={`rounded-xl border border-slate-200 bg-white ${selectedOrder ? "hidden" : ""}`}>
         <div className="border-b border-slate-100 px-5 py-4 sm:px-6"><p className="text-xs font-semibold uppercase tracking-wide text-primary">Sales invoice</p><h2 className="mt-1 text-lg font-bold text-slate-900">Add products</h2><p className="mt-1 text-sm text-slate-500">Available quantities reflect the selected location.</p></div>
         <div className="grid items-end gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4 sm:p-6">
           <SearchableSelect label="Product" value={selectedProductId} onChange={(productId) => { setSelectedProductId(productId); setSelectedBatchId(""); setRate(String(inventory.find((product) => product.id === productId)?.price ?? "")); }} placeholder="Search products..." options={inventory.map((product) => ({ value: product.id, label: product.name, description: `${product.category || "Product"} · ${stockAtSelectedLocation(product)} ${product.unit || "unit"} at location · ${formatCurrency(product.price)}` }))} />
@@ -618,7 +659,7 @@ const AdminPos = () => {
         </div>
       </section>
 
-      <details className="rounded-xl border border-slate-200 bg-white">
+      <details className={`rounded-xl border border-slate-200 bg-white ${selectedOrder ? "hidden" : ""}`}>
         <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-slate-800">Promotions and offers</summary>
         <div className="grid gap-3 border-t border-slate-100 p-5 sm:grid-cols-[1fr_auto] sm:items-end">
           <label className="text-sm font-medium text-slate-700">Promotion<select id="promotion" value={selectedOfferId} onChange={(event) => setSelectedOfferId(event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary"><option value="">Select active promotion</option>{offers.map((offer) => <option key={offer._id} value={offer._id}>{offer.title} {offer.code ? `· ${offer.code}` : ""}</option>)}</select></label>
@@ -627,7 +668,7 @@ const AdminPos = () => {
         </div>
       </details>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+      <section className={`rounded-xl border border-slate-200 bg-white p-5 sm:p-6 ${selectedOrder ? "hidden" : ""}`}>
         <div className="grid gap-6 lg:grid-cols-[1fr_320px] lg:items-end">
           <div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Payment and total</p><h2 className="mt-1 text-lg font-bold text-slate-900">Complete sale</h2><div className="mt-4 flex flex-wrap gap-2">{["Cash", "UPI", "Card", "Credit", "Cheque"].map((mode) => <button key={mode} type="button" onClick={() => setPaymentMode(mode)} aria-pressed={paymentMode === mode} className={`rounded-lg border px-3 py-2 text-sm font-semibold ${paymentMode === mode ? "border-primary bg-primary text-white" : "border-slate-200 text-slate-600 hover:border-primary"}`}>{mode}</button>)}</div></div>
           <div className="space-y-2 border-t border-slate-100 pt-4 text-sm lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0"><div className="flex justify-between text-slate-600"><span>Subtotal</span><span>{formatCurrency(totals.subtotal)}</span></div><div className="flex justify-between text-rose-600"><span>Discount</span><span>-{formatCurrency(totals.discount)}</span></div><div className="flex justify-between text-slate-600"><span>GST (5%)</span><span>{formatCurrency(totals.tax)}</span></div><div className="flex justify-between border-t border-slate-200 pt-3 text-lg font-bold text-slate-900"><span>Total</span><span>{formatCurrency(totals.total)}</span></div></div>

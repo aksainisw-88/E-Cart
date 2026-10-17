@@ -10,7 +10,13 @@ const StoreLocation = require("../models/StoreLocation");
 const User = require("../models/User");
 
 const router = express.Router();
-const fulfillmentSchema = z.object({ locationId: z.string().regex(/^[a-f\d]{24}$/i) });
+const fulfillmentSchema = z.object({
+  locationId: z.string().regex(/^[a-f\d]{24}$/i),
+  items: z.array(z.object({
+    orderItemIndex: z.coerce.number().int().min(0),
+    purchaseId: z.string().regex(/^[a-f\d]{24}$/i),
+  })).min(1).max(100),
+});
 const saleSchema = z.object({
   customerId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
   customerName: z.string().trim().max(120).optional().default("Walk-in Customer"),
@@ -79,14 +85,63 @@ router.get("/orders", async (request, response, next) => {
 router.post("/orders/:orderId/invoice", async (request, response, next) => {
   try {
     const fulfillment = fulfillmentSchema.safeParse(request.body);
-    if (!fulfillment.success) return response.status(400).json({ success: false, message: "Select a stock location before invoicing this order." });
+    if (!fulfillment.success) return response.status(400).json({ success: false, message: "Select a batch for every customer order item." });
     const order = await Order.findById(request.params.orderId).populate("customer", "name email phone customerSource").populate("store", "name city");
     if (!order) return response.status(404).json({ success: false, message: "Customer order not found." });
     if (order.status !== "Processing") return response.status(409).json({ success: false, message: "Only processing customer orders can be invoiced from POS." });
     if (order.posInvoiceNumber || await PosSale.exists({ order: order._id })) return response.status(409).json({ success: false, message: "This customer order already has a POS invoice." });
+    const orderItemIndexes = fulfillment.data.items.map((item) => item.orderItemIndex);
+    if (orderItemIndexes.length !== order.items.length || new Set(orderItemIndexes).size !== order.items.length || order.items.some((_, index) => !orderItemIndexes.includes(index))) {
+      return response.status(400).json({ success: false, message: "Select exactly one batch for each customer order item." });
+    }
     const location = await StoreLocation.findOne({ _id: fulfillment.data.locationId, active: true }).select("_id name isDefault").lean();
     if (!location) return response.status(400).json({ success: false, message: "Select an active store location." });
     if (order.store && !order.store._id.equals(location._id)) return response.status(400).json({ success: false, message: `Fulfill this order at ${order.store.name}.` });
+
+    const purchaseIds = [...new Set(fulfillment.data.items.map((item) => item.purchaseId))];
+    await Purchase.updateMany(
+      { _id: { $in: purchaseIds }, remainingQuantity: { $exists: false } },
+      [{ $set: { remainingQuantity: { $add: [{ $ifNull: ["$quantity", 0] }, { $ifNull: ["$freeQuantity", 0] }] } } }],
+      { updatePipeline: true },
+    );
+    const purchases = await Purchase.find({ _id: { $in: purchaseIds } }).select("product location variant batchNumber expiryDate mrp rate remainingQuantity").lean();
+    const purchaseMap = new Map(purchases.map((purchase) => [purchase._id.toString(), purchase]));
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const fulfillmentLines = [];
+    for (const selection of fulfillment.data.items) {
+      const orderItem = order.items[selection.orderItemIndex];
+      const purchase = purchaseMap.get(selection.purchaseId);
+      const sameLocation = purchase && (purchase.location ? purchase.location.toString() === location._id.toString() : location.isDefault);
+      if (!purchase || purchase.product.toString() !== orderItem.product.toString() || !sameLocation) {
+        return response.status(400).json({ success: false, message: `Select a batch for ${orderItem.name} from ${location.name}.` });
+      }
+      if (purchase.expiryDate && purchase.expiryDate < today) return response.status(400).json({ success: false, message: `The selected batch of ${orderItem.name} has expired.` });
+      const quantity = Number(orderItem.quantity) || 1;
+      if (Number(purchase.remainingQuantity) < quantity) return response.status(409).json({ success: false, message: `${purchase.batchNumber || "Selected batch"} does not have enough stock for ${orderItem.name}.` });
+      fulfillmentLines.push({ orderItemIndex: selection.orderItemIndex, orderItem, purchase, quantity });
+    }
+
+    const batchQuantities = new Map();
+    const variantQuantities = new Map();
+    fulfillmentLines.forEach(({ orderItem, purchase, quantity }) => {
+      const purchaseId = purchase._id.toString();
+      batchQuantities.set(purchaseId, (batchQuantities.get(purchaseId) || 0) + quantity);
+      if (purchase.variant) {
+        const key = `${orderItem.product.toString()}:${purchase.variant}`;
+        const current = variantQuantities.get(key) || { productId: orderItem.product, name: purchase.variant, quantity: 0 };
+        current.quantity += quantity;
+        variantQuantities.set(key, current);
+      }
+    });
+    for (const variant of variantQuantities.values()) {
+      const product = await Product.findById(variant.productId).select("variants").lean();
+      const productVariant = product?.variants?.find((entry) => entry.name === variant.name);
+      const locationStock = productVariant?.locationStock?.find((entry) => entry.location.toString() === location._id.toString());
+      if (!locationStock || Number(locationStock.quantity) < variant.quantity) {
+        return response.status(409).json({ success: false, message: `Variant ${variant.name} does not have enough stock at ${location.name}.` });
+      }
+    }
 
     const promotionDiscount = Number(order.promoDiscount) || 0;
     const invoiceNumber = `POS-${new Date().getFullYear()}-${crypto.randomInt(100000, 1000000)}`;
@@ -99,18 +154,22 @@ router.post("/orders/:orderId/invoice", async (request, response, next) => {
         customerName: order.shipping?.name || order.customer?.name || "Customer",
         customerSource: order.customer?.customerSource || "Online",
         location: location._id,
-        items: order.items.map((item) => {
-            const quantity = Number(item.quantity) || 1;
-            const rate = Number(item.price) || 0;
+        items: fulfillmentLines.map(({ orderItem, purchase, quantity }) => {
+          const rate = Number(orderItem.price) || 0;
           return {
-            product: item.product,
-            productName: item.name,
-            mrp: Number(item.originalPrice || item.price) || 0,
-              unitPrice: rate,
-              quantity,
+            product: orderItem.product,
+            purchase: purchase._id,
+            productName: orderItem.name,
+            variant: purchase.variant || "",
+            batchNumber: purchase.batchNumber || "",
+            expiryDate: purchase.expiryDate,
+            mrp: Number(purchase.mrp || orderItem.originalPrice || orderItem.price) || 0,
+            unit: "unit",
+            unitPrice: rate,
+            quantity,
             freeQuantity: 0,
-              discount: 0,
-              amount: rate * quantity,
+            discount: 0,
+            amount: rate * quantity,
           };
         }),
         subtotal: Number(order.subtotal) || 0,
@@ -129,12 +188,51 @@ router.post("/orders/:orderId/invoice", async (request, response, next) => {
       throw error;
     }
 
+    const changedBatches = [];
+    const changedVariants = [];
+    const rollbackStock = async () => {
+      await Promise.all(changedBatches.map(({ purchaseId, quantity }) => Purchase.updateOne({ _id: purchaseId }, { $inc: { remainingQuantity: quantity } })));
+      await Promise.all(changedVariants.map(({ productId, name, quantity }) => Product.updateOne(
+        { _id: productId },
+        { $inc: { "variants.$[variant].locationStock.$[stock].quantity": quantity } },
+        { arrayFilters: [{ "variant.name": name }, { "stock.location": location._id }] },
+      )));
+    };
+    for (const [purchaseId, quantity] of batchQuantities) {
+      const purchase = purchaseMap.get(purchaseId);
+      const updated = await Purchase.findOneAndUpdate(
+        { _id: purchaseId, remainingQuantity: { $gte: quantity } },
+        { $inc: { remainingQuantity: -quantity } },
+        { new: true },
+      );
+      if (!updated) {
+        await rollbackStock();
+        await PosSale.deleteOne({ _id: sale._id });
+        return response.status(409).json({ success: false, message: `Batch ${purchase.batchNumber || "selected batch"} changed while invoicing. Review the batch and try again.` });
+      }
+      changedBatches.push({ purchaseId, quantity });
+    }
+    for (const variant of variantQuantities.values()) {
+      const updated = await Product.findOneAndUpdate(
+        { _id: variant.productId, variants: { $elemMatch: { name: variant.name, locationStock: { $elemMatch: { location: location._id, quantity: { $gte: variant.quantity } } } } } },
+        { $inc: { "variants.$[variant].locationStock.$[stock].quantity": -variant.quantity } },
+        { new: true, arrayFilters: [{ "variant.name": variant.name }, { "stock.location": location._id, "stock.quantity": { $gte: variant.quantity } }] },
+      );
+      if (!updated) {
+        await rollbackStock();
+        await PosSale.deleteOne({ _id: sale._id });
+        return response.status(409).json({ success: false, message: `Variant ${variant.name} changed while invoicing. Review its stock and try again.` });
+      }
+      changedVariants.push(variant);
+    }
+
     const shippedOrder = await Order.findOneAndUpdate(
       { _id: order._id, status: "Processing", $or: [{ posInvoiceNumber: "" }, { posInvoiceNumber: { $exists: false } }] },
       { $set: { status: "Shipped", posInvoiceNumber: invoiceNumber, shippedAt: new Date() } },
       { new: true },
     );
     if (!shippedOrder) {
+      await rollbackStock();
       await PosSale.deleteOne({ _id: sale._id });
       return response.status(409).json({ success: false, message: "This order changed while creating its invoice. Refresh the customer orders and try again." });
     }

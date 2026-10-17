@@ -26,6 +26,23 @@ const sendSignupCode = async (email, code, env) => {
   return true;
 };
 
+const sendInventoryResetCode = async (email, code, env) => {
+  const from = env.SMTP_FROM || env.SMTP_USER;
+  if (!isEmailConfigured(env)) {
+    if (env.NODE_ENV !== "production") return false;
+    throw new Error("Email delivery is not configured.");
+  }
+
+  await createTransporter(env).sendMail({
+    from,
+    to: email,
+    subject: "Inventory reset confirmation code",
+    text: `Your inventory reset confirmation code is ${code}. It expires in 10 minutes. If you did not request this, contact your store administrator immediately.`,
+    html: `<p>Your inventory reset confirmation code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>This code expires in 10 minutes. If you did not request this reset, contact your store administrator immediately.</p>`,
+  });
+  return true;
+};
+
 const sendPasswordResetLink = async (email, resetUrl, env) => {
   const from = env.SMTP_FROM || env.SMTP_USER;
   if (!isEmailConfigured(env)) {
@@ -43,4 +60,4 @@ const sendPasswordResetLink = async (email, resetUrl, env) => {
   return true;
 };
 
-module.exports = { isEmailConfigured, sendPasswordResetLink, sendSignupCode };
+module.exports = { isEmailConfigured, sendPasswordResetLink, sendSignupCode, sendInventoryResetCode };

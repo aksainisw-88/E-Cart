@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bell, CheckCircle2, CreditCard, LockKeyhole, Save, UserRound } from "lucide-react";
+import { Bell, CheckCircle2, CreditCard, LockKeyhole, RotateCcw, Save, UserRound } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const preferenceKey = "e-mart-admin-preferences";
@@ -24,6 +24,12 @@ const AdminSettings = () => {
   const [profile, setProfile] = useState({ id: "", name: "", email: "", role: "" });
   const [preferences, setPreferences] = useState(readPreferences);
   const [integrations, setIntegrations] = useState(emptyIntegrations);
+  const [resetOtp, setResetOtp] = useState("");
+  const [developmentOtp, setDevelopmentOtp] = useState("");
+  const [resetAcknowledged, setResetAcknowledged] = useState(false);
+  const [resetBusy, setResetBusy] = useState("");
+  const [resetMessage, setResetMessage] = useState("");
+  const [resetError, setResetError] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -46,6 +52,54 @@ const AdminSettings = () => {
   const updateProfile = (field) => (event) => setProfile((current) => ({ ...current, [field]: event.target.value }));
   const updatePreference = (field) => (event) => setPreferences((current) => ({ ...current, [field]: event.target.checked }));
   const updateIntegration = (provider, field) => (event) => setIntegrations((current) => ({ ...current, [provider]: { ...current[provider], [field]: field === "enabled" ? event.target.checked : event.target.value } }));
+
+  const sendInventoryResetOtp = async () => {
+    setResetBusy("send");
+    setResetError("");
+    setResetMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/users/inventory-reset/otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to send inventory reset code.");
+      setDevelopmentOtp(result.developmentOtp || "");
+      setResetOtp("");
+      setResetAcknowledged(false);
+      setResetMessage(result.message || "Reset code sent to the signed-in admin email.");
+    } catch (requestError) {
+      setResetError(requestError.message);
+    } finally {
+      setResetBusy("");
+    }
+  };
+
+  const confirmInventoryReset = async () => {
+    setResetBusy("reset");
+    setResetError("");
+    setResetMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/users/inventory-reset/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ otp: resetOtp }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to reset inventory.");
+      setResetOtp("");
+      setDevelopmentOtp("");
+      setResetAcknowledged(false);
+      setResetMessage(`${result.message} ${result.data?.products ?? 0} products and ${result.data?.batches ?? 0} batches updated.`);
+    } catch (requestError) {
+      setResetError(requestError.message);
+    } finally {
+      setResetBusy("");
+    }
+  };
 
   const saveSettings = async (event) => {
     event.preventDefault();
@@ -137,6 +191,19 @@ const AdminSettings = () => {
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600"><LockKeyhole className="h-5 w-5" /></span><div><h2 className="font-semibold text-slate-900">Security</h2><p className="mt-1 text-xs text-slate-500">Your session is protected with an HttpOnly authentication cookie.</p></div></div><p className="mt-5 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">To change your password, sign out and use the account recovery flow. Admin role changes remain available in Users.</p></section>
+
+        <section className="rounded-xl border border-red-200 bg-white p-6 sm:p-8">
+          <div className="flex items-center gap-3 border-b border-red-100 pb-5"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600"><RotateCcw className="h-5 w-5" /></span><div><h2 className="font-semibold text-slate-900">Reset inventory to zero</h2><p className="mt-1 text-xs text-slate-500">This resets product, location, variant, and purchase-batch stock. It preserves customers, products, orders, sales, purchases, and store settings.</p></div></div>
+          <div className="mt-5 flex flex-wrap items-end gap-3"><button type="button" onClick={sendInventoryResetOtp} disabled={Boolean(resetBusy)} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{resetBusy === "send" ? "Sending code..." : "Send OTP to admin email"}</button><p className="text-xs text-slate-500">Signed in as {profile.email || "admin"}</p></div>
+          {developmentOtp && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Development reset code: <span className="font-bold tracking-widest">{developmentOtp}</span></p>}
+          <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(180px,240px)_1fr] sm:items-end">
+            <label className="text-sm font-semibold text-slate-700">6-digit OTP<input inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" value={resetOtp} onChange={(event) => setResetOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm tracking-widest outline-none focus:border-primary" placeholder="Enter code" /></label>
+            <label className="flex cursor-pointer items-start gap-2 pb-2 text-xs leading-5 text-slate-600"><input type="checkbox" checked={resetAcknowledged} onChange={(event) => setResetAcknowledged(event.target.checked)} className="mt-0.5 h-4 w-4 accent-red-600" /><span>I understand all current product, branch, variant, and batch stock quantities will be set to zero.</span></label>
+          </div>
+          {resetError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{resetError}</p>}
+          {resetMessage && <p role="status" className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{resetMessage}</p>}
+          <div className="mt-5 flex justify-end"><button type="button" onClick={confirmInventoryReset} disabled={Boolean(resetBusy) || resetOtp.length !== 6 || !resetAcknowledged} className="inline-flex h-10 items-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw className="h-4 w-4" />{resetBusy === "reset" ? "Resetting..." : "Confirm inventory reset"}</button></div>
+        </section>
 
         <div className="flex justify-end"><button type="submit" disabled={saving || !profile.id} className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"><Save className="h-4 w-4" />{saving ? "Saving..." : "Save settings"}</button></div>
       </form>

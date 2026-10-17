@@ -1,7 +1,13 @@
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const express = require("express");
+const mongoose = require("mongoose");
 const { z } = require("zod");
 const User = require("../models/User");
+const Product = require("../models/Product");
+const Purchase = require("../models/Purchase");
+const InventoryResetOtp = require("../models/InventoryResetOtp");
+const { sendInventoryResetCode } = require("../utils/email");
 
 const router = express.Router();
 const menuPermissionSchema = z.array(z.enum([
@@ -36,6 +42,87 @@ const withRoleMenuValidation = (schema) => schema.superRefine((data, context) =>
 });
 const userSchema = withRoleMenuValidation(z.object({ name: z.string().trim().min(2).max(80), email: z.string().email(), password: z.string().min(8).max(128), role: z.enum(["admin", "manager", "user"]), menuPermissions: menuPermissionSchema }));
 const editSchema = withRoleMenuValidation(z.object({ name: z.string().trim().min(2).max(80), email: z.string().email(), role: z.enum(["admin", "manager", "user"]), menuPermissions: menuPermissionSchema }));
+const inventoryResetConfirmSchema = z.object({ otp: z.string().regex(/^\d{6}$/) });
+const hashInventoryResetOtp = (userId, otp, secret) => crypto.createHmac("sha256", secret).update(`${userId}:${otp}`).digest("hex");
+const maskEmail = (email) => {
+  const [name, domain] = String(email || "").split("@");
+  return name && domain ? `${name.slice(0, 1)}${"*".repeat(Math.max(2, name.length - 1))}@${domain}` : "your admin email";
+};
+
+router.post("/inventory-reset/otp", async (request, response, next) => {
+  try {
+    const admin = await User.findOne({ _id: request.user.id, role: "admin", status: "Active" }).select("email");
+    if (!admin?.email) return response.status(403).json({ success: false, message: "An active admin account is required to reset inventory." });
+    const existing = await InventoryResetOtp.findOne({ user: admin._id }).select("createdAt").lean();
+    if (existing && Date.now() - new Date(existing.createdAt).getTime() < 60_000) {
+      return response.status(429).json({ success: false, message: "Wait one minute before requesting another reset code." });
+    }
+    const otp = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+    const env = request.app.locals.env;
+    const sent = await sendInventoryResetCode(admin.email, otp, env);
+    await InventoryResetOtp.findOneAndUpdate(
+      { user: admin._id },
+      { otpHash: hashInventoryResetOtp(admin._id, otp, env.JWT_SECRET), attempts: 0, expiresAt: new Date(Date.now() + 10 * 60_000) },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+    response.json({ success: true, message: `Reset code sent to ${maskEmail(admin.email)}. It expires in 10 minutes.`, ...(!sent ? { developmentOtp: otp } : {}) });
+  } catch (error) {
+    if (error.message === "Email delivery is not configured.") return response.status(503).json({ success: false, message: "Admin email delivery is not configured." });
+    next(error);
+  }
+});
+
+router.post("/inventory-reset/confirm", async (request, response, next) => {
+  try {
+    const parsed = inventoryResetConfirmSchema.safeParse(request.body);
+    if (!parsed.success) return response.status(400).json({ success: false, message: "Enter the 6-digit reset code." });
+    const admin = await User.findOne({ _id: request.user.id, role: "admin", status: "Active" }).select("_id");
+    if (!admin) return response.status(403).json({ success: false, message: "An active admin account is required to reset inventory." });
+    const challenge = await InventoryResetOtp.findOne({ user: admin._id, expiresAt: { $gt: new Date() } });
+    if (!challenge) return response.status(400).json({ success: false, message: "Reset code is invalid or expired. Request a new code." });
+    if (challenge.attempts >= 5) {
+      await challenge.deleteOne();
+      return response.status(429).json({ success: false, message: "Too many incorrect codes. Request a new code." });
+    }
+    const expected = Buffer.from(challenge.otpHash, "hex");
+    const submitted = Buffer.from(hashInventoryResetOtp(admin._id, parsed.data.otp, request.app.locals.env.JWT_SECRET), "hex");
+    if (submitted.length !== expected.length || !crypto.timingSafeEqual(submitted, expected)) {
+      challenge.attempts += 1;
+      await challenge.save();
+      if (challenge.attempts >= 5) await challenge.deleteOne();
+      return response.status(400).json({ success: false, message: "The reset code is incorrect." });
+    }
+
+    const session = await mongoose.startSession();
+    let resultCounts;
+    try {
+      await session.withTransaction(async () => {
+        const currentChallenge = await InventoryResetOtp.findOne({ _id: challenge._id, user: admin._id, expiresAt: { $gt: new Date() } }).session(session);
+        if (!currentChallenge || currentChallenge.otpHash !== challenge.otpHash) {
+          throw Object.assign(new Error("Reset code was already used or expired. Request a new code."), { statusCode: 400 });
+        }
+        await InventoryResetOtp.deleteOne({ _id: currentChallenge._id }, { session });
+        const [products, batches] = await Promise.all([
+          Product.updateMany({}, [{ $set: {
+            stock: 0,
+            locationStock: { $map: { input: { $ifNull: ["$locationStock", []] }, as: "location", in: { $mergeObjects: ["$$location", { quantity: 0 }] } } },
+            variants: { $map: { input: { $ifNull: ["$variants", []] }, as: "variant", in: { $mergeObjects: ["$$variant", { locationStock: { $map: { input: { $ifNull: ["$$variant.locationStock", []] }, as: "stock", in: { $mergeObjects: ["$$stock", { quantity: 0 }] } } } }] } } },
+          } }], { session }),
+          Purchase.updateMany({ remainingQuantity: { $ne: 0 } }, { $set: { remainingQuantity: 0 } }, { session }),
+        ]);
+        resultCounts = { products: products.matchedCount, batches: batches.modifiedCount };
+      });
+    } catch (error) {
+      const transactionUnsupported = error.code === 20 || error.codeName === "IllegalOperation" || /transactions are not supported|replica set/i.test(error.message || "");
+      if (transactionUnsupported) return response.status(503).json({ success: false, message: "Inventory reset requires MongoDB transaction support. Configure MongoDB as a replica set and try again." });
+      if (error.statusCode) return response.status(error.statusCode).json({ success: false, message: error.message });
+      return next(error);
+    } finally {
+      await session.endSession();
+    }
+    response.json({ success: true, message: "Inventory quantities were reset to zero. Store records and transaction history were preserved.", data: resultCounts });
+  } catch (error) { next(error); }
+});
 
 router.get("/", async (request, response, next) => {
   try {

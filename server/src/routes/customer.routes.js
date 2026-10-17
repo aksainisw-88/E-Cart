@@ -23,7 +23,7 @@ const customerSchema = z.object({
 
 router.get("/", async (request, response, next) => {
   try {
-    const customers = await User.find({ role: "customer" }).select("name email phone address locality pincode district state gstin panNumber gender status customerSource createdAt").sort({ createdAt: -1 }).lean();
+    const customers = await User.find({ role: "customer" }).select("name email phone address locality pincode district state gstin panNumber gender status customerSource createdAt addresses").sort({ createdAt: -1 }).lean();
     const [orders, posSales] = await Promise.all([
       Order.aggregate([{ $group: { _id: "$customer", count: { $sum: 1 }, total: { $sum: "$total" } } }]),
       PosSale.aggregate([{ $match: { customer: { $exists: true } } }, { $group: { _id: "$customer", count: { $sum: 1 }, total: { $sum: "$total" } } }]),
@@ -34,7 +34,20 @@ router.get("/", async (request, response, next) => {
       const current = summary.get(key) || { count: 0, total: 0 };
       summary.set(key, { count: current.count + item.count, total: current.total + item.total });
     });
-    response.json({ success: true, data: customers.map((customer) => ({ ...customer, customerSource: customer.customerSource || "Online", orderCount: summary.get(customer._id.toString())?.count || 0, totalSpent: summary.get(customer._id.toString())?.total || 0 })) });
+    response.json({ success: true, data: customers.map((customer) => {
+      const { addresses, ...customerData } = customer;
+      const defaultAddress = addresses?.find((address) => address.isDefault) || addresses?.[0];
+      return {
+        ...customerData,
+        phone: customer.phone || defaultAddress?.phone || "",
+        address: customer.address || defaultAddress?.address || "",
+        locality: customer.locality || defaultAddress?.city || "",
+        pincode: customer.pincode || defaultAddress?.pincode || "",
+        customerSource: customer.customerSource || "Online",
+        orderCount: summary.get(customer._id.toString())?.count || 0,
+        totalSpent: summary.get(customer._id.toString())?.total || 0,
+      };
+    }) });
   } catch (error) { next(error); }
 });
 
