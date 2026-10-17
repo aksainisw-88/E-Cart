@@ -18,6 +18,7 @@ const saleItemSchema = new mongoose.Schema({
 
 const posSaleSchema = new mongoose.Schema({
   invoiceNumber: { type: String, required: true, unique: true, trim: true },
+  order: { type: mongoose.Schema.Types.ObjectId, ref: "Order", unique: true, sparse: true },
   customer: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   customerName: { type: String, trim: true, default: "Walk-in Customer" },
   customerSource: { type: String, enum: ["Online", "Offline", "Walk-in"], default: "Walk-in" },
@@ -27,10 +28,11 @@ const posSaleSchema = new mongoose.Schema({
   itemDiscount: { type: Number, min: 0, default: 0 },
   promotionDiscount: { type: Number, min: 0, default: 0 },
   discount: { type: Number, min: 0, default: 0 },
+  delivery: { type: Number, min: 0, default: 0 },
   taxRate: { type: Number, min: 0, default: 5 },
   tax: { type: Number, min: 0, default: 0 },
   total: { type: Number, required: true, min: 0 },
-  paymentMode: { type: String, enum: ["Cash", "UPI", "Card", "Credit", "Cheque"], required: true },
+  paymentMode: { type: String, enum: ["Cash", "UPI", "Card", "Credit", "Cheque", "Online", "COD"], required: true },
   paymentStatus: { type: String, enum: ["Paid", "Pending"], default: "Paid" },
 }, { timestamps: true });
 

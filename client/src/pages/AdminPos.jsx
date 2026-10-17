@@ -56,6 +56,8 @@ const AdminPos = () => {
   const [discount, setDiscount] = useState(0);
   const [cart, setCart] = useState([]);
   const [recentInvoices, setRecentInvoices] = useState([]);
+  const [openOrders, setOpenOrders] = useState([]);
+  const [clearingOrderId, setClearingOrderId] = useState("");
   const [lastReceipt, setLastReceipt] = useState(null);
   const [historyQuery, setHistoryQuery] = useState("");
   const [message, setMessage] = useState("");
@@ -67,18 +69,19 @@ const AdminPos = () => {
     let active = true;
     const loadPos = async () => {
       try {
-        const [productResponse, locationResponse, offerResponse, salesResponse, customerResponse] = await Promise.all([
+        const [productResponse, locationResponse, offerResponse, salesResponse, customerResponse, orderResponse] = await Promise.all([
           fetch(`${API_URL}/api/products`, { credentials: "include" }),
           fetch(`${API_URL}/api/stores`),
           fetch(`${API_URL}/api/catalog/offers`, { credentials: "include" }),
           fetch(`${API_URL}/api/pos/sales`, { credentials: "include" }),
           fetch(`${API_URL}/api/customers`, { credentials: "include" }),
+          fetch(`${API_URL}/api/pos/orders`, { credentials: "include" }),
         ]);
-        const [productResult, locationResult, offerResult, salesResult, customerResult] = await Promise.all([
-          productResponse.json(), locationResponse.json(), offerResponse.json(), salesResponse.json(), customerResponse.json(),
+        const [productResult, locationResult, offerResult, salesResult, customerResult, orderResult] = await Promise.all([
+          productResponse.json(), locationResponse.json(), offerResponse.json(), salesResponse.json(), customerResponse.json(), orderResponse.json(),
         ]);
-        if (!productResponse.ok || !locationResponse.ok || !offerResponse.ok || !salesResponse.ok || !customerResponse.ok) {
-          throw new Error(productResult.message || locationResult.message || offerResult.message || salesResult.message || customerResult.message || "Unable to load POS data.");
+        if (!productResponse.ok || !locationResponse.ok || !offerResponse.ok || !salesResponse.ok || !customerResponse.ok || !orderResponse.ok) {
+          throw new Error(productResult.message || locationResult.message || offerResult.message || salesResult.message || customerResult.message || orderResult.message || "Unable to load POS data.");
         }
         if (!active) return;
         const productData = (productResult.data || []).filter((product) => product.status === "Published");
@@ -92,6 +95,7 @@ const AdminPos = () => {
         setRate(String(nextInventory[0]?.price ?? ""));
         setOffers(offerResult.data || []);
         setCustomers((customerResult.data || []).filter((customer) => customer.status === "Active"));
+        setOpenOrders(orderResult.data || []);
         setRecentInvoices((salesResult.data || []).map((sale) => ({
           id: sale.invoiceNumber,
           customer: sale.customerName,
@@ -422,6 +426,54 @@ const AdminPos = () => {
     }
   };
 
+  const clearOrderToInvoice = async (order) => {
+    if (!selectedLocationId) {
+      setError("Select a stock location before invoicing a customer order.");
+      return;
+    }
+    setClearingOrderId(order._id);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/pos/orders/${order._id}/invoice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ locationId: selectedLocationId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to invoice this customer order.");
+      const sale = result.data;
+      const receipt = {
+        invoiceNumber: sale.invoiceNumber,
+        customerName: sale.customerName,
+        paymentMode: sale.paymentMode,
+        locationName: sale.location?.name || selectedLocation?.name,
+        items: sale.items.map((item) => ({ name: item.productName, variant: item.variant, batchNumber: item.batchNumber, expiryDate: item.expiryDate, qty: item.quantity, freeQty: item.freeQuantity, price: item.unitPrice, discount: item.discount })),
+        totals: { subtotal: sale.subtotal, discount: sale.discount, tax: sale.tax, delivery: sale.delivery, total: sale.total },
+        promotion: sale.promotionDiscount ? { title: "Order promotion" } : null,
+      };
+      setOpenOrders((current) => current.filter((item) => item._id !== order._id));
+      setRecentInvoices((current) => [{
+        id: sale.invoiceNumber,
+        customer: sale.customerName,
+        items: sale.items.length,
+        total: sale.total,
+        paymentMode: sale.paymentMode,
+        status: sale.paymentStatus,
+        date: new Date(sale.createdAt).toLocaleDateString(),
+        location: sale.location?.name || selectedLocation?.name || "-",
+        sale,
+      }, ...current]);
+      setLastReceipt(receipt);
+      setMessage(result.message || `Invoice ${sale.invoiceNumber} created and order marked Shipped.`);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setClearingOrderId("");
+    }
+  };
+
   const printReceipt = (receiptToPrint = lastReceipt, existingWindow = null) => {
     if (!receiptToPrint) {
       setMessage("Create an invoice before printing a receipt.");
@@ -437,6 +489,17 @@ const AdminPos = () => {
     const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
     const itemRows = receiptToPrint.items.map((item) => `<tr><td>${escapeHtml(item.name)}<small>${item.variant ? `${escapeHtml(item.variant)} · ` : ""}${item.batchNumber ? `Batch ${escapeHtml(item.batchNumber)}` : ""}${item.expiryDate ? ` · Exp ${escapeHtml(new Date(item.expiryDate).toLocaleDateString())}` : ""}${item.freeQty ? ` · ${item.freeQty} free` : ""}</small></td><td>${item.qty}</td><td>${formatCurrency(Math.max(item.qty * item.price - item.discount, 0))}</td></tr>`).join("");
     printWindow.document.write(`<!doctype html><html><head><title>${escapeHtml(receiptToPrint.invoiceNumber)}</title><style>body{font-family:Arial,sans-serif;color:#17202a;padding:24px;max-width:390px;margin:auto}h1{font-size:20px;margin:0 0 4px}p{margin:5px 0;color:#5b6670;font-size:13px}.meta{border-bottom:1px solid #dfe4e8;padding-bottom:14px;margin-bottom:14px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 0;border-bottom:1px solid #edf0f2;text-align:left}th:last-child,td:last-child{text-align:right}td:nth-child(2){text-align:center}small{display:block;color:#008f68;margin-top:3px}.totals{margin-top:14px}.line{display:flex;justify-content:space-between;padding:5px 0;font-size:13px}.total{border-top:2px solid #17202a;margin-top:6px;padding-top:10px;font-size:18px;font-weight:bold}.thanks{text-align:center;margin-top:28px}@media print{body{padding:0}}</style></head><body><div class="meta"><h1>Sales Invoice</h1><p><strong>${escapeHtml(receiptToPrint.invoiceNumber)}</strong></p><p>Customer: ${escapeHtml(receiptToPrint.customerName)}</p><p>Payment: ${escapeHtml(receiptToPrint.paymentMode)}</p><p>${new Date().toLocaleString()}</p></div><table><thead><tr><th>Product</th><th>Qty</th><th>Amount</th></tr></thead><tbody>${itemRows}</tbody></table><div class="totals"><div class="line"><span>Subtotal</span><span>${formatCurrency(receiptToPrint.totals.subtotal)}</span></div><div class="line"><span>Discount</span><span>-${formatCurrency(receiptToPrint.totals.discount)}</span></div>${receiptToPrint.promotion ? `<div class="line"><span>Offer</span><span>${escapeHtml(receiptToPrint.promotion.title)}</span></div>` : ""}<div class="line"><span>GST (5%)</span><span>${formatCurrency(receiptToPrint.totals.tax)}</span></div><div class="line total"><span>Total</span><span>${formatCurrency(receiptToPrint.totals.total)}</span></div></div><p class="thanks">Thank you for shopping with us.</p><script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();};</script></body></html>`);
+    const totalsElement = printWindow.document.querySelector(".totals");
+    if (totalsElement) {
+      const gstRow = [...totalsElement.querySelectorAll(".line")].find((row) => row.textContent.includes("GST (5%)"));
+      if (!Number(receiptToPrint.totals.tax || 0)) gstRow?.remove();
+      if (Number(receiptToPrint.totals.delivery || 0) > 0) {
+        const deliveryRow = printWindow.document.createElement("div");
+        deliveryRow.className = "line";
+        deliveryRow.innerHTML = `<span>Delivery</span><span>${formatCurrency(receiptToPrint.totals.delivery)}</span>`;
+        totalsElement.insertBefore(deliveryRow, totalsElement.querySelector(".total"));
+      }
+    }
     printWindow.document.close();
   };
 
@@ -485,7 +548,7 @@ const AdminPos = () => {
       paymentMode: invoice.paymentMode,
       locationName: invoice.location,
       items: sale.items.map((item) => ({ name: item.productName, variant: item.variant, batchNumber: item.batchNumber, expiryDate: item.expiryDate, qty: item.quantity, freeQty: item.freeQuantity, price: item.unitPrice, discount: item.discount })),
-      totals: { subtotal: sale.subtotal, discount: sale.discount, tax: sale.tax, total: sale.total },
+      totals: { subtotal: sale.subtotal, discount: sale.discount, tax: sale.tax, delivery: sale.delivery, total: sale.total },
     });
   };
 
@@ -497,6 +560,32 @@ const AdminPos = () => {
       </header>
 
       {(error || message) && <div role={error ? "alert" : "status"} className={`rounded-lg px-4 py-3 text-sm ${error ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-800"}`}>{error || message}<button type="button" onClick={() => { setError(""); setMessage(""); }} aria-label="Dismiss message" className="float-right"><X className="h-4 w-4" /></button></div>}
+
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
+          <div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Customer fulfillment</p><h2 className="mt-1 text-lg font-bold text-slate-900">Orders to invoice <span className="ml-1 text-sm font-medium text-slate-400">{openOrders.length}</span></h2><p className="mt-1 text-xs text-slate-500">Create the sales invoice and mark each order Shipped. Checkout has already updated stock.</p></div>
+        </div>
+        {loading ? <p className="p-6 text-sm text-slate-500">Loading customer orders...</p> : openOrders.length ? (
+          <div className="divide-y divide-slate-100">
+            {openOrders.map((order) => {
+              const orderStoreId = String(order.store?._id || order.store || "");
+              const locationMatches = !orderStoreId || orderStoreId === selectedLocationId;
+              return <article key={order._id} className="flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center sm:px-6">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-slate-900">#{order.orderNumber}</p><span className="rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">Processing</span></div>
+                  <p className="mt-1 text-sm text-slate-600">{order.customer?.name || order.shipping?.name || "Customer"}{order.customer?.phone ? ` · ${order.customer.phone}` : ""}</p>
+                  <p className="mt-1 truncate text-xs text-slate-500">{(order.items || []).map((item) => `${item.name} × ${item.quantity}`).join(" · ")}</p>
+                  <p className="mt-1 text-xs text-slate-500">{order.store?.name ? `Fulfill at ${order.store.name} · ` : ""}Placed {new Date(order.createdAt).toLocaleDateString()}</p>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-3 sm:justify-end">
+                  <p className="text-base font-bold text-slate-900">{formatCurrency(order.total)}</p>
+                  <button type="button" disabled={saving || Boolean(clearingOrderId) || !selectedLocationId || !locationMatches} onClick={() => clearOrderToInvoice(order)} title={!locationMatches ? `Select ${order.store?.name} to fulfill this order` : "Create invoice and mark order shipped"} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-3.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-4 w-4" />{clearingOrderId === order._id ? "Creating..." : locationMatches ? "Clear order & create invoice" : `Use ${order.store?.name}`}</button>
+                </div>
+              </article>;
+            })}
+          </div>
+        ) : <p className="p-6 text-sm text-slate-500">No processing customer orders are waiting for an invoice.</p>}
+      </section>
 
       <section className="rounded-xl border border-slate-200 bg-white">
         <div className="border-b border-slate-100 px-5 py-4 sm:px-6"><p className="text-xs font-semibold uppercase tracking-wide text-primary">Invoice details</p><h2 className="mt-1 text-lg font-bold text-slate-900">Customer and location</h2></div>

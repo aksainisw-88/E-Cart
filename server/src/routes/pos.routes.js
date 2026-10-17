@@ -3,12 +3,14 @@ const express = require("express");
 const { z } = require("zod");
 
 const PosSale = require("../models/PosSale");
+const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Purchase = require("../models/Purchase");
 const StoreLocation = require("../models/StoreLocation");
 const User = require("../models/User");
 
 const router = express.Router();
+const fulfillmentSchema = z.object({ locationId: z.string().regex(/^[a-f\d]{24}$/i) });
 const saleSchema = z.object({
   customerId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
   customerName: z.string().trim().max(120).optional().default("Walk-in Customer"),
@@ -59,6 +61,85 @@ router.get("/sales", async (request, response, next) => {
   try {
     const sales = await PosSale.find().populate("location", "name city").populate("customer", "name email phone customerSource").sort({ createdAt: -1 }).limit(100).lean();
     response.json({ success: true, data: sales });
+  } catch (error) { next(error); }
+});
+
+router.get("/orders", async (request, response, next) => {
+  try {
+    const orders = await Order.find({
+      status: "Processing",
+      $or: [{ posInvoiceNumber: "" }, { posInvoiceNumber: { $exists: false } }],
+    }).populate("customer", "name email phone customerSource").populate("store", "name city").sort({ createdAt: 1 }).limit(100).lean();
+    const existingInvoices = await PosSale.find({ order: { $in: orders.map((order) => order._id) } }).select("order").lean();
+    const invoicedOrderIds = new Set(existingInvoices.map((sale) => sale.order.toString()));
+    response.json({ success: true, data: orders.filter((order) => !invoicedOrderIds.has(order._id.toString())) });
+  } catch (error) { next(error); }
+});
+
+router.post("/orders/:orderId/invoice", async (request, response, next) => {
+  try {
+    const fulfillment = fulfillmentSchema.safeParse(request.body);
+    if (!fulfillment.success) return response.status(400).json({ success: false, message: "Select a stock location before invoicing this order." });
+    const order = await Order.findById(request.params.orderId).populate("customer", "name email phone customerSource").populate("store", "name city");
+    if (!order) return response.status(404).json({ success: false, message: "Customer order not found." });
+    if (order.status !== "Processing") return response.status(409).json({ success: false, message: "Only processing customer orders can be invoiced from POS." });
+    if (order.posInvoiceNumber || await PosSale.exists({ order: order._id })) return response.status(409).json({ success: false, message: "This customer order already has a POS invoice." });
+    const location = await StoreLocation.findOne({ _id: fulfillment.data.locationId, active: true }).select("_id name isDefault").lean();
+    if (!location) return response.status(400).json({ success: false, message: "Select an active store location." });
+    if (order.store && !order.store._id.equals(location._id)) return response.status(400).json({ success: false, message: `Fulfill this order at ${order.store.name}.` });
+
+    const promotionDiscount = Number(order.promoDiscount) || 0;
+    const invoiceNumber = `POS-${new Date().getFullYear()}-${crypto.randomInt(100000, 1000000)}`;
+    let sale;
+    try {
+      sale = await PosSale.create({
+        invoiceNumber,
+        order: order._id,
+        customer: order.customer?._id,
+        customerName: order.shipping?.name || order.customer?.name || "Customer",
+        customerSource: order.customer?.customerSource || "Online",
+        location: location._id,
+        items: order.items.map((item) => {
+            const quantity = Number(item.quantity) || 1;
+            const rate = Number(item.price) || 0;
+          return {
+            product: item.product,
+            productName: item.name,
+            mrp: Number(item.originalPrice || item.price) || 0,
+              unitPrice: rate,
+              quantity,
+            freeQuantity: 0,
+              discount: 0,
+              amount: rate * quantity,
+          };
+        }),
+        subtotal: Number(order.subtotal) || 0,
+        itemDiscount: 0,
+        promotionDiscount,
+        discount: promotionDiscount,
+        delivery: Number(order.delivery) || 0,
+        taxRate: 0,
+        tax: 0,
+        total: Number(order.total) || 0,
+        paymentMode: order.paymentMethod === "cod" ? "COD" : "Online",
+        paymentStatus: order.paymentStatus === "Paid" ? "Paid" : "Pending",
+      });
+    } catch (error) {
+      if (error.code === 11000) return response.status(409).json({ success: false, message: "This customer order already has a POS invoice." });
+      throw error;
+    }
+
+    const shippedOrder = await Order.findOneAndUpdate(
+      { _id: order._id, status: "Processing", $or: [{ posInvoiceNumber: "" }, { posInvoiceNumber: { $exists: false } }] },
+      { $set: { status: "Shipped", posInvoiceNumber: invoiceNumber, shippedAt: new Date() } },
+      { new: true },
+    );
+    if (!shippedOrder) {
+      await PosSale.deleteOne({ _id: sale._id });
+      return response.status(409).json({ success: false, message: "This order changed while creating its invoice. Refresh the customer orders and try again." });
+    }
+    await sale.populate("location", "name city");
+    response.status(201).json({ success: true, data: sale, order: shippedOrder, message: `Invoice ${invoiceNumber} created and order marked Shipped. Stock was already deducted when the customer placed the order.` });
   } catch (error) { next(error); }
 });
 

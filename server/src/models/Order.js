@@ -22,6 +22,8 @@ const orderSchema = new mongoose.Schema(
     razorpaySignature: { type: String, trim: true, default: "" },
     paidAt: { type: Date },
     status: { type: String, enum: ["Processing", "Shipped", "Delivered", "Cancelled"], default: "Processing" },
+    posInvoiceNumber: { type: String, trim: true, default: "" },
+    shippedAt: { type: Date },
     cancelReason: { type: String, trim: true, maxlength: 500, default: "" },
     cancelledAt: { type: Date },
     returnStatus: { type: String, enum: ["Not requested", "Requested", "Approved", "Rejected", "Completed"], default: "Not requested" },
