@@ -26,10 +26,10 @@ const sendSignupCode = async (email, code, env) => {
   return true;
 };
 
-const sendInventoryResetCode = async (email, code, env) => {
+const sendInventoryResetCode = async (email, code, env, { allowDevelopmentFallback = false } = {}) => {
   const from = env.SMTP_FROM || env.SMTP_USER;
   if (!isEmailConfigured(env)) {
-    if (env.NODE_ENV !== "production") return false;
+    if (allowDevelopmentFallback && env.NODE_ENV !== "production") return false;
     throw new Error("Email delivery is not configured.");
   }
 
@@ -43,10 +43,10 @@ const sendInventoryResetCode = async (email, code, env) => {
   return true;
 };
 
-const sendStoreResetCode = async (email, code, env) => {
+const sendStoreResetCode = async (email, code, env, { allowDevelopmentFallback = false } = {}) => {
   const from = env.SMTP_FROM || env.SMTP_USER;
   if (!isEmailConfigured(env)) {
-    if (env.NODE_ENV !== "production") return false;
+    if (allowDevelopmentFallback && env.NODE_ENV !== "production") return false;
     throw new Error("Email delivery is not configured.");
   }
 

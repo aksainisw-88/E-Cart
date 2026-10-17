@@ -30,6 +30,12 @@ const AdminSettings = () => {
   const [resetBusy, setResetBusy] = useState("");
   const [resetMessage, setResetMessage] = useState("");
   const [resetError, setResetError] = useState("");
+  const [storeResetOtp, setStoreResetOtp] = useState("");
+  const [storeDevelopmentOtp, setStoreDevelopmentOtp] = useState("");
+  const [storeResetAcknowledged, setStoreResetAcknowledged] = useState(false);
+  const [storeResetBusy, setStoreResetBusy] = useState("");
+  const [storeResetMessage, setStoreResetMessage] = useState("");
+  const [storeResetError, setStoreResetError] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -98,6 +104,54 @@ const AdminSettings = () => {
       setResetError(requestError.message);
     } finally {
       setResetBusy("");
+    }
+  };
+
+  const sendStoreResetOtp = async () => {
+    setStoreResetBusy("send");
+    setStoreResetError("");
+    setStoreResetMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/users/store-reset/otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to send store reset code.");
+      setStoreDevelopmentOtp(result.developmentOtp || "");
+      setStoreResetOtp("");
+      setStoreResetAcknowledged(false);
+      setStoreResetMessage(result.message || "Store reset code sent to the signed-in admin email.");
+    } catch (requestError) {
+      setStoreResetError(requestError.message);
+    } finally {
+      setStoreResetBusy("");
+    }
+  };
+
+  const confirmStoreReset = async () => {
+    setStoreResetBusy("reset");
+    setStoreResetError("");
+    setStoreResetMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/users/store-reset/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ otp: storeResetOtp }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to reset store data.");
+      setStoreResetOtp("");
+      setStoreDevelopmentOtp("");
+      setStoreResetAcknowledged(false);
+      setStoreResetMessage(`${result.message} Admin/staff accounts preserved; ${result.data?.products ?? 0} products and ${result.data?.customers ?? 0} customers deleted.`);
+    } catch (requestError) {
+      setStoreResetError(requestError.message);
+    } finally {
+      setStoreResetBusy("");
     }
   };
 
@@ -203,6 +257,19 @@ const AdminSettings = () => {
           {resetError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{resetError}</p>}
           {resetMessage && <p role="status" className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{resetMessage}</p>}
           <div className="mt-5 flex justify-end"><button type="button" onClick={confirmInventoryReset} disabled={Boolean(resetBusy) || resetOtp.length !== 6 || !resetAcknowledged} className="inline-flex h-10 items-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw className="h-4 w-4" />{resetBusy === "reset" ? "Resetting..." : "Confirm inventory reset"}</button></div>
+        </section>
+
+        <section className="rounded-xl border border-red-300 bg-white p-6 sm:p-8">
+          <div className="flex items-center gap-3 border-b border-red-100 pb-5"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 text-red-700"><RotateCcw className="h-5 w-5" /></span><div><h2 className="font-semibold text-red-800">Reset all store data</h2><p className="mt-1 text-xs text-slate-500">Permanently deletes customers, products, categories, orders, POS sales, purchases, vendors, offers, support tickets, store locations/settings, and uploaded product/store files. Admin and staff accounts are preserved.</p></div></div>
+          <div className="mt-5 flex flex-wrap items-end gap-3"><button type="button" onClick={sendStoreResetOtp} disabled={Boolean(storeResetBusy)} className="inline-flex h-10 items-center gap-2 rounded-lg border border-red-200 px-4 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60">{storeResetBusy === "send" ? "Sending code..." : "Send separate store reset OTP"}</button><p className="text-xs text-slate-500">Sent to {profile.email || "the signed-in admin email"}</p></div>
+          {storeDevelopmentOtp && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Development store reset code: <span className="font-bold tracking-widest">{storeDevelopmentOtp}</span></p>}
+          <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(180px,240px)_1fr] sm:items-end">
+            <label className="text-sm font-semibold text-slate-700">6-digit store reset OTP<input inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" value={storeResetOtp} onChange={(event) => setStoreResetOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm tracking-widest outline-none focus:border-primary" placeholder="Enter separate code" /></label>
+            <label className="flex cursor-pointer items-start gap-2 pb-2 text-xs leading-5 text-red-700"><input type="checkbox" checked={storeResetAcknowledged} onChange={(event) => setStoreResetAcknowledged(event.target.checked)} className="mt-0.5 h-4 w-4 accent-red-600" /><span>I understand this permanently deletes the listed store records and uploaded files. This cannot be undone.</span></label>
+          </div>
+          {storeResetError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{storeResetError}</p>}
+          {storeResetMessage && <p role="status" className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{storeResetMessage}</p>}
+          <div className="mt-5 flex justify-end"><button type="button" onClick={confirmStoreReset} disabled={Boolean(storeResetBusy) || storeResetOtp.length !== 6 || !storeResetAcknowledged} className="inline-flex h-10 items-center gap-2 rounded-lg bg-red-700 px-4 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw className="h-4 w-4" />{storeResetBusy === "reset" ? "Resetting store..." : "Permanently reset store data"}</button></div>
         </section>
 
         <div className="flex justify-end"><button type="submit" disabled={saving || !profile.id} className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"><Save className="h-4 w-4" />{saving ? "Saving..." : "Save settings"}</button></div>

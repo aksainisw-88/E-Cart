@@ -76,7 +76,7 @@ app.use("/api/products", requireAuth, requireAnyRole("admin", "manager", "user")
 app.use("/api/vendors", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission((request) => request.method === "GET" ? ["/admin/vendors", "/admin/purchase-entry"] : ["/admin/vendors"]), vendorRoutes);
 app.use("/api/purchases", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission((request) => request.method === "GET" ? ["/admin/vendors", "/admin/purchase-entry"] : ["/admin/purchase-entry"]), purchaseRoutes);
 app.use("/api/users", requireAuth, requireRole("admin"), requireAnyMenuPermission((request) => {
-  if (request.path.startsWith("/inventory-reset/")) return ["/admin/settings"];
+  if (request.path.startsWith("/inventory-reset/") || request.path.startsWith("/store-reset/")) return ["/admin/settings"];
   if (request.method === "PUT" && request.path.slice(1) === request.user.id) return ["/admin/users", "/admin/settings"];
   return ["/admin/users"];
 }), userRoutes);
