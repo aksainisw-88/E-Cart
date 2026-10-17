@@ -1,5 +1,6 @@
 const express = require("express");
 const Order = require("../models/Order");
+const PosSale = require("../models/PosSale");
 const User = require("../models/User");
 
 const router = express.Router();
@@ -13,6 +14,25 @@ const getDateRange = (request) => {
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from > to) throw new Error("Invalid report date range.");
   return { from, to };
 };
+
+router.get("/sales-transactions", async (request, response, next) => {
+  try {
+    const { from, to } = getDateRange(request);
+    const [sales, total] = await Promise.all([
+      PosSale.find({ createdAt: { $gte: from, $lte: to } })
+        .populate("customer", "name email phone customerSource")
+        .populate("location", "name city")
+        .sort({ createdAt: -1 })
+        .limit(5000)
+        .lean(),
+      PosSale.countDocuments({ createdAt: { $gte: from, $lte: to } }),
+    ]);
+    response.json({ success: true, data: { sales, total, from, to, limited: total > sales.length } });
+  } catch (error) {
+    if (error.message === "Invalid report date range.") return response.status(400).json({ success: false, message: error.message });
+    return next(error);
+  }
+});
 
 router.get("/", async (request, response, next) => {
   try {

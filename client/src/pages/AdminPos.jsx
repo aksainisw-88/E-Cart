@@ -38,7 +38,11 @@ const AdminPos = () => {
   const [inventory, setInventory] = useState([]);
   const [locations, setLocations] = useState([]);
   const [selectedLocationId, setSelectedLocationId] = useState("");
-  const [customerName, setCustomerName] = useState("Walk-in Customer");
+  const [customers, setCustomers] = useState([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [customerFormOpen, setCustomerFormOpen] = useState(false);
+  const [customerForm, setCustomerForm] = useState({ name: "", phone: "", email: "" });
+  const [savingCustomer, setSavingCustomer] = useState(false);
   const [paymentMode, setPaymentMode] = useState("Cash");
   const [offers, setOffers] = useState([]);
   const [selectedOfferId, setSelectedOfferId] = useState("");
@@ -63,17 +67,18 @@ const AdminPos = () => {
     let active = true;
     const loadPos = async () => {
       try {
-        const [productResponse, locationResponse, offerResponse, salesResponse] = await Promise.all([
+        const [productResponse, locationResponse, offerResponse, salesResponse, customerResponse] = await Promise.all([
           fetch(`${API_URL}/api/products`, { credentials: "include" }),
           fetch(`${API_URL}/api/stores`),
           fetch(`${API_URL}/api/catalog/offers`, { credentials: "include" }),
           fetch(`${API_URL}/api/pos/sales`, { credentials: "include" }),
+          fetch(`${API_URL}/api/customers`, { credentials: "include" }),
         ]);
-        const [productResult, locationResult, offerResult, salesResult] = await Promise.all([
-          productResponse.json(), locationResponse.json(), offerResponse.json(), salesResponse.json(),
+        const [productResult, locationResult, offerResult, salesResult, customerResult] = await Promise.all([
+          productResponse.json(), locationResponse.json(), offerResponse.json(), salesResponse.json(), customerResponse.json(),
         ]);
-        if (!productResponse.ok || !locationResponse.ok || !offerResponse.ok || !salesResponse.ok) {
-          throw new Error(productResult.message || locationResult.message || offerResult.message || salesResult.message || "Unable to load POS data.");
+        if (!productResponse.ok || !locationResponse.ok || !offerResponse.ok || !salesResponse.ok || !customerResponse.ok) {
+          throw new Error(productResult.message || locationResult.message || offerResult.message || salesResult.message || customerResult.message || "Unable to load POS data.");
         }
         if (!active) return;
         const productData = (productResult.data || []).filter((product) => product.status === "Published");
@@ -86,6 +91,7 @@ const AdminPos = () => {
         setSelectedProductId(nextInventory[0]?.id || "");
         setRate(String(nextInventory[0]?.price ?? ""));
         setOffers(offerResult.data || []);
+        setCustomers((customerResult.data || []).filter((customer) => customer.status === "Active"));
         setRecentInvoices((salesResult.data || []).map((sale) => ({
           id: sale.invoiceNumber,
           customer: sale.customerName,
@@ -108,6 +114,7 @@ const AdminPos = () => {
   }, []);
 
   const selectedProduct = inventory.find((product) => product.id === selectedProductId);
+  const selectedCustomer = customers.find((customer) => customer._id === selectedCustomerId);
   const batchKey = `${selectedProductId}:${selectedLocationId}`;
   const batches = batchData.key === batchKey ? batchData.data : [];
   const batchLoading = Boolean(selectedProductId && selectedLocationId && batchData.key !== batchKey);
@@ -355,7 +362,8 @@ const AdminPos = () => {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          customerName,
+          customerId: selectedCustomerId || undefined,
+          customerName: selectedCustomer?.name || "Walk-in Customer",
           locationId: selectedLocationId,
           paymentMode,
           promotionDiscount: appliedPromotion?.discountAmount || 0,
@@ -403,6 +411,7 @@ const AdminPos = () => {
       setAppliedPromotion(null);
       setSelectedOfferId("");
       setSelectedProductId(inventory[0]?.id || "");
+      setSelectedCustomerId("");
       if (printAfterSave) printReceipt(receipt, receiptWindow);
     } catch (saveError) {
       receiptWindow?.close();
@@ -432,7 +441,7 @@ const AdminPos = () => {
 
   const cancelInvoice = () => {
     setCart([]);
-    setCustomerName("Walk-in Customer");
+    setSelectedCustomerId("");
     setPaymentMode("Cash");
     setAppliedPromotion(null);
     setSelectedOfferId("");
@@ -440,6 +449,31 @@ const AdminPos = () => {
     setFreeQuantity(0);
     setError("");
     setMessage("Current invoice cancelled.");
+  };
+
+  const savePosCustomer = async (event) => {
+    event.preventDefault();
+    setSavingCustomer(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_URL}/api/customers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(customerForm),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to add customer.");
+      setCustomers((current) => [result.data, ...current]);
+      setSelectedCustomerId(result.data._id);
+      setCustomerForm({ name: "", phone: "", email: "" });
+      setCustomerFormOpen(false);
+      setMessage(`${result.data.name} added to this sale.`);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSavingCustomer(false);
+    }
   };
 
   const printSavedInvoice = (invoice) => {
@@ -466,7 +500,7 @@ const AdminPos = () => {
       <section className="rounded-xl border border-slate-200 bg-white">
         <div className="border-b border-slate-100 px-5 py-4 sm:px-6"><p className="text-xs font-semibold uppercase tracking-wide text-primary">Invoice details</p><h2 className="mt-1 text-lg font-bold text-slate-900">Customer and location</h2></div>
         <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
-          <label className="text-sm font-medium text-slate-700">Customer<input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in customer" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+          <div><label htmlFor="pos-customer" className="text-sm font-medium text-slate-700">Customer<select id="pos-customer" value={selectedCustomerId} onChange={(event) => setSelectedCustomerId(event.target.value)} disabled={loading || saving} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:opacity-60"><option value="">Walk-in Customer</option>{customers.map((customer) => <option key={customer._id} value={customer._id}>{customer.name}{customer.phone ? ` · ${customer.phone}` : ""}</option>)}</select></label><button type="button" onClick={() => { setCustomerForm({ name: "", phone: "", email: "" }); setCustomerFormOpen(true); }} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"><Plus className="h-3.5 w-3.5" />Add customer</button></div>
           <label className="text-sm font-medium text-slate-700"><span className="flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" />Stock location</span><select value={selectedLocationId} onChange={(event) => { if (cart.length && !window.confirm("Changing location will clear the current invoice. Continue?")) return; setCart([]); setSelectedLocationId(event.target.value); setSelectedBatchId(""); setError(""); }} disabled={loading || saving} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:opacity-60"><option value="">Select a store location</option>{locations.map((location) => <option key={location._id} value={location._id}>{location.name}</option>)}</select></label>
         </div>
       </section>
@@ -515,6 +549,15 @@ const AdminPos = () => {
         <div className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-primary">POS register</p><h2 className="mt-1 text-lg font-bold text-slate-900">Recent sales <span className="ml-1 text-sm font-medium text-slate-400">{filteredInvoices.length}</span></h2></div><label className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 sm:w-80"><Search className="h-4 w-4 shrink-0 text-slate-400" /><input value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} placeholder="Search invoice, customer, location..." className="w-full bg-transparent text-sm outline-none" /></label></div>
         <div className="overflow-x-auto"><table className="w-full min-w-220 text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Invoice</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Location</th><th className="px-4 py-3">Items</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Payment</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Receipt</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredInvoices.map((invoice) => <tr key={invoice.id}><td className="px-5 py-3 font-semibold text-primary">{invoice.id}</td><td className="px-4 py-3 text-slate-700">{invoice.customer}</td><td className="px-4 py-3 text-slate-600">{invoice.location}</td><td className="px-4 py-3 text-slate-600">{invoice.items}</td><td className="px-4 py-3 font-semibold text-slate-800">{formatCurrency(invoice.total)}</td><td className="px-4 py-3 text-slate-600">{invoice.paymentMode}<span className="block text-xs text-slate-500">{invoice.status}</span></td><td className="px-4 py-3 text-slate-500">{invoice.date}</td><td className="px-4 py-3"><button type="button" onClick={() => printSavedInvoice(invoice)} aria-label={`Print ${invoice.id}`} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"><Printer className="h-4 w-4" /></button></td></tr>)}</tbody></table>{!filteredInvoices.length && <p className="px-5 py-12 text-center text-sm text-slate-500">{recentInvoices.length ? "No sales match this search." : "No saved sales yet."}</p>}</div>
       </section>
+      {customerFormOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+        <form onSubmit={savePosCustomer} role="dialog" aria-modal="true" aria-labelledby="pos-customer-title" className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+          <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-primary">Offline customer</p><h2 id="pos-customer-title" className="mt-1 text-xl font-bold text-slate-900">Add customer</h2></div><button type="button" onClick={() => setCustomerFormOpen(false)} aria-label="Close customer form" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
+          <label className="mt-5 block text-sm font-semibold text-slate-700">Full name<input required minLength={2} maxLength={80} value={customerForm.name} onChange={(event) => setCustomerForm((current) => ({ ...current, name: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+          <label className="mt-4 block text-sm font-semibold text-slate-700">Phone<input type="tel" maxLength={30} value={customerForm.phone} onChange={(event) => setCustomerForm((current) => ({ ...current, phone: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+          <label className="mt-4 block text-sm font-semibold text-slate-700">Email <span className="font-normal text-slate-400">(optional)</span><input type="email" value={customerForm.email} onChange={(event) => setCustomerForm((current) => ({ ...current, email: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+          <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setCustomerFormOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button><button type="submit" disabled={savingCustomer} className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-60">{savingCustomer ? "Saving..." : "Add to sale"}</button></div>
+        </form>
+      </div>}
     </div>
   );
 };

@@ -26,6 +26,7 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    phone: { type: String, trim: true, maxlength: 30, default: "" },
     password: {
       type: String,
       required: true,
@@ -37,6 +38,7 @@ const userSchema = new mongoose.Schema(
       default: "customer",
     },
     customerType: { type: String, enum: ["B2C", "B2B"], default: "B2C" },
+    customerSource: { type: String, enum: ["Online", "Offline"], default: "Online" },
     businessName: { type: String, trim: true, maxlength: 120, default: "" },
     gstin: { type: String, trim: true, uppercase: true, maxlength: 15, default: "" },
     status: {

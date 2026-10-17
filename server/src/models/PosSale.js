@@ -17,7 +17,9 @@ const saleItemSchema = new mongoose.Schema({
 
 const posSaleSchema = new mongoose.Schema({
   invoiceNumber: { type: String, required: true, unique: true, trim: true },
+  customer: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   customerName: { type: String, trim: true, default: "Walk-in Customer" },
+  customerSource: { type: String, enum: ["Online", "Offline", "Walk-in"], default: "Walk-in" },
   location: { type: mongoose.Schema.Types.ObjectId, ref: "StoreLocation", required: true },
   items: { type: [saleItemSchema], required: true },
   subtotal: { type: Number, required: true, min: 0 },

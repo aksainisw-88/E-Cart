@@ -6,9 +6,11 @@ const PosSale = require("../models/PosSale");
 const Product = require("../models/Product");
 const Purchase = require("../models/Purchase");
 const StoreLocation = require("../models/StoreLocation");
+const User = require("../models/User");
 
 const router = express.Router();
 const saleSchema = z.object({
+  customerId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
   customerName: z.string().trim().max(120).optional().default("Walk-in Customer"),
   locationId: z.string().regex(/^[a-f\d]{24}$/i),
   paymentMode: z.enum(["Cash", "UPI", "Card", "Credit", "Cheque"]),
@@ -55,7 +57,7 @@ router.get("/batches", async (request, response, next) => {
 
 router.get("/sales", async (request, response, next) => {
   try {
-    const sales = await PosSale.find().populate("location", "name city").sort({ createdAt: -1 }).limit(100).lean();
+    const sales = await PosSale.find().populate("location", "name city").populate("customer", "name email phone customerSource").sort({ createdAt: -1 }).limit(100).lean();
     response.json({ success: true, data: sales });
   } catch (error) { next(error); }
 });
@@ -65,6 +67,8 @@ router.post("/sales", async (request, response, next) => {
     const parsed = saleSchema.safeParse(request.body);
     if (!parsed.success) return response.status(400).json({ success: false, message: "Check the invoice details and product quantities." });
     const data = parsed.data;
+    const customer = data.customerId ? await User.findOne({ _id: data.customerId, role: "customer", status: "Active" }).select("name customerSource").lean() : null;
+    if (data.customerId && !customer) return response.status(400).json({ success: false, message: "Select an active customer." });
     const location = await StoreLocation.findOne({ _id: data.locationId, active: true }).select("_id name isDefault").lean();
     if (!location) return response.status(400).json({ success: false, message: "Select an active store location." });
 
@@ -157,7 +161,9 @@ router.post("/sales", async (request, response, next) => {
     const invoiceNumber = `POS-${new Date().getFullYear()}-${crypto.randomInt(100000, 1000000)}`;
     const sale = await PosSale.create({
       invoiceNumber,
-      customerName: data.customerName || "Walk-in Customer",
+      customer: customer?._id,
+      customerName: customer?.name || data.customerName || "Walk-in Customer",
+      customerSource: customer?.customerSource || (customer ? "Online" : "Walk-in"),
       location: location._id,
       items,
       subtotal,

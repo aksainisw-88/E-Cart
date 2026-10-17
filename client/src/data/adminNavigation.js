@@ -16,11 +16,13 @@ import {
   MessageSquareQuote,
   ImagePlus,
   Boxes,
+  ClipboardList,
 } from "lucide-react";
 
 export const adminNavigation = [
   { label: "Overview", to: "/admin", icon: LayoutDashboard, roles: ["admin"] },
   { label: "Reports", to: "/admin/reports", icon: BarChart3, roles: ["admin", "manager", "user"] },
+  { label: "Sales transactions", to: "/admin/sales-transactions", icon: ClipboardList, roles: ["admin", "manager", "user"] },
   { label: "Products", to: "/admin/products", icon: Package, roles: ["admin", "manager", "user"] },
   { label: "Inventory", to: "/admin/inventory", icon: Boxes, roles: ["admin", "manager", "user"] },
   { label: "Categories", to: "/admin/categories", icon: Layers3, roles: ["admin", "manager", "user"] },

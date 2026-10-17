@@ -54,7 +54,7 @@ app.use("/api/webhooks/razorpay", require("./routes/razorpayWebhook.routes"));
 app.use("/api/auth", authRoutes);
 app.use("/api/catalog", catalogRoutes);
 app.use("/api/admin/overview", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission("/admin"), overviewRoutes);
-app.use("/api/admin/reports", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission("/admin/reports"), reportsRoutes);
+app.use("/api/admin/reports", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission((request) => request.path === "/sales-transactions" ? ["/admin/sales-transactions", "/admin/reports"] : ["/admin/reports"]), reportsRoutes);
 app.use("/api/orders", requireAuth, requireAnyMenuPermission((request) => {
   if (!["admin", "manager", "user"].includes(request.user.role)) return null;
   if (request.method === "GET" && request.path === "/") return ["/admin/orders"];
@@ -76,7 +76,10 @@ app.use("/api/products", requireAuth, requireAnyRole("admin", "manager", "user")
 app.use("/api/vendors", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission((request) => request.method === "GET" ? ["/admin/vendors", "/admin/purchase-entry"] : ["/admin/vendors"]), vendorRoutes);
 app.use("/api/purchases", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission((request) => request.method === "GET" ? ["/admin/vendors", "/admin/purchase-entry"] : ["/admin/purchase-entry"]), purchaseRoutes);
 app.use("/api/users", requireAuth, requireRole("admin"), requireAnyMenuPermission((request) => request.method === "PUT" && request.path.slice(1) === request.user.id ? ["/admin/users", "/admin/settings"] : ["/admin/users"]), userRoutes);
-app.use("/api/customers", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission("/admin/customers"), customerRoutes);
+app.use("/api/customers", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission((request) => {
+  if (request.method === "GET") return ["/admin/customers", "/admin/pos"];
+  return ["/admin/customers", "/admin/pos"];
+}), customerRoutes);
 app.use("/api/admin/orders", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission((request) => {
   if (request.method === "GET") return ["/admin/orders", "/admin/payments", "/admin/returns"];
   if (request.method === "POST" && request.path.endsWith("/refund")) return ["/admin/returns"];

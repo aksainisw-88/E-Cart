@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Search, UserCheck, UserX } from "lucide-react";
+import { Pencil, Plus, Search, Trash2, UserCheck, UserX, X } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -8,6 +8,10 @@ const AdminCustomers = () => {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
   const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+  const [saving, setSaving] = useState(false);
   const load = () =>
     fetch(`${API_URL}/api/customers`, { credentials: "include" })
       .then(async (response) => {
@@ -41,6 +45,48 @@ const AdminCustomers = () => {
         ),
       );
   };
+  const openCreate = () => {
+    setEditingId("");
+    setForm({ name: "", email: "", phone: "" });
+    setFormOpen(true);
+    setError("");
+  };
+  const openEdit = (customer) => {
+    setEditingId(customer._id);
+    setForm({ name: customer.name || "", email: customer.email || "", phone: customer.phone || "" });
+    setFormOpen(true);
+    setError("");
+  };
+  const saveCustomer = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_URL}/api/customers${editingId ? `/${editingId}` : ""}`, {
+        method: editingId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(form),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to save customer.");
+      setCustomers((items) => editingId
+        ? items.map((item) => item._id === editingId ? { ...item, ...result.data } : item)
+        : [result.data, ...items]);
+      setFormOpen(false);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const deleteCustomer = async (customer) => {
+    if (!window.confirm(`Delete ${customer.name}? Customers with transaction history cannot be deleted.`)) return;
+    const response = await fetch(`${API_URL}/api/customers/${customer._id}`, { method: "DELETE", credentials: "include" });
+    const result = await response.json();
+    if (!response.ok) setError(result.message || "Unable to delete customer.");
+    else setCustomers((items) => items.filter((item) => item._id !== customer._id));
+  };
   const visible = customers.filter((customer) => {
     const matchesQuery = `${customer.name} ${customer.email}`.toLowerCase().includes(query.toLowerCase());
     return matchesQuery && (status === "All" || customer.status === status);
@@ -52,10 +98,7 @@ const AdminCustomers = () => {
         <h1 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">
           Customers
         </h1>
-        <p className="mt-2 text-sm text-slate-500">
-          Search customers, review their order history, and control account
-          access.
-        </p>
+        <div className="flex flex-wrap items-end justify-between gap-4"><p className="mt-2 text-sm text-slate-500">Manage customer details, account status, and customer source.</p><button type="button" onClick={openCreate} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark"><Plus className="h-4 w-4" />Add customer</button></div>
       </div>
       {error && (
         <p className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">
@@ -82,10 +125,12 @@ const AdminCustomers = () => {
                 {[
                   "Customer",
                   "Email",
+                  "Phone",
+                  "Source",
                   "Orders",
                   "Total spent",
                   "Status",
-                  "Action",
+                  "Actions",
                 ].map((heading) => (
                   <th key={heading} className="px-5 py-3 font-semibold">
                     {heading}
@@ -107,6 +152,8 @@ const AdminCustomers = () => {
                     </div>
                   </td>
                   <td className="px-5 py-4 text-slate-500">{customer.email}</td>
+                  <td className="px-5 py-4 text-slate-500">{customer.phone || "-"}</td>
+                  <td className="px-5 py-4"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${customer.customerSource === "Offline" ? "bg-amber-50 text-amber-700" : "bg-sky-50 text-sky-700"}`}>{customer.customerSource || "Online"}</span></td>
                   <td className="px-5 py-4 text-slate-500">
                     {customer.orderCount}
                   </td>
@@ -121,18 +168,11 @@ const AdminCustomers = () => {
                     </span>
                   </td>
                   <td className="px-5 py-4">
-                    <button
-                      type="button"
-                      onClick={() => toggleStatus(customer)}
-                      className="flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-dark"
-                    >
-                      {customer.status === "Active" ? (
-                        <UserX className="h-4 w-4" />
-                      ) : (
-                        <UserCheck className="h-4 w-4" />
-                      )}
-                      {customer.status === "Active" ? "Block" : "Activate"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => openEdit(customer)} title="Edit customer" aria-label={`Edit ${customer.name}`} className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-primary"><Pencil className="h-4 w-4" /></button>
+                      <button type="button" onClick={() => toggleStatus(customer)} title={customer.status === "Active" ? "Block customer" : "Activate customer"} className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-dark">{customer.status === "Active" ? <><UserX className="h-4 w-4" />Block</> : <><UserCheck className="h-4 w-4" />Activate</>}</button>
+                      <button type="button" onClick={() => deleteCustomer(customer)} title="Delete customer" aria-label={`Delete ${customer.name}`} className="rounded-md p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -145,6 +185,16 @@ const AdminCustomers = () => {
           )}
         </div>
       </section>
+      {formOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+        <form onSubmit={saveCustomer} role="dialog" aria-modal="true" aria-labelledby="customer-form-title" className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl sm:p-7">
+          <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-primary">Offline customer</p><h2 id="customer-form-title" className="mt-1 text-xl font-bold text-slate-900">{editingId ? "Edit customer" : "Add customer"}</h2></div><button type="button" onClick={() => setFormOpen(false)} aria-label="Close customer form" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
+          <label className="mt-5 block text-sm font-semibold text-slate-700">Full name<input required minLength={2} maxLength={80} value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+          <label className="mt-4 block text-sm font-semibold text-slate-700">Phone<input type="tel" maxLength={30} value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+          <label className="mt-4 block text-sm font-semibold text-slate-700">Email <span className="font-normal text-slate-400">(optional)</span><input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+          {error && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+          <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setFormOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button><button type="submit" disabled={saving} className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-60">{saving ? "Saving..." : "Save customer"}</button></div>
+        </form>
+      </div>}
     </div>
   );
 };
