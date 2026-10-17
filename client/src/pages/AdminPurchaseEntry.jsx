@@ -14,6 +14,9 @@ const AdminPurchaseEntry = () => {
   const [locations, setLocations] = useState([]);
   const [adjustments, setAdjustments] = useState([]);
   const [form, setForm] = useState(emptyForm);
+  const [variantFormOpen, setVariantFormOpen] = useState(false);
+  const [variantForm, setVariantForm] = useState({ name: "", sku: "", price: "" });
+  const [variantSaving, setVariantSaving] = useState(false);
   const [purchaseItems, setPurchaseItems] = useState([]);
   const [adjustment, setAdjustment] = useState(emptyAdjustment);
   const [editingId, setEditingId] = useState(null);
@@ -83,6 +86,39 @@ const AdminPurchaseEntry = () => {
   const updateField = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
   const resetForm = () => { setEditingId(null); setForm({ ...emptyForm, location: locations.find((location) => location.isDefault)?._id || locations[0]?._id || "", purchaseDate: new Date().toISOString().slice(0, 10) }); };
   const updateAdjustment = (field) => (event) => setAdjustment((current) => ({ ...current, [field]: event.target.value }));
+
+  const createVariantForPurchase = async (event) => {
+    event.preventDefault();
+    if (!selectedProduct) return;
+    const name = variantForm.name.trim();
+    if (!name) return;
+    setVariantSaving(true);
+    setError("");
+    try {
+      const response = await fetch(`${apiUrl}/api/purchases/variants`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          productId: selectedProduct._id,
+          name,
+          sku: variantForm.sku.trim(),
+          ...(variantForm.price === "" ? {} : { price: Number(variantForm.price) }),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to add this product variant.");
+      setProducts((current) => current.map((product) => product._id === selectedProduct._id ? result.data : product));
+      setForm((current) => ({ ...current, variant: name }));
+      setVariantForm({ name: "", sku: "", price: "" });
+      setVariantFormOpen(false);
+      setMessage(`${name} added to ${selectedProduct.name}. Enter its batch and purchase stock to complete the intake.`);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setVariantSaving(false);
+    }
+  };
 
   const addPurchaseItem = () => {
     if (!form.vendor || !form.product || !form.location || !form.vendorInvoiceNumber.trim()) {
@@ -197,7 +233,7 @@ const AdminPurchaseEntry = () => {
             <label className="text-sm font-medium text-slate-700">Invoice date<input required type="date" value={form.purchaseDate} onChange={updateField("purchaseDate")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3" /></label>
             <div className="border-t border-slate-100 pt-4 sm:col-span-2 xl:col-span-4"><h3 className="text-sm font-semibold text-slate-900">Product and batch</h3><p className="mt-1 text-xs text-slate-500">Capture the product identity and traceable batch information.</p></div>
             <SearchableSelect label="Product" value={form.product} onChange={(productId) => setForm((current) => ({ ...current, product: productId, variant: "" }))} placeholder="Search products by name or category" className="xl:col-span-2" options={products.map((product) => ({ value: product._id, label: product.name, description: `${product.category} · ${product.stock} ${product.unit || "unit"} in stock` }))} />
-            <label className="text-sm font-medium text-slate-700">Variant / pack<select required={productVariants.length > 0} disabled={!productVariants.length} value={form.variant} onChange={updateField("variant")} className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:bg-slate-50 disabled:text-slate-400"><option value="">{productVariants.length ? "Select variant / pack" : "No variants configured"}</option>{productVariants.map((variant) => <option key={variant._id || variant.name} value={variant.name}>{variant.name}{variant.sku ? ` · ${variant.sku}` : ""}</option>)}</select></label>
+            <div><label htmlFor="purchase-variant" className="text-sm font-medium text-slate-700">Variant / pack<select id="purchase-variant" required={productVariants.length > 0} disabled={!productVariants.length} value={form.variant} onChange={updateField("variant")} className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:bg-slate-50 disabled:text-slate-400"><option value="">{productVariants.length ? "Select variant / pack" : "No variants configured"}</option>{productVariants.map((variant) => <option key={variant._id || variant.name} value={variant.name}>{variant.name}{variant.sku ? ` · ${variant.sku}` : ""}</option>)}</select></label><button type="button" disabled={!selectedProduct || !locations.length || variantSaving} onClick={() => { setVariantForm({ name: "", sku: "", price: "" }); setVariantFormOpen(true); }} className="mt-2 text-xs font-semibold text-primary hover:underline disabled:cursor-not-allowed disabled:text-slate-400">+ Add variant / pack</button></div>
             <label className="text-sm font-medium text-slate-700">Batch<input value={form.batchNumber} onChange={updateField("batchNumber")} placeholder="Batch / lot number" className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3" /></label>
             <label className="text-sm font-medium text-slate-700">Expiry date<input type="date" value={form.expiryDate} onChange={updateField("expiryDate")} className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3" /></label>
             <div className="border-t border-slate-100 pt-4 sm:col-span-2 xl:col-span-4"><h3 className="text-sm font-semibold text-slate-900">Quantity and pricing</h3><p className="mt-1 text-xs text-slate-500">Enter invoice rates and quantities; amount recalculates automatically.</p></div>
@@ -255,6 +291,15 @@ const AdminPurchaseEntry = () => {
         <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200"><table className="w-full min-w-190 text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400"><tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Product</th><th className="px-4 py-3">Stock change</th><th className="px-4 py-3">Balance change</th><th className="px-4 py-3">Reason</th></tr></thead><tbody className="divide-y divide-slate-100">{adjustments.map((entry) => <tr key={entry._id}><td className="px-4 py-3 text-slate-500">{new Date(entry.adjustmentDate).toLocaleDateString()}</td><td className="px-4 py-3 font-medium text-slate-700">{entry.product?.name || "-"}</td><td className={`px-4 py-3 font-semibold ${entry.stockAdjustment < 0 ? "text-red-600" : "text-emerald-700"}`}>{entry.stockAdjustment > 0 ? "+" : ""}{entry.stockAdjustment}</td><td className={`px-4 py-3 font-semibold ${entry.balanceAdjustment < 0 ? "text-red-600" : "text-emerald-700"}`}>{entry.balanceAdjustment > 0 ? "+" : ""}{formatCurrency(entry.balanceAdjustment)}</td><td className="px-4 py-3 text-slate-600">{entry.reason}</td></tr>)}</tbody></table>{!adjustments.length && <p className="px-4 py-8 text-center text-sm text-slate-500">No adjustments recorded.</p>}</div>
         </div>
       </details>
+      {variantFormOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+        <form onSubmit={createVariantForPurchase} role="dialog" aria-modal="true" aria-labelledby="purchase-variant-title" className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+          <div><p className="text-xs font-bold uppercase tracking-wider text-primary">{selectedProduct?.name}</p><h2 id="purchase-variant-title" className="mt-1 text-xl font-bold text-slate-900">Add variant / pack</h2></div>
+          <label className="mt-5 block text-sm font-semibold text-slate-700">Pack or variant name<input required maxLength={120} value={variantForm.name} onChange={(event) => setVariantForm((current) => ({ ...current, name: event.target.value }))} placeholder="e.g. Pack of 10" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-sm font-semibold text-slate-700">SKU <span className="font-normal text-slate-400">(optional)</span><input maxLength={80} value={variantForm.sku} onChange={(event) => setVariantForm((current) => ({ ...current, sku: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label><label className="text-sm font-semibold text-slate-700">Selling price <span className="font-normal text-slate-400">(optional)</span><input type="number" min="0" step="0.01" value={variantForm.price} onChange={(event) => setVariantForm((current) => ({ ...current, price: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label></div>
+          {error && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+          <div className="mt-6 flex justify-end gap-2"><button type="button" disabled={variantSaving} onClick={() => setVariantFormOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button><button type="submit" disabled={variantSaving} className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-60">{variantSaving ? "Adding..." : "Add and select"}</button></div>
+        </form>
+      </div>}
     </div>
   );
 };

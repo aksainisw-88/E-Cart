@@ -28,6 +28,12 @@ const purchaseSchema = z.object({
   taxRate: z.coerce.number().min(0).max(100).default(0),
   purchaseDate: z.coerce.date(),
 });
+const variantCreateSchema = z.object({
+  productId: z.string().regex(/^[a-f\d]{24}$/i),
+  name: z.string().trim().min(1).max(120),
+  sku: z.string().trim().max(80).optional().default(""),
+  price: z.coerce.number().min(0).optional(),
+});
 const adjustmentSchema = z.object({
   product: z.string().min(1),
   vendor: z.string().optional().or(z.literal("")),
@@ -151,6 +157,26 @@ router.post("/", async (request, response, next) => {
   try {
     const purchase = await createPurchase(request.body);
     response.status(201).json({ success: true, data: purchase });
+  } catch (error) { next(error); }
+});
+
+router.post("/variants", async (request, response, next) => {
+  try {
+    const parsed = variantCreateSchema.safeParse(request.body);
+    if (!parsed.success) return response.status(400).json({ success: false, message: "Enter a valid product and variant name." });
+    const product = await Product.findById(parsed.data.productId);
+    if (!product) return response.status(404).json({ success: false, message: "Product not found." });
+    if (product.variants.some((variant) => variant.name.toLocaleLowerCase() === parsed.data.name.toLocaleLowerCase())) {
+      return response.status(409).json({ success: false, message: "This variant already exists for the selected product." });
+    }
+    product.variants.push({
+      name: parsed.data.name,
+      sku: parsed.data.sku,
+      ...(parsed.data.price === undefined ? {} : { price: parsed.data.price }),
+      locationStock: [],
+    });
+    await product.save();
+    response.status(201).json({ success: true, data: product });
   } catch (error) { next(error); }
 });
 
