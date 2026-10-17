@@ -51,8 +51,8 @@ const maskEmail = (email) => {
 
 router.post("/inventory-reset/otp", async (request, response, next) => {
   try {
-    const admin = await User.findOne({ _id: request.user.id, role: "admin", status: "Active" }).select("email");
-    if (!admin?.email) return response.status(403).json({ success: false, message: "An active admin account is required to reset inventory." });
+    const admin = await User.findOne({ _id: request.user.id, role: "admin" }).select("email status");
+    if (!admin?.email || admin.status === "Blocked") return response.status(403).json({ success: false, message: "An active admin account is required to reset inventory." });
     const existing = await InventoryResetOtp.findOne({ user: admin._id }).select("createdAt").lean();
     if (existing && Date.now() - new Date(existing.createdAt).getTime() < 60_000) {
       return response.status(429).json({ success: false, message: "Wait one minute before requesting another reset code." });
@@ -76,8 +76,8 @@ router.post("/inventory-reset/confirm", async (request, response, next) => {
   try {
     const parsed = inventoryResetConfirmSchema.safeParse(request.body);
     if (!parsed.success) return response.status(400).json({ success: false, message: "Enter the 6-digit reset code." });
-    const admin = await User.findOne({ _id: request.user.id, role: "admin", status: "Active" }).select("_id");
-    if (!admin) return response.status(403).json({ success: false, message: "An active admin account is required to reset inventory." });
+    const admin = await User.findOne({ _id: request.user.id, role: "admin" }).select("_id status");
+    if (!admin || admin.status === "Blocked") return response.status(403).json({ success: false, message: "An active admin account is required to reset inventory." });
     const challenge = await InventoryResetOtp.findOne({ user: admin._id, expiresAt: { $gt: new Date() } });
     if (!challenge) return response.status(400).json({ success: false, message: "Reset code is invalid or expired. Request a new code." });
     if (challenge.attempts >= 5) {
