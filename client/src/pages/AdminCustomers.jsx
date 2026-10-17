@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pencil, Plus, Search, Trash2, UserCheck, UserX, X } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
+const emptyCustomerForm = { name: "", email: "", phone: "", address: "", locality: "", pincode: "", district: "", state: "", gstin: "", panNumber: "", gender: "" };
 
 const AdminCustomers = () => {
   const [customers, setCustomers] = useState([]);
@@ -10,7 +11,7 @@ const AdminCustomers = () => {
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState("");
   const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+  const [form, setForm] = useState(emptyCustomerForm);
   const [saving, setSaving] = useState(false);
   const load = () =>
     fetch(`${API_URL}/api/customers`, { credentials: "include" })
@@ -47,13 +48,13 @@ const AdminCustomers = () => {
   };
   const openCreate = () => {
     setEditingId("");
-    setForm({ name: "", email: "", phone: "" });
+    setForm(emptyCustomerForm);
     setFormOpen(true);
     setError("");
   };
   const openEdit = (customer) => {
     setEditingId(customer._id);
-    setForm({ name: customer.name || "", email: customer.email || "", phone: customer.phone || "" });
+    setForm({ ...emptyCustomerForm, ...customer, email: customer.email || "" });
     setFormOpen(true);
     setError("");
   };
@@ -92,7 +93,7 @@ const AdminCustomers = () => {
     return matchesQuery && (status === "All" || customer.status === status);
   });
   return (
-    <div className="mx-auto max-w-[1500px]">
+    <div className="mx-auto max-w-375">
       <div>
         <p className="text-sm font-medium text-primary">Admin workspace</p>
         <h1 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">
@@ -119,7 +120,7 @@ const AdminCustomers = () => {
           <div className="flex items-center gap-3"><select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"><option value="All">All statuses</option><option value="Active">Active</option><option value="Blocked">Blocked</option></select><span className="text-sm text-slate-500">{visible.length} customers</span></div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
+          <table className="w-full min-w-190 text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
               <tr>
                 {[
@@ -186,11 +187,21 @@ const AdminCustomers = () => {
         </div>
       </section>
       {formOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-        <form onSubmit={saveCustomer} role="dialog" aria-modal="true" aria-labelledby="customer-form-title" className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl sm:p-7">
+        <form onSubmit={saveCustomer} role="dialog" aria-modal="true" aria-labelledby="customer-form-title" className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl sm:p-7">
           <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-primary">Offline customer</p><h2 id="customer-form-title" className="mt-1 text-xl font-bold text-slate-900">{editingId ? "Edit customer" : "Add customer"}</h2></div><button type="button" onClick={() => setFormOpen(false)} aria-label="Close customer form" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
-          <label className="mt-5 block text-sm font-semibold text-slate-700">Full name<input required minLength={2} maxLength={80} value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
-          <label className="mt-4 block text-sm font-semibold text-slate-700">Phone<input type="tel" maxLength={30} value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
-          <label className="mt-4 block text-sm font-semibold text-slate-700">Email <span className="font-normal text-slate-400">(optional)</span><input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <label className="text-sm font-semibold text-slate-700">Full name<input required minLength={2} maxLength={80} value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+            <label className="text-sm font-semibold text-slate-700">Phone<input type="tel" maxLength={30} value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+            <label className="text-sm font-semibold text-slate-700">Email <span className="font-normal text-slate-400">(optional)</span><input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+            <label className="text-sm font-semibold text-slate-700">Gender<select value={form.gender} onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary"><option value="">Not specified</option><option>Female</option><option>Male</option><option>Other</option><option>Prefer not to say</option></select></label>
+            <label className="text-sm font-semibold text-slate-700 sm:col-span-2">Address<textarea maxLength={300} rows={2} value={form.address} onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))} className="mt-2 w-full resize-y rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-primary" /></label>
+            <label className="text-sm font-semibold text-slate-700">Locality<input maxLength={120} value={form.locality} onChange={(event) => setForm((current) => ({ ...current, locality: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+            <label className="text-sm font-semibold text-slate-700">PIN code<input inputMode="numeric" maxLength={6} pattern="[0-9]{6}" value={form.pincode} onChange={(event) => setForm((current) => ({ ...current, pincode: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+            <label className="text-sm font-semibold text-slate-700">District<input maxLength={120} value={form.district} onChange={(event) => setForm((current) => ({ ...current, district: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+            <label className="text-sm font-semibold text-slate-700">State<input maxLength={120} value={form.state} onChange={(event) => setForm((current) => ({ ...current, state: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-primary" /></label>
+            <label className="text-sm font-semibold text-slate-700">GST number<input maxLength={15} value={form.gstin} onChange={(event) => setForm((current) => ({ ...current, gstin: event.target.value.toUpperCase() }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm uppercase outline-none focus:border-primary" /></label>
+            <label className="text-sm font-semibold text-slate-700">PAN number<input maxLength={10} value={form.panNumber} onChange={(event) => setForm((current) => ({ ...current, panNumber: event.target.value.toUpperCase() }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm uppercase outline-none focus:border-primary" /></label>
+          </div>
           {error && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
           <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setFormOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button><button type="submit" disabled={saving} className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-60">{saving ? "Saving..." : "Save customer"}</button></div>
         </form>

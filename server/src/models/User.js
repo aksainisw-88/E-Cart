@@ -27,6 +27,13 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
     phone: { type: String, trim: true, maxlength: 30, default: "" },
+    address: { type: String, trim: true, maxlength: 300, default: "" },
+    locality: { type: String, trim: true, maxlength: 120, default: "" },
+    pincode: { type: String, trim: true, maxlength: 6, default: "" },
+    district: { type: String, trim: true, maxlength: 120, default: "" },
+    state: { type: String, trim: true, maxlength: 120, default: "" },
+    panNumber: { type: String, trim: true, uppercase: true, maxlength: 10, default: "" },
+    gender: { type: String, enum: ["", "Male", "Female", "Other", "Prefer not to say"], default: "" },
     password: {
       type: String,
       required: true,
