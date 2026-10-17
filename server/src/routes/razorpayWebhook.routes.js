@@ -24,6 +24,31 @@ router.post("/", async (request, response, next) => {
       return response.status(400).json({ success: false, message: "Invalid Razorpay webhook signature." });
     }
 
+    if (["refund.processed", "refund.failed"].includes(request.body.event)) {
+      const refund = request.body.payload?.refund?.entity;
+      if (!refund?.id || !refund.payment_id || !Number.isFinite(refund.amount)) {
+        return response.status(400).json({ success: false, message: "Invalid refund webhook payload." });
+      }
+      const processed = request.body.event === "refund.processed";
+      await Order.findOneAndUpdate(
+        {
+          razorpayPaymentId: refund.payment_id,
+          refundStatus: "Processing",
+          $or: [{ refundId: refund.id }, { refundId: "" }],
+        },
+        {
+          $set: {
+            refundStatus: processed ? "Refunded" : "Failed",
+            refundMethod: "Razorpay",
+            refundId: refund.id,
+            ...(processed ? {} : { refundNote: "Razorpay reported that the refund failed." }),
+            refundedAt: processed ? new Date() : null,
+          },
+        },
+      );
+      return response.json({ success: true, received: true });
+    }
+
     if (request.body.event !== "payment.captured") return response.json({ success: true, received: true });
 
     const payment = request.body.payload?.payment?.entity;

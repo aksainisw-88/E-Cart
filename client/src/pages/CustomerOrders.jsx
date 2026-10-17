@@ -6,6 +6,14 @@ import Footer from "../components/home/Footer";
 const API_URL = import.meta.env.VITE_API_URL || "";
 
 const statusSteps = ["Pending", "Processing", "Shipped", "Delivered"];
+const availableReturnTypes = (order) => {
+  const items = order?.items || [];
+  if (!items.length) return [];
+  return [
+    ...(items.every((item) => item.returnEligible) ? ["Return"] : []),
+    ...(items.every((item) => item.replaceEligible) ? ["Replacement"] : []),
+  ];
+};
 
 const OrderTimeline = ({ status }) => {
   const activeIndex = status === "Cancelled" ? -1 : statusSteps.indexOf(status);
@@ -58,6 +66,11 @@ const CustomerOrders = () => {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelError, setCancelError] = useState("");
   const [cancelSaving, setCancelSaving] = useState(false);
+  const [returningOrder, setReturningOrder] = useState(null);
+  const [returnReason, setReturnReason] = useState("");
+  const [returnType, setReturnType] = useState("Return");
+  const [returnError, setReturnError] = useState("");
+  const [returnSaving, setReturnSaving] = useState(false);
 
   const load = () =>
     fetch(`${API_URL}/api/orders/mine`, { credentials: "include" })
@@ -105,6 +118,35 @@ const CustomerOrders = () => {
       setCancelError(requestError.message);
     } finally {
       setCancelSaving(false);
+    }
+  };
+
+  const submitReturnRequest = async (event) => {
+    event.preventDefault();
+    const reason = returnReason.trim();
+    if (reason.length < 3) {
+      setReturnError("Please enter a reason (at least 3 characters).");
+      return;
+    }
+    if (!returningOrder) return;
+
+    setReturnSaving(true);
+    setReturnError("");
+    try {
+      const response = await fetch(`${API_URL}/api/orders/${returningOrder._id}/return`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason, type: returnType }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to request a return.");
+      setOrders((current) => current.map((item) => (item._id === returningOrder._id ? result.data : item)));
+      setReturningOrder(null);
+    } catch (requestError) {
+      setReturnError(requestError.message);
+    } finally {
+      setReturnSaving(false);
     }
   };
 
@@ -234,6 +276,15 @@ const CustomerOrders = () => {
                               Cancel order
                             </button>
                           )}
+                          {order.status === "Delivered" && (!order.returnStatus || order.returnStatus === "Not requested") && availableReturnTypes(order).length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => { setReturningOrder(order); setReturnType(availableReturnTypes(order)[0]); setReturnReason(""); setReturnError(""); }}
+                              className="rounded-lg border border-primary/30 px-3 py-1.5 text-xs text-primary hover:bg-primary/5"
+                            >
+                              {availableReturnTypes(order).length > 1 ? "Request return or replacement" : `Request ${availableReturnTypes(order)[0].toLowerCase()}`}
+                            </button>
+                          )}
                         </>
                       )}
                       <button
@@ -253,6 +304,20 @@ const CustomerOrders = () => {
                     </div>
                   ) : (
                     <OrderTimeline status={order.status} />
+                  )}
+
+                  {order.returnStatus && order.returnStatus !== "Not requested" && (
+                    <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-semibold text-slate-800">{order.returnType || "Return"} {order.returnStatus.toLowerCase()}</p>
+                        {order.returnRequestedAt && <p className="text-xs text-slate-500">Requested {new Date(order.returnRequestedAt).toLocaleDateString()}</p>}
+                      </div>
+                      {order.returnReason && <p className="mt-2 text-slate-600"><span className="font-medium">Reason:</span> {order.returnReason}</p>}
+                      {order.returnAdminNote && <p className="mt-1 text-slate-600"><span className="font-medium">Update:</span> {order.returnAdminNote}</p>}
+                      {order.refundStatus === "Refunded" && <p className="mt-1 text-emerald-700"><span className="font-medium">Refund:</span> ₹{Number(order.refundAmount || 0).toLocaleString("en-IN")} ({order.refundMethod === "Razorpay" ? "processed through Razorpay" : "recorded by the store"})</p>}
+                      {order.refundStatus === "Processing" && <p className="mt-1 text-amber-700"><span className="font-medium">Refund:</span> Processing{order.refundMethod === "Razorpay" ? " with the payment provider" : " by the store"}.</p>}
+                      {order.refundStatus === "Failed" && <p className="mt-1 text-red-700"><span className="font-medium">Refund:</span> The payment provider reported a failure. Please contact support.</p>}
+                    </div>
                   )}
 
                   <div className="mt-6 grid gap-4 border-t border-gray-100 pt-5 sm:grid-cols-3">
@@ -302,6 +367,28 @@ const CustomerOrders = () => {
           <div className="mt-5 flex justify-end gap-2">
             <button type="button" onClick={() => setCancelingOrder(null)} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Keep order</button>
             <button type="submit" disabled={cancelSaving} className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60">{cancelSaving ? "Cancelling..." : "Confirm cancellation"}</button>
+          </div>
+        </form>
+      </div>}
+      {returningOrder && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+        <form onSubmit={submitReturnRequest} role="dialog" aria-modal="true" aria-labelledby="return-order-title" className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl sm:p-7">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-primary">Request a {returnType.toLowerCase()}</p>
+              <h2 id="return-order-title" className="mt-1 text-xl font-bold text-slate-900">Order #{returningOrder.orderNumber}</h2>
+              <p className="mt-2 text-sm text-slate-500">Tell us why you would like to {returnType.toLowerCase()} this order. Our team will review your request.</p>
+            </div>
+            <button type="button" onClick={() => setReturningOrder(null)} aria-label="Close return request dialog" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+          </div>
+          <label htmlFor="return-type" className="mt-4 block text-sm font-semibold text-slate-700">Request type</label>
+          <select id="return-type" value={returnType} onChange={(event) => setReturnType(event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary">{availableReturnTypes(returningOrder).map((type) => <option key={type} value={type}>{type}</option>)}</select>
+          <label htmlFor="return-reason" className="mt-4 block text-sm font-semibold text-slate-700">Reason</label>
+          <textarea id="return-reason" required minLength={3} maxLength={500} rows={4} value={returnReason} onChange={(event) => setReturnReason(event.target.value)} placeholder="Describe the issue with your order..." className="mt-2 w-full resize-y rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-primary" />
+          <p className="mt-1 text-right text-xs text-slate-400">{returnReason.length}/500</p>
+          {returnError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{returnError}</p>}
+          <div className="mt-5 flex justify-end gap-2">
+            <button type="button" onClick={() => setReturningOrder(null)} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Keep order</button>
+            <button type="submit" disabled={returnSaving} className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">{returnSaving ? "Submitting..." : "Submit request"}</button>
           </div>
         </form>
       </div>}

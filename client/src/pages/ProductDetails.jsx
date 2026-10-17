@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Heart, Minus, Plus, ShoppingCart, Star } from "lucide-react";
+import { ArrowLeft, Check, Heart, Minus, Plus, ShoppingCart, Star, X } from "lucide-react";
 
 import Footer from "../components/home/Footer";
 import ProductCard from "../components/home/ProductCard";
@@ -235,7 +235,7 @@ const ProductDetails = () => {
               </button>
             </div>
 
-            <div className="mt-7 grid gap-3 text-sm text-gray-700 sm:grid-cols-3">
+            <div className="mt-7 grid gap-3 text-sm text-gray-700 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
                 <p className="text-gray-500">Shipping</p>
                 <p className="mt-1 font-semibold">Free over ₹499</p>
@@ -245,8 +245,18 @@ const ProductDetails = () => {
                 <p className={`mt-1 font-semibold ${outOfStock ? "text-red-600" : stock <= 5 ? "text-amber-600" : "text-emerald-600"}`}>{outOfStock ? "Out of stock" : stock <= 5 ? `Only ${stock} left` : `${stock} in stock`}</p>
               </div>
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                <p className="text-gray-500">Return</p>
-                <p className="mt-1 font-semibold">14-day easy return</p>
+                <p className="text-gray-500">Return policy</p>
+                <p className={`mt-1 inline-flex items-center gap-1.5 font-semibold ${product.returnEligible ? "text-emerald-700" : "text-slate-500"}`}>
+                  {product.returnEligible ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
+                  {product.returnEligible ? "Return available" : "No returns"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                <p className="text-gray-500">Replacement policy</p>
+                <p className={`mt-1 inline-flex items-center gap-1.5 font-semibold ${product.replaceEligible ? "text-emerald-700" : "text-slate-500"}`}>
+                  {product.replaceEligible ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
+                  {product.replaceEligible ? "Replacement available" : "No replacements"}
+                </p>
               </div>
             </div>
           </section>

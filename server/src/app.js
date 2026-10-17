@@ -78,7 +78,9 @@ app.use("/api/purchases", requireAuth, requireAnyRole("admin", "manager", "user"
 app.use("/api/users", requireAuth, requireRole("admin"), requireAnyMenuPermission((request) => request.method === "PUT" && request.path.slice(1) === request.user.id ? ["/admin/users", "/admin/settings"] : ["/admin/users"]), userRoutes);
 app.use("/api/customers", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission("/admin/customers"), customerRoutes);
 app.use("/api/admin/orders", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission((request) => {
-  if (request.method === "GET") return ["/admin/orders", "/admin/payments"];
+  if (request.method === "GET") return ["/admin/orders", "/admin/payments", "/admin/returns"];
+  if (request.method === "POST" && request.path.endsWith("/refund")) return ["/admin/returns"];
+  if (request.method === "PATCH" && request.path.endsWith("/return-status")) return ["/admin/orders", "/admin/returns"];
   return request.path.endsWith("/payment") ? ["/admin/payments"] : ["/admin/orders"];
 }), orderRoutes);
 app.post("/api/store/delivery-check", requireAuth, async (request, response, next) => {

@@ -42,6 +42,8 @@ const productSchema = z.object({
   reviews: z.coerce.number().int().min(0).default(0),
   status: z.enum(["Published", "Draft"]).default("Published"),
   description: z.string().optional().default(""),
+  returnEligible: z.preprocess((value) => value === true || value === "true" ? true : value === false || value === "false" ? false : value, z.boolean()).optional().default(false),
+  replaceEligible: z.preprocess((value) => value === true || value === "true" ? true : value === false || value === "false" ? false : value, z.boolean()).optional().default(false),
 });
 const categorySchema = z.object({ name: z.string().trim().min(2).max(80), parentCategoryId: z.string().optional().nullable() });
 const categoryEditSchema = z.object({ name: z.string().trim().min(2).max(80) });

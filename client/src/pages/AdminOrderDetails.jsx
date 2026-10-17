@@ -12,6 +12,7 @@ const AdminOrderDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [updating, setUpdating] = useState(false);
+  const [returnNote, setReturnNote] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -40,6 +41,27 @@ const AdminOrderDetails = () => {
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Unable to update order status.");
       setOrder((current) => ({ ...current, ...result.data }));
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const updateReturnStatus = async (status) => {
+    setUpdating(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_URL}/api/admin/orders/${orderId}/return-status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status, note: returnNote.trim() }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to update return status.");
+      setOrder((current) => ({ ...current, ...result.data }));
+      setReturnNote("");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -112,6 +134,38 @@ const AdminOrderDetails = () => {
               {order.cancelledAt && <div className="flex gap-3"><span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-700">×</span><div><p className="text-sm font-medium text-red-700">Order cancelled</p><p className="mt-1 text-xs text-slate-500">{new Date(order.cancelledAt).toLocaleString("en-IN")}</p>{order.cancelReason && <p className="mt-2 rounded-lg bg-red-50 p-3 text-xs leading-5 text-red-800">{order.cancelReason}</p>}</div></div>}
               {!order.cancelledAt && <div className="flex gap-3"><span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-700"><Clock3 className="h-3.5 w-3.5" /></span><div><p className="text-sm font-medium text-slate-800">Current status: {order.status}</p><p className="mt-1 text-xs text-slate-500">Payment status: {order.paymentStatus}</p></div></div>}
             </div>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-2"><h2 className="text-sm font-semibold text-slate-900">Return request</h2>{order.returnStatus !== "Not requested" && <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">{order.returnType || "Return"}</span>}</div>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${order.returnStatus === "Rejected" ? "bg-red-50 text-red-700" : order.returnStatus === "Completed" ? "bg-emerald-50 text-emerald-700" : order.returnStatus === "Not requested" ? "bg-slate-100 text-slate-600" : "bg-amber-50 text-amber-700"}`}>{order.returnStatus || "Not requested"}</span>
+            </div>
+            {order.returnStatus && order.returnStatus !== "Not requested" ? (
+              <>
+                <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-700">{order.returnReason}</p>
+                {order.returnRequestedAt && <p className="mt-2 text-xs text-slate-400">Requested {new Date(order.returnRequestedAt).toLocaleString("en-IN")}</p>}
+                {order.returnAdminNote && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-600"><span className="font-semibold">Staff update:</span> {order.returnAdminNote}</p>}
+                {order.refundStatus === "Refunded" && <p className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">Refunded {money(order.refundAmount)} via {order.refundMethod === "Razorpay" ? `Razorpay (${order.refundId || "no reference"})` : "manual transfer"}.</p>}
+                {order.refundStatus === "Processing" && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Refund is processing. {order.refundNote}</p>}
+                {order.refundStatus === "Failed" && <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{order.refundNote || "Razorpay reported that the refund failed."}</p>}
+                {order.returnStatus === "Completed" && order.returnType === "Return" && order.refundStatus !== "Refunded" && <Link to="/admin/returns" className="mt-3 inline-flex text-xs font-semibold text-primary hover:underline">Process refund in Returns</Link>}
+                {order.returnStatus === "Requested" || order.returnStatus === "Approved" ? (
+                  <div className="mt-4">
+                    <label htmlFor="return-staff-note" className="block text-xs font-semibold text-slate-600">Update for customer</label>
+                    <textarea id="return-staff-note" rows={3} maxLength={500} value={returnNote} onChange={(event) => setReturnNote(event.target.value)} className="mt-2 w-full resize-y rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-primary" placeholder="Optional note about this decision" />
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {order.returnStatus === "Requested" ? <>
+                        <button type="button" disabled={updating} onClick={() => updateReturnStatus("Approved")} className="rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">Approve {order.returnType === "Replacement" ? "replacement" : "return"}</button>
+                        <button type="button" disabled={updating} onClick={() => updateReturnStatus("Rejected")} className="rounded-lg border border-red-200 px-3.5 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60">Reject {order.returnType === "Replacement" ? "replacement" : "return"}</button>
+                      </> : (
+                        <button type="button" disabled={updating} onClick={() => updateReturnStatus("Completed")} className="rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">Mark {order.returnType === "Replacement" ? "replacement" : "return"} complete</button>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : <p className="mt-4 text-sm text-slate-500">No return has been requested for this order.</p>}
           </section>
         </div>
 

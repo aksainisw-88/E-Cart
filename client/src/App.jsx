@@ -25,6 +25,7 @@ import AdminStores from "./pages/AdminStores";
 import AdminCategories from "./pages/AdminCategories";
 import AdminOrderDetails from "./pages/AdminOrderDetails";
 import AdminInventory from "./pages/AdminInventory";
+import AdminReturns from "./pages/AdminReturns";
 import ResetPassword from "./pages/ResetPassword";
 
 const RequireCustomerAuth = ({ children }) => {
@@ -87,6 +88,7 @@ function App() {
           <Route path="customers" element={<AdminSection section="customers" />} />
           <Route path="orders" element={<AdminSection section="orders" />} />
           <Route path="orders/:orderId" element={<AdminOrderDetails />} />
+          <Route path="returns" element={<AdminReturns />} />
           <Route path="pos" element={<AdminSection section="pos" />} />
           <Route path="purchase-entry" element={<AdminSection section="purchase-entry" />} />
           <Route path="vendors" element={<AdminSection section="vendors" />} />

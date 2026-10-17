@@ -19,6 +19,19 @@ const orderSchema = z.object({
   promoCode: z.string().trim().max(50).optional().default(""),
 });
 const cancellationSchema = z.object({ reason: z.string().trim().min(3).max(500) });
+const returnRequestSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+  type: z.enum(["Return", "Replacement"]).default("Return"),
+});
+const returnResolutionSchema = z.object({
+  status: z.enum(["Approved", "Rejected", "Completed"]),
+  note: z.string().trim().max(500).optional().default(""),
+});
+const refundSchema = z.object({
+  amount: z.coerce.number().positive(),
+  mode: z.enum(["razorpay", "manual"]),
+  note: z.string().trim().max(500).optional().default(""),
+});
 
 const getRazorpayConfig = async (request) => {
   const settings = await StoreSettings.findOne({ key: "default" }).select("paymentIntegrations").lean();
@@ -72,7 +85,7 @@ router.post("/", async (request, response, next) => {
     }
     const isRazorpay = data.paymentMethod === "razorpay";
     const productIds = data.items.map((item) => item.id);
-    const products = await Product.find({ _id: { $in: productIds }, status: "Published" }).select("_id name stock costPrice locationStock").lean();
+    const products = await Product.find({ _id: { $in: productIds }, status: "Published" }).select("_id name stock costPrice locationStock returnEligible replaceEligible").lean();
     const productMap = new Map(products.map((product) => [product._id.toString(), product]));
     const availableStockFor = (product) => {
       if (selectedStore && product?.locationStock?.length) {
@@ -88,7 +101,7 @@ router.post("/", async (request, response, next) => {
       return response.status(503).json({ success: false, message: "Razorpay is not configured on the server." });
     }
     const razorpay = isRazorpay ? createRazorpayClient(razorpayConfig) : null;
-    const order = await Order.create({ orderNumber: `EM-${crypto.randomInt(10000, 99999)}`, customer: request.user.id, store: selectedStore?._id, items: data.items.map((item) => { const originalPrice = Number(item.originalPrice) || 0; const percentageDiscount = item.price * ((Number(item.discount) || 0) / 100); const discountAmount = originalPrice > item.price ? originalPrice - item.price : percentageDiscount; return { product: item.id, name: item.name, price: item.price, costPrice: costPrices.get(item.id) || 0, originalPrice, discount: item.discount || 0, discountAmount, quantity: item.quantity, image: item.image }; }), shipping: data.shipping, subtotal, discount, promoCode, promoDiscount, delivery, total: Math.max(0, subtotal + delivery - promoDiscount), paymentMethod: data.paymentMethod, paymentStatus: data.paymentMethod === "cod" || isRazorpay ? "Pending" : "Paid" });
+    const order = await Order.create({ orderNumber: `EM-${crypto.randomInt(10000, 99999)}`, customer: request.user.id, store: selectedStore?._id, items: data.items.map((item) => { const originalPrice = Number(item.originalPrice) || 0; const percentageDiscount = item.price * ((Number(item.discount) || 0) / 100); const discountAmount = originalPrice > item.price ? originalPrice - item.price : percentageDiscount; const product = productMap.get(item.id); return { product: item.id, name: item.name, price: item.price, costPrice: costPrices.get(item.id) || 0, originalPrice, discount: item.discount || 0, discountAmount, quantity: item.quantity, image: item.image, returnEligible: Boolean(product.returnEligible), replaceEligible: Boolean(product.replaceEligible) }; }), shipping: data.shipping, subtotal, discount, promoCode, promoDiscount, delivery, total: Math.max(0, subtotal + delivery - promoDiscount), paymentMethod: data.paymentMethod, paymentStatus: data.paymentMethod === "cod" || isRazorpay ? "Pending" : "Paid" });
     const stockUpdate = await Product.bulkWrite(data.items.map((item) => {
       const usesLocationStock = Boolean(selectedStore && productMap.get(item.id)?.locationStock?.length);
       const filter = { _id: item.id, stock: { $gte: item.quantity } };
@@ -138,6 +151,26 @@ router.patch("/:id/cancel", async (request, response, next) => {
     order.status = "Cancelled";
     order.cancelReason = cancellation.data.reason;
     order.cancelledAt = new Date();
+    await order.save();
+    response.json({ success: true, data: order });
+  } catch (error) { next(error); }
+});
+
+router.patch("/:id/return", requireAnyRole("customer"), async (request, response, next) => {
+  try {
+    const requestData = returnRequestSchema.safeParse(request.body);
+    if (!requestData.success) return response.status(400).json({ success: false, message: "A return reason of at least 3 characters is required." });
+    const order = await Order.findOne({ _id: request.params.id, customer: request.user.id });
+    if (!order) return response.status(404).json({ success: false, message: "Order not found." });
+    if (order.status !== "Delivered") return response.status(400).json({ success: false, message: "Only delivered orders can be returned." });
+    if (order.returnStatus !== "Not requested") return response.status(400).json({ success: false, message: "A return has already been requested for this order." });
+    const policyField = requestData.data.type === "Return" ? "returnEligible" : "replaceEligible";
+    const policyAvailable = order.items.length > 0 && order.items.every((item) => item[policyField] === true);
+    if (!policyAvailable) return response.status(400).json({ success: false, message: `This order is not eligible for a ${requestData.data.type.toLowerCase()} under its product policies.` });
+    order.returnStatus = "Requested";
+    order.returnType = requestData.data.type;
+    order.returnReason = requestData.data.reason;
+    order.returnRequestedAt = new Date();
     await order.save();
     response.json({ success: true, data: order });
   } catch (error) { next(error); }
@@ -206,6 +239,91 @@ router.patch("/:id/status", requireAnyRole("admin", "manager", "user"), async (r
     const order = await Order.findByIdAndUpdate(request.params.id, { status: request.body.status }, { new: true, runValidators: true });
     if (!order) return response.status(404).json({ success: false, message: "Order not found" });
     response.json({ success: true, data: order });
+  } catch (error) { next(error); }
+});
+
+router.patch("/:id/return-status", requireAnyRole("admin", "manager", "user"), async (request, response, next) => {
+  try {
+    const resolution = returnResolutionSchema.safeParse(request.body);
+    if (!resolution.success) return response.status(400).json({ success: false, message: "Choose a valid return status and provide a note of up to 500 characters." });
+    const order = await Order.findById(request.params.id);
+    if (!order) return response.status(404).json({ success: false, message: "Order not found." });
+    const allowedNextStatuses = order.returnStatus === "Requested"
+      ? ["Approved", "Rejected"]
+      : order.returnStatus === "Approved" ? ["Completed"] : [];
+    if (!allowedNextStatuses.includes(resolution.data.status)) {
+      return response.status(400).json({ success: false, message: "This return status transition is not allowed." });
+    }
+    order.returnStatus = resolution.data.status;
+    order.returnAdminNote = resolution.data.note;
+    if (resolution.data.status === "Approved" || resolution.data.status === "Rejected") order.returnReviewedAt = new Date();
+    if (resolution.data.status === "Completed") order.returnCompletedAt = new Date();
+    await order.save();
+    await order.populate("customer", "name email customerType businessName");
+    await order.populate("store", "name city address");
+    response.json({ success: true, data: order });
+  } catch (error) { next(error); }
+});
+
+router.post("/:id/refund", requireAnyRole("admin", "manager", "user"), async (request, response, next) => {
+  try {
+    const refundData = refundSchema.safeParse(request.body);
+    if (!refundData.success) return response.status(400).json({ success: false, message: "Enter a valid refund amount and method." });
+    const order = await Order.findById(request.params.id);
+    if (!order) return response.status(404).json({ success: false, message: "Order not found." });
+    if (order.returnStatus !== "Completed" || order.returnType !== "Return") return response.status(400).json({ success: false, message: "Only completed return requests can be refunded." });
+    if (order.refundStatus && !["Not refunded", "Failed"].includes(order.refundStatus)) return response.status(409).json({ success: false, message: "A refund has already been started for this order." });
+    const amount = Math.round(refundData.data.amount * 100) / 100;
+    if (amount > Number(order.total)) return response.status(400).json({ success: false, message: "Refund amount cannot exceed the order total." });
+    if (refundData.data.mode === "razorpay" && (order.paymentMethod !== "razorpay" || order.paymentStatus !== "Paid" || !order.razorpayPaymentId)) {
+      return response.status(400).json({ success: false, message: "A verified Razorpay payment is required for an automatic refund." });
+    }
+    if (refundData.data.mode === "manual" && order.paymentStatus !== "Paid" && order.paymentMethod !== "cod") {
+      return response.status(400).json({ success: false, message: "Only collected payments can be recorded as manually refunded." });
+    }
+    const razorpayConfig = refundData.data.mode === "razorpay" ? await getRazorpayConfig(request) : null;
+    if (refundData.data.mode === "razorpay" && !razorpayConfig) {
+      return response.status(503).json({ success: false, message: "Razorpay is not configured on the server." });
+    }
+    const claimedOrder = await Order.findOneAndUpdate(
+      { _id: order._id, returnStatus: "Completed", $or: [{ refundStatus: "Not refunded" }, { refundStatus: { $exists: false } }, { refundStatus: "Failed" }] },
+      { $set: { refundStatus: "Processing", refundAmount: amount, refundNote: refundData.data.note, refundId: "", refundMethod: "" } },
+      { new: true },
+    );
+    if (!claimedOrder) return response.status(409).json({ success: false, message: "A refund has already been started for this order." });
+
+    if (refundData.data.mode === "razorpay") {
+      let providerRefund;
+      try {
+        const razorpay = createRazorpayClient(razorpayConfig);
+        providerRefund = await razorpay.payments.refund(order.razorpayPaymentId, {
+          amount: Math.round(amount * 100),
+          notes: { orderNumber: order.orderNumber },
+        });
+      } catch (error) {
+        await Order.findOneAndUpdate({ _id: order._id, refundStatus: "Processing" }, { $set: { refundNote: error.message || "Razorpay refund status could not be confirmed." } });
+        return response.status(502).json({ success: false, message: error.message || "Razorpay refund failed." });
+      }
+
+      const status = providerRefund.status === "processed" ? "Refunded" : providerRefund.status === "failed" ? "Failed" : "Processing";
+      const updatedOrder = await Order.findOneAndUpdate(
+        { _id: order._id, refundStatus: "Processing", refundId: "" },
+        { $set: { refundStatus: status, refundMethod: "Razorpay", refundId: providerRefund.id, refundNote: status === "Failed" ? "Razorpay reported that the refund failed." : refundData.data.note, refundedAt: status === "Refunded" ? new Date() : null } },
+        { new: true },
+      );
+      const latestOrder = updatedOrder || await Order.findById(order._id);
+      await latestOrder.populate("customer", "name email customerType businessName");
+      await latestOrder.populate("store", "name city address");
+      return response.json({ success: true, data: latestOrder });
+    }
+
+    claimedOrder.refundStatus = "Refunded";
+    claimedOrder.refundMethod = "Manual";
+    claimedOrder.refundedAt = new Date();
+    await claimedOrder.save();
+    await claimedOrder.populate("customer", "name email customerType businessName");
+    await claimedOrder.populate("store", "name city address");
+    response.json({ success: true, data: claimedOrder });
   } catch (error) { next(error); }
 });
 

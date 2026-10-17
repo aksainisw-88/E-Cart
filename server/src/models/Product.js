@@ -33,6 +33,8 @@ const productSchema = new mongoose.Schema(
     image: { type: String, default: "" },
     images: { type: [String], default: [] },
     description: { type: String, trim: true, default: "" },
+    returnEligible: { type: Boolean, default: false },
+    replaceEligible: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

@@ -26,6 +26,8 @@ const emptyProduct = {
   reviews: "0",
   status: "Published",
   description: "",
+  returnEligible: false,
+  replaceEligible: false,
 };
 const apiUrl = import.meta.env.VITE_API_URL || "";
 
@@ -113,6 +115,8 @@ const AdminProducts = () => {
       reviews: product.reviews || 0,
       status: product.status,
       description: product.description || "",
+      returnEligible: Boolean(product.returnEligible),
+      replaceEligible: Boolean(product.replaceEligible),
     });
     setImages([]);
     setImagePreviews((product.images?.length ? product.images : product.image ? [product.image] : []).map((image) => `${apiUrl}${image}`));
@@ -447,6 +451,21 @@ const AdminProducts = () => {
                       <label className="text-sm font-medium text-slate-700">Rating<input required type="number" min="0" max="5" step="0.1" value={form.rating} onChange={updateField("rating")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
                       <label className="text-sm font-medium text-slate-700">Reviews<input required type="number" min="0" value={form.reviews} onChange={updateField("reviews")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
                     </div>
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+                  <h3 className="text-sm font-semibold text-slate-800">Return and replacement policy</h3>
+                  <p className="mt-1 text-xs text-slate-500">Choose which post-delivery options customers can request for this product.</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
+                      <input type="checkbox" checked={form.returnEligible} onChange={(event) => setForm((current) => ({ ...current, returnEligible: event.target.checked }))} className="mt-0.5 h-4 w-4 accent-primary" />
+                      <span><span className="block font-semibold">Returns accepted</span><span className="mt-1 block text-xs text-slate-500">Customer may request a return after delivery.</span></span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
+                      <input type="checkbox" checked={form.replaceEligible} onChange={(event) => setForm((current) => ({ ...current, replaceEligible: event.target.checked }))} className="mt-0.5 h-4 w-4 accent-primary" />
+                      <span><span className="block font-semibold">Replacements accepted</span><span className="mt-1 block text-xs text-slate-500">Customer may request a replacement after delivery.</span></span>
+                    </label>
                   </div>
                 </section>
               </div>
