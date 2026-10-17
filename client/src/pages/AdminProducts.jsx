@@ -26,7 +26,7 @@ const emptyProduct = {
   reviews: "0",
   status: "Published",
   description: "",
-  returnEligible: false,
+  returnEligible: true,
   replaceEligible: false,
 };
 const apiUrl = import.meta.env.VITE_API_URL || "";

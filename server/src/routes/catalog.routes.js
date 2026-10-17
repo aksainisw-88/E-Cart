@@ -31,7 +31,11 @@ const imageSignature = async (buffer) => {
 router.get("/products", async (request, response, next) => {
   try {
     const products = await Product.find({ status: "Published" }).sort({ createdAt: -1 }).lean();
-    products.forEach((product) => { product.images = product.images?.length ? product.images : product.image ? [product.image] : []; });
+    products.forEach((product) => {
+      product.images = product.images?.length ? product.images : product.image ? [product.image] : [];
+      product.returnEligible ??= true;
+      product.replaceEligible ??= false;
+    });
     response.json({ success: true, data: products });
   } catch (error) {
     next(error);

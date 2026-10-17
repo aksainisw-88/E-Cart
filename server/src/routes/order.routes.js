@@ -101,7 +101,7 @@ router.post("/", async (request, response, next) => {
       return response.status(503).json({ success: false, message: "Razorpay is not configured on the server." });
     }
     const razorpay = isRazorpay ? createRazorpayClient(razorpayConfig) : null;
-    const order = await Order.create({ orderNumber: `EM-${crypto.randomInt(10000, 99999)}`, customer: request.user.id, store: selectedStore?._id, items: data.items.map((item) => { const originalPrice = Number(item.originalPrice) || 0; const percentageDiscount = item.price * ((Number(item.discount) || 0) / 100); const discountAmount = originalPrice > item.price ? originalPrice - item.price : percentageDiscount; const product = productMap.get(item.id); return { product: item.id, name: item.name, price: item.price, costPrice: costPrices.get(item.id) || 0, originalPrice, discount: item.discount || 0, discountAmount, quantity: item.quantity, image: item.image, returnEligible: Boolean(product.returnEligible), replaceEligible: Boolean(product.replaceEligible) }; }), shipping: data.shipping, subtotal, discount, promoCode, promoDiscount, delivery, total: Math.max(0, subtotal + delivery - promoDiscount), paymentMethod: data.paymentMethod, paymentStatus: data.paymentMethod === "cod" || isRazorpay ? "Pending" : "Paid" });
+    const order = await Order.create({ orderNumber: `EM-${crypto.randomInt(10000, 99999)}`, customer: request.user.id, store: selectedStore?._id, items: data.items.map((item) => { const originalPrice = Number(item.originalPrice) || 0; const percentageDiscount = item.price * ((Number(item.discount) || 0) / 100); const discountAmount = originalPrice > item.price ? originalPrice - item.price : percentageDiscount; const product = productMap.get(item.id); return { product: item.id, name: item.name, price: item.price, costPrice: costPrices.get(item.id) || 0, originalPrice, discount: item.discount || 0, discountAmount, quantity: item.quantity, image: item.image, returnEligible: product.returnEligible ?? true, replaceEligible: Boolean(product.replaceEligible) }; }), shipping: data.shipping, subtotal, discount, promoCode, promoDiscount, delivery, total: Math.max(0, subtotal + delivery - promoDiscount), paymentMethod: data.paymentMethod, paymentStatus: data.paymentMethod === "cod" || isRazorpay ? "Pending" : "Paid" });
     const stockUpdate = await Product.bulkWrite(data.items.map((item) => {
       const usesLocationStock = Boolean(selectedStore && productMap.get(item.id)?.locationStock?.length);
       const filter = { _id: item.id, stock: { $gte: item.quantity } };
@@ -137,6 +137,14 @@ router.post("/", async (request, response, next) => {
 router.get("/mine", async (request, response, next) => {
   try {
     const orders = await Order.find({ customer: request.user.id }).populate("store", "name city").sort({ createdAt: -1 }).limit(10);
+    const productIds = orders.flatMap((order) => order.items.map((item) => item.product).filter(Boolean));
+    const products = await Product.find({ _id: { $in: productIds } }).select("_id returnEligible replaceEligible");
+    const productPolicies = new Map(products.map((product) => [product._id.toString(), product]));
+    orders.forEach((order) => order.items.forEach((item) => {
+      const policy = productPolicies.get(item.product?.toString());
+      item.returnEligible = item.returnEligible === true || policy?.returnEligible === true;
+      item.replaceEligible = item.replaceEligible === true || policy?.replaceEligible === true;
+    }));
     response.json({ success: true, data: orders });
   } catch (error) { next(error); }
 });
@@ -165,7 +173,10 @@ router.patch("/:id/return", requireAnyRole("customer"), async (request, response
     if (order.status !== "Delivered") return response.status(400).json({ success: false, message: "Only delivered orders can be returned." });
     if (order.returnStatus !== "Not requested") return response.status(400).json({ success: false, message: "A return has already been requested for this order." });
     const policyField = requestData.data.type === "Return" ? "returnEligible" : "replaceEligible";
-    const policyAvailable = order.items.length > 0 && order.items.every((item) => item[policyField] === true);
+    const itemProductIds = order.items.map((item) => item.product).filter(Boolean);
+    const currentProducts = await Product.find({ _id: { $in: itemProductIds } }).select("_id returnEligible replaceEligible");
+    const currentPolicies = new Map(currentProducts.map((product) => [product._id.toString(), product]));
+    const policyAvailable = order.items.length > 0 && order.items.every((item) => item[policyField] === true || currentPolicies.get(item.product?.toString())?.[policyField] === true);
     if (!policyAvailable) return response.status(400).json({ success: false, message: `This order is not eligible for a ${requestData.data.type.toLowerCase()} under its product policies.` });
     order.returnStatus = "Requested";
     order.returnType = requestData.data.type;
