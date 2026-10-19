@@ -63,24 +63,36 @@ const AdminInventory = () => {
 
   useEffect(() => {
     let active = true;
-    fetch(`${apiUrl}/api/inventory`, { credentials: "include" })
-      .then(async (response) => {
+    const loadInventory = async () => {
+      let syncMessage = "";
+      try {
+        const syncResponse = await fetch(`${apiUrl}/api/inventory/reconcile-product-stock`, { method: "POST", credentials: "include" });
+        const syncResult = await syncResponse.json();
+        if (!syncResponse.ok) throw new Error(syncResult.message || "Unable to synchronize product stock totals.");
+        if (syncResult.updated) syncMessage = `Stock totals synchronized for ${syncResult.updated} ${syncResult.updated === 1 ? "product" : "products"} using their location inventory.`;
+      } catch (syncError) {
+        if (active) setError(syncError.message);
+      }
+      try {
+        const response = await fetch(`${apiUrl}/api/inventory`, { credentials: "include" });
         const result = await response.json();
         if (!response.ok) throw new Error(result.message || "Unable to load inventory.");
-        return result.data;
-      })
-      .then(({ locations: availableLocations, products: availableProducts }) => {
         if (!active) return;
-        const branchList = availableLocations || [];
-        const productList = availableProducts || [];
+        const branchList = result.data.locations || [];
+        const productList = result.data.products || [];
         const initialLocation = branchList.find((location) => location.isDefault) || branchList[0];
         setLocations(branchList);
         setProducts(productList);
         setSelectedLocationId(initialLocation?._id || "");
         setDrafts(Object.fromEntries(productList.map((product) => [product._id, buildDraft(product, branchList)])));
-      })
-      .catch((requestError) => { if (active) setError(requestError.message); })
-      .finally(() => { if (active) setLoading(false); });
+        if (syncMessage) setMessage(syncMessage);
+      } catch (requestError) {
+        if (active) setError(requestError.message);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    loadInventory();
     return () => { active = false; };
   }, []);
 

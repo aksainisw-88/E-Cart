@@ -4,7 +4,7 @@ import SearchableSelect from "../components/admin/SearchableSelect";
 
 const apiUrl = import.meta.env.VITE_API_URL || "";
 const emptyForm = { vendor: "", product: "", variant: "", vendorInvoiceNumber: "", referenceNumber: "", location: "", batchNumber: "", expiryDate: "", mrp: 0, rate: 0, quantity: 1, freeQuantity: 0, unitCost: 0, taxRate: 0, discount: 0, purchaseDate: new Date().toISOString().slice(0, 10) };
-const emptyAdjustment = { vendor: "", product: "", stockAdjustment: 0, balanceAdjustment: 0, reason: "", adjustmentDate: new Date().toISOString().slice(0, 10) };
+const emptyAdjustment = { vendor: "", product: "", location: "", stockAdjustment: 0, balanceAdjustment: 0, reason: "", adjustmentDate: new Date().toISOString().slice(0, 10) };
 const formatCurrency = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
 const getPurchaseItemTotal = (item) => {
   const subtotal = (Number(item.quantity) || 0) * (Number(item.rate ?? item.unitCost) || 0);
@@ -61,6 +61,7 @@ const AdminPurchaseEntry = () => {
     setLocations(loadedLocations);
     const defaultLocation = loadedLocations.find((location) => location.isDefault) || loadedLocations[0];
     if (defaultLocation) setForm((current) => current.location ? current : { ...current, location: defaultLocation._id });
+    if (defaultLocation) setAdjustment((current) => current.location ? current : { ...current, location: defaultLocation._id });
   };
 
   const refresh = async () => applyLoadedData(await load());
@@ -77,6 +78,7 @@ const AdminPurchaseEntry = () => {
         setLocations(loadedLocations);
         const defaultLocation = loadedLocations.find((location) => location.isDefault) || loadedLocations[0];
         if (defaultLocation) setForm((current) => current.location ? current : { ...current, location: defaultLocation._id });
+        if (defaultLocation) setAdjustment((current) => current.location ? current : { ...current, location: defaultLocation._id });
       })
       .catch((requestError) => { if (active) setError(requestError.message); });
     return () => { active = false; };
@@ -189,7 +191,7 @@ const AdminPurchaseEntry = () => {
     const result = await response.json();
     if (!response.ok) { setError(result.message || "Unable to save adjustment."); return; }
     setMessage("Purchase adjustment saved and inventory updated.");
-    setAdjustment({ ...emptyAdjustment, adjustmentDate: new Date().toISOString().slice(0, 10) });
+    setAdjustment({ ...emptyAdjustment, location: locations.find((location) => location.isDefault)?._id || locations[0]?._id || "", adjustmentDate: new Date().toISOString().slice(0, 10) });
     await refresh();
   };
 
@@ -378,18 +380,19 @@ const AdminPurchaseEntry = () => {
       </div>
 
       <details className="mt-6 rounded-xl border border-slate-200 bg-white">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5"><div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Stock controls</p><h2 className="mt-1 text-lg font-bold text-slate-900">Purchase adjustments</h2><p className="mt-1 text-sm text-slate-500">Open to correct stock or vendor balances with a reason.</p></div><span className="shrink-0 text-sm font-semibold text-slate-500">{adjustments.length} records</span></summary>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5"><div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Stock controls</p><h2 className="mt-1 text-lg font-bold text-slate-900">Purchase adjustments</h2><p className="mt-1 text-sm text-slate-500">Correct stock at a specific location or adjust vendor balances.</p></div><span className="shrink-0 text-sm font-semibold text-slate-500">{adjustments.length} records</span></summary>
         <div className="border-t border-slate-200 p-5">
-        <form onSubmit={saveAdjustment} className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <form onSubmit={saveAdjustment} className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <SearchableSelect label="Product" value={adjustment.product} onChange={(productId) => setAdjustment((current) => ({ ...current, product: productId }))} options={products.map((product) => ({ value: product._id, label: product.name, description: product.category }))} />
           <SearchableSelect label="Vendor (optional)" value={adjustment.vendor} onChange={(vendorId) => setAdjustment((current) => ({ ...current, vendor: vendorId }))} options={vendors.map((vendor) => ({ value: vendor._id, label: vendor.name, description: [vendor.phone, vendor.email].filter(Boolean).join(" · ") }))} />
-          <input type="number" value={adjustment.stockAdjustment} onChange={updateAdjustment("stockAdjustment")} placeholder="Stock +/-" className="h-11 rounded-xl border border-slate-200 px-3 text-sm" />
+          <label className="text-sm font-medium text-slate-700">Stock location<select value={adjustment.location} onChange={updateAdjustment("location")} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="">Select location</option>{locations.filter((location) => location.active).map((location) => <option key={location._id} value={location._id}>{location.name}</option>)}</select></label>
+          <input type="number" step="1" value={adjustment.stockAdjustment} onChange={updateAdjustment("stockAdjustment")} placeholder="Stock +/-" aria-label="Stock adjustment quantity" className="h-11 rounded-xl border border-slate-200 px-3 text-sm" />
           <input type="number" step="0.01" value={adjustment.balanceAdjustment} onChange={updateAdjustment("balanceAdjustment")} placeholder="Balance +/-" className="h-11 rounded-xl border border-slate-200 px-3 text-sm" />
           <input value={adjustment.reason} onChange={updateAdjustment("reason")} required placeholder="Reason" className="h-11 rounded-xl border border-slate-200 px-3 text-sm" />
           <input type="date" value={adjustment.adjustmentDate} onChange={updateAdjustment("adjustmentDate")} required className="h-11 rounded-xl border border-slate-200 px-3 text-sm" />
           <button type="submit" className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white md:col-span-2 xl:col-span-4"><Save className="h-4 w-4" />Save adjustment</button>
         </form>
-        <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200"><table className="w-full min-w-190 text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400"><tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Product</th><th className="px-4 py-3">Stock change</th><th className="px-4 py-3">Balance change</th><th className="px-4 py-3">Reason</th></tr></thead><tbody className="divide-y divide-slate-100">{adjustments.map((entry) => <tr key={entry._id}><td className="px-4 py-3 text-slate-500">{new Date(entry.adjustmentDate).toLocaleDateString()}</td><td className="px-4 py-3 font-medium text-slate-700">{entry.product?.name || "-"}</td><td className={`px-4 py-3 font-semibold ${entry.stockAdjustment < 0 ? "text-red-600" : "text-emerald-700"}`}>{entry.stockAdjustment > 0 ? "+" : ""}{entry.stockAdjustment}</td><td className={`px-4 py-3 font-semibold ${entry.balanceAdjustment < 0 ? "text-red-600" : "text-emerald-700"}`}>{entry.balanceAdjustment > 0 ? "+" : ""}{formatCurrency(entry.balanceAdjustment)}</td><td className="px-4 py-3 text-slate-600">{entry.reason}</td></tr>)}</tbody></table>{!adjustments.length && <p className="px-4 py-8 text-center text-sm text-slate-500">No adjustments recorded.</p>}</div>
+        <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200"><table className="w-full min-w-220 text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400"><tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Product</th><th className="px-4 py-3">Location</th><th className="px-4 py-3">Stock change</th><th className="px-4 py-3">Balance change</th><th className="px-4 py-3">Reason</th></tr></thead><tbody className="divide-y divide-slate-100">{adjustments.map((entry) => <tr key={entry._id}><td className="px-4 py-3 text-slate-500">{new Date(entry.adjustmentDate).toLocaleDateString()}</td><td className="px-4 py-3 font-medium text-slate-700">{entry.product?.name || "-"}</td><td className="px-4 py-3 text-slate-600">{entry.location?.name || "-"}</td><td className={`px-4 py-3 font-semibold ${entry.stockAdjustment < 0 ? "text-red-600" : "text-emerald-700"}`}>{entry.stockAdjustment > 0 ? "+" : ""}{entry.stockAdjustment}</td><td className={`px-4 py-3 font-semibold ${entry.balanceAdjustment < 0 ? "text-red-600" : "text-emerald-700"}`}>{entry.balanceAdjustment > 0 ? "+" : ""}{formatCurrency(entry.balanceAdjustment)}</td><td className="px-4 py-3 text-slate-600">{entry.reason}</td></tr>)}</tbody></table>{!adjustments.length && <p className="px-4 py-8 text-center text-sm text-slate-500">No adjustments recorded.</p>}</div>
         </div>
       </details>
       {variantFormOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">

@@ -37,6 +37,7 @@ const variantCreateSchema = z.object({
 const adjustmentSchema = z.object({
   product: z.string().min(1),
   vendor: z.string().optional().or(z.literal("")),
+  location: z.union([z.string().regex(/^[a-f\d]{24}$/i), z.literal("")]).optional().default(""),
   stockAdjustment: z.coerce.number().int(),
   balanceAdjustment: z.coerce.number().default(0),
   reason: z.string().trim().min(3),
@@ -77,12 +78,18 @@ const getAmounts = (data) => {
 const createInvoiceNumber = () => `PUR-${new Date().getFullYear()}-${Date.now().toString().slice(-8)}`;
 
 const changeProductStock = (product, locationId, quantityChange) => {
-  product.stock = Math.max(0, Number(product.stock || 0) + quantityChange);
-  if (!locationId) return;
+  if (!locationId) {
+    product.stock = Math.max(0, Number(product.stock || 0) + quantityChange);
+    return;
+  }
   product.locationStock ||= [];
+  if (!product.locationStock.length && Number(product.stock) > 0) {
+    product.locationStock.push({ location: locationId, quantity: Number(product.stock) });
+  }
   const locationEntry = product.locationStock.find((entry) => entry.location.toString() === locationId.toString());
   if (locationEntry) locationEntry.quantity = Math.max(0, locationEntry.quantity + quantityChange);
   else if (quantityChange > 0) product.locationStock.push({ location: locationId, quantity: quantityChange });
+  product.stock = product.locationStock.reduce((total, entry) => total + (Number(entry.quantity) || 0), 0);
 };
 
 const resolveActiveLocation = async (locationId) => resolveLocation(locationId);
@@ -148,7 +155,7 @@ router.get("/", async (request, response, next) => {
 
 router.get("/adjustments", async (request, response, next) => {
   try {
-    const adjustments = await PurchaseAdjustment.find().populate("product", "name stock").populate("vendor", "name").sort({ adjustmentDate: -1, createdAt: -1 });
+    const adjustments = await PurchaseAdjustment.find().populate("product", "name stock").populate("vendor", "name").populate("location", "name").sort({ adjustmentDate: -1, createdAt: -1 });
     response.json({ success: true, data: adjustments });
   } catch (error) { next(error); }
 });
@@ -186,12 +193,22 @@ router.post("/adjustment", async (request, response, next) => {
     if (!data.stockAdjustment && !data.balanceAdjustment) return response.status(400).json({ success: false, message: "Enter a stock or balance adjustment." });
     const product = await resolveProduct(data.product);
     if (!product) return response.status(404).json({ success: false, message: "Product not found." });
-    if (product.stock + data.stockAdjustment < 0) return response.status(400).json({ success: false, message: "Stock adjustment cannot make stock negative." });
+    const location = data.stockAdjustment ? await resolveActiveLocation(data.location) : null;
+    if (data.stockAdjustment && !location) return response.status(400).json({ success: false, message: "Select an active stock location for this adjustment." });
+    if (data.stockAdjustment) {
+      product.locationStock ||= [];
+      if (!product.locationStock.length && Number(product.stock) > 0) product.locationStock.push({ location: location._id, quantity: Number(product.stock) });
+      const locationEntry = product.locationStock.find((entry) => entry.location.toString() === location._id.toString());
+      const locationQuantity = Number(locationEntry?.quantity) || 0;
+      if (locationQuantity + data.stockAdjustment < 0) return response.status(400).json({ success: false, message: `Stock adjustment cannot make ${location.name} inventory negative.` });
+      if (locationEntry) locationEntry.quantity = locationQuantity + data.stockAdjustment;
+      else product.locationStock.push({ location: location._id, quantity: data.stockAdjustment });
+      product.stock = product.locationStock.reduce((total, entry) => total + (Number(entry.quantity) || 0), 0);
+    }
     const vendor = data.vendor ? await resolveVendor(data.vendor) : null;
     if (vendor && vendor.pendingAmount + data.balanceAdjustment < 0) return response.status(400).json({ success: false, message: "Balance adjustment cannot make pending amount negative." });
-    const adjustment = await PurchaseAdjustment.create({ ...data, product: product._id, vendor: vendor?._id });
-    product.stock += data.stockAdjustment;
-    await product.save();
+    const adjustment = await PurchaseAdjustment.create({ ...data, product: product._id, vendor: vendor?._id, location: location?._id });
+    if (data.stockAdjustment) await product.save();
     if (vendor) { vendor.pendingAmount += data.balanceAdjustment; await vendor.save(); }
     response.status(201).json({ success: true, data: adjustment });
   } catch (error) { next(error); }

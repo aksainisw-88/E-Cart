@@ -31,6 +31,16 @@ router.get("/", async (request, response, next) => {
   } catch (error) { next(error); }
 });
 
+router.post("/reconcile-product-stock", async (request, response, next) => {
+  try {
+    const result = await Product.updateMany(
+      { "locationStock.0": { $exists: true } },
+      [{ $set: { stock: { $sum: "$locationStock.quantity" } } }],
+    );
+    response.json({ success: true, updated: result.modifiedCount || 0 });
+  } catch (error) { next(error); }
+});
+
 router.get("/:productId/purchases", async (request, response, next) => {
   try {
     if (!/^[a-f\d]{24}$/i.test(request.params.productId)) {
