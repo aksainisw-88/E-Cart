@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bell, ChevronDown, LogOut, Menu, Moon, Search, Sun, X } from "lucide-react";
 import { Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
@@ -20,12 +20,28 @@ const AdminLayout = () => {
   const [notifications, setNotifications] = useState([]);
   const [newOrderNotification, setNewOrderNotification] = useState(null);
   const [orderCount, setOrderCount] = useState(0);
+  const [adminSearch, setAdminSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const adminSearchRef = useRef(null);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("e-mart-admin-dark") === "true");
   const navigate = useNavigate();
   const location = useLocation();
   const store = useStore();
   const logout = async () => { await fetch("/api/auth/logout", { method: "POST", credentials: "include" }); navigate("/account", { replace: true }); };
   const toggleDarkMode = () => setDarkMode((current) => { const next = !current; localStorage.setItem("e-mart-admin-dark", String(next)); return next; });
+
+  useEffect(() => {
+    const handleShortcut = (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchOpen(true);
+        window.requestAnimationFrame(() => adminSearchRef.current?.focus());
+      }
+      if (event.key === "Escape") setSearchOpen(false);
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -123,6 +139,11 @@ const AdminLayout = () => {
     .filter((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`))
     .sort((first, second) => second.to.length - first.to.length)[0];
   const canAccessCurrentRoute = currentMenu && hasMenuAccess(currentMenu);
+  const searchableMenus = [...visibleNavigation.flatMap((item) => [item, ...(item.children || []).filter(hasMenuAccess)]), ...visibleSecondaryNavigation]
+    .filter((item, index, collection) => collection.findIndex((candidate) => candidate.to === item.to && candidate.label === item.label) === index);
+  const searchResults = adminSearch.trim()
+    ? searchableMenus.filter((item) => `${item.label} ${item.to}`.toLowerCase().includes(adminSearch.trim().toLowerCase())).slice(0, 6)
+    : [];
   if (!canAccessCurrentRoute && visibleNavigation.length > 0) {
     return <Navigate to={visibleNavigation[0].to} replace />;
   }
@@ -244,9 +265,37 @@ const AdminLayout = () => {
             <button type="button" onClick={() => setSidebarOpen(true)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden" aria-label="Open navigation">
               <Menu className="h-5 w-5" />
             </button>
-            <div className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 md:flex md:w-80">
-              <Search className="h-4 w-4 text-slate-400" />
-              <input className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" placeholder="Search products, orders, customers..." />
+            <div className="relative hidden md:block md:w-80" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setSearchOpen(false); }}>
+              <div className={`flex items-center gap-2 rounded-xl border bg-slate-50 px-3 py-2.5 transition ${searchOpen ? "border-primary ring-2 ring-primary/10" : "border-slate-200"}`}>
+                <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                <input
+                  ref={adminSearchRef}
+                  aria-label="Jump to an admin section"
+                  value={adminSearch}
+                  onFocus={() => setSearchOpen(true)}
+                  onChange={(event) => { setAdminSearch(event.target.value); setSearchOpen(true); }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && searchResults[0]) {
+                      navigate(searchResults[0].to);
+                      setAdminSearch("");
+                      setSearchOpen(false);
+                    }
+                  }}
+                  className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+                  placeholder="Find an admin page..."
+                />
+                <kbd className="shrink-0 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-400">Ctrl/⌘ K</kbd>
+              </div>
+              {searchOpen && adminSearch.trim() && <div role="group" className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl" aria-label="Admin page search results">
+                {searchResults.length ? searchResults.map((item) => {
+                  const Icon = item.icon;
+                  return <button key={`${item.to}-${item.label}`} type="button" onClick={() => { navigate(item.to); setAdminSearch(""); setSearchOpen(false); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-slate-700 transition hover:bg-emerald-50 hover:text-primary">
+                    <Icon className="h-4 w-4 text-slate-400" />
+                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                    <span className="text-[10px] text-slate-400">Open</span>
+                  </button>;
+                }) : <p className="px-3 py-3 text-xs text-slate-500">No admin sections match “{adminSearch}”.</p>}
+              </div>}
             </div>
           </div>
           <div className="relative flex items-center gap-2 sm:gap-4">

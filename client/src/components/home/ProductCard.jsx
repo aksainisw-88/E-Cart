@@ -3,35 +3,19 @@ import {
   ShoppingCart,
   Star,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useCart } from "../../context/cartContext";
 import { useWishlist } from "../../context/wishlistContext";
 
 const ProductCard = ({ product }) => {
-  const navigate = useNavigate();
   const { addToCart } = useCart();
   const { isSaved, toggleWishlist } = useWishlist();
   const saved = isSaved(product);
   const stock = Number(product.stock ?? 0);
   const outOfStock = stock <= 0;
 
-  const openProduct = () => {
-    navigate(`/products/${product.id}`);
-  };
-
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={openProduct}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          openProduct();
-        }
-      }}
-      className="group relative cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-white transition-all duration-200 hover:border-emerald-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/40"
-    >
+    <article className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-lg hover:shadow-slate-900/5">
       <button
         type="button"
         className={`absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full shadow-sm transition ${saved ? "bg-red-500 text-white" : "bg-white text-gray-500 hover:bg-primary hover:text-white"}`}
@@ -51,19 +35,19 @@ const ProductCard = ({ product }) => {
       )}
       {outOfStock && <span className="absolute left-3 top-10 z-10 rounded bg-slate-800 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">Out of stock</span>}
 
-      <div className="flex h-32 items-center justify-center bg-slate-50 p-3 sm:h-40 sm:p-4">
+      <Link to={`/products/${product.id}`} aria-label={`View ${product.name}`} className="flex h-32 items-center justify-center bg-slate-50 p-3 sm:h-40 sm:p-4">
         <img
           src={product.image}
           alt={product.name}
           className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
         />
-      </div>
+      </Link>
 
       <div className="p-3 sm:p-4">
         <p className="truncate text-[10px] text-gray-500 sm:text-xs">{product.brand ? `${product.brand} · ` : ""}{product.category}</p>
 
-        <h3 className="mt-1 line-clamp-2 min-h-[36px] text-xs font-semibold text-gray-900 sm:text-sm">
-          {product.name}
+        <h3 className="mt-1 min-h-[36px] text-xs font-semibold text-gray-900 sm:text-sm">
+          <Link to={`/products/${product.id}`} className="line-clamp-2 rounded-sm hover:text-primary focus-visible:outline-primary">{product.name}</Link>
         </h3>
 
         <div className="mt-2 flex items-center gap-1">
@@ -105,7 +89,7 @@ const ProductCard = ({ product }) => {
           {outOfStock ? "Out of stock" : "Add to Cart"}
         </button>
       </div>
-    </div>
+    </article>
   );
 };
 

@@ -1,7 +1,8 @@
 ﻿import { useEffect, useState } from "react";
-import { Check, Clock3, Package, X, XCircle } from "lucide-react";
+import { Check, Clock3, Package, ShoppingCart, X, XCircle } from "lucide-react";
 import CustomerAccountNav from "../components/customer/CustomerAccountNav";
 import Footer from "../components/home/Footer";
+import { useCart } from "../context/cartContext";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -59,6 +60,7 @@ const OrderTimeline = ({ status }) => {
 };
 
 const CustomerOrders = () => {
+  const { addProductsToCart } = useCart();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -71,6 +73,8 @@ const CustomerOrders = () => {
   const [returnType, setReturnType] = useState("Return");
   const [returnError, setReturnError] = useState("");
   const [returnSaving, setReturnSaving] = useState(false);
+  const [reorderingOrderId, setReorderingOrderId] = useState("");
+  const [reorderFeedback, setReorderFeedback] = useState({});
 
   const load = () =>
     fetch(`${API_URL}/api/orders/mine`, { credentials: "include" })
@@ -81,6 +85,37 @@ const CustomerOrders = () => {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+
+  const reorder = async (order) => {
+    setReorderingOrderId(order._id);
+    setReorderFeedback((current) => ({ ...current, [order._id]: "" }));
+    try {
+      const response = await fetch(`${API_URL}/api/catalog/products`, { cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to check current product availability.");
+
+      const catalog = new Map((result.data || []).map((product) => [String(product._id), product]));
+      const requestedItems = (order.items || []).map((item) => {
+        const currentProduct = catalog.get(String(item.product));
+        if (!currentProduct) return { name: item.name, stock: 0, quantity: item.quantity };
+        return {
+          ...currentProduct,
+          id: currentProduct._id,
+          image: currentProduct.image?.startsWith("/") ? `${API_URL}${currentProduct.image}` : currentProduct.image,
+          quantity: item.quantity,
+        };
+      });
+      const { addedQuantity, unavailable } = addProductsToCart(requestedItems);
+      const message = addedQuantity
+        ? `${addedQuantity} item${addedQuantity === 1 ? "" : "s"} added to your cart${unavailable.length ? ". Some products were unavailable or limited by current stock." : "."}`
+        : "No additional quantity could be added; these items may be out of stock or already at their stock limit.";
+      setReorderFeedback((current) => ({ ...current, [order._id]: message }));
+    } catch (requestError) {
+      setReorderFeedback((current) => ({ ...current, [order._id]: requestError.message }));
+    } finally {
+      setReorderingOrderId("");
+    }
+  };
 
   useEffect(() => {
     load();
@@ -257,7 +292,7 @@ const CustomerOrders = () => {
                       {order.store?.name && <p className="mt-1 text-xs font-medium text-slate-500">Store: {order.store.name}{order.store.city ? ` · ${order.store.city}` : ""}</p>}
                     </div>
 
-                    <div className="flex items-center gap-3 text-sm font-semibold">
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold sm:gap-3">
                       {order.status === "Cancelled" ? (
                         <>
                           <XCircle className="h-4 w-4 text-red-500" />
@@ -294,8 +329,19 @@ const CustomerOrders = () => {
                       >
                         Download PDF
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => reorder(order)}
+                        disabled={reorderingOrderId === order._id}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60"
+                      >
+                        <ShoppingCart className="h-3.5 w-3.5" />
+                        {reorderingOrderId === order._id ? "Checking stock..." : "Buy again"}
+                      </button>
                     </div>
                   </div>
+
+                  {reorderFeedback[order._id] && <p role="status" className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700">{reorderFeedback[order._id]}</p>}
 
                   {order.status === "Cancelled" ? (
                     <div className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">

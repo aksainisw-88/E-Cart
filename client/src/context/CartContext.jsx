@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CartContext } from "./cartContext";
 const storageKey = "e-mart-cart";
 
@@ -12,10 +12,12 @@ const readCart = () => {
 
 export const CartProvider = ({ children }) => {
   const [items, setItems] = useState(readCart);
+  const itemsRef = useRef(items);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [promo, setPromo] = useState({ code: "", discount: 0, title: "" });
   const [promoError, setPromoError] = useState("");
   const saveItems = (nextItems) => {
+    itemsRef.current = nextItems;
     setItems(nextItems);
     localStorage.setItem(storageKey, JSON.stringify(nextItems));
   };
@@ -24,13 +26,44 @@ export const CartProvider = ({ children }) => {
     const amount = Number(quantity) > 0 ? Number(quantity) : 1;
     const stock = Number(product.stock ?? 0);
     if (stock <= 0) return;
-    const existing = items.find((item) => item.id === id);
+    const currentItems = itemsRef.current;
+    const existing = currentItems.find((item) => item.id === id);
     if (existing) {
-      saveItems(items.map((item) => item.id === id ? { ...item, quantity: Math.min(stock, item.quantity + amount) } : item));
+      saveItems(currentItems.map((item) => item.id === id ? { ...item, quantity: Math.min(stock, item.quantity + amount) } : item));
     } else {
-      saveItems([...items, { ...product, id, quantity: Math.min(stock, amount) }]);
+      saveItems([...currentItems, { ...product, id, quantity: Math.min(stock, amount) }]);
     }
     setDrawerOpen(true);
+  };
+  const addProductsToCart = (products) => {
+    const nextItems = new Map(itemsRef.current.map((item) => [String(item.id || item._id), item]));
+    const unavailable = [];
+    let addedQuantity = 0;
+
+    products.forEach((product) => {
+      const id = String(product.id || product._id || "");
+      const stock = Number(product.stock ?? 0);
+      const requested = Math.max(1, Number(product.quantity) || 1);
+      const existing = nextItems.get(id);
+      const currentQuantity = Number(existing?.quantity || 0);
+
+      if (!id || stock <= 0) {
+        unavailable.push(product.name || "An item");
+        return;
+      }
+
+      const quantity = Math.min(stock, currentQuantity + requested);
+      addedQuantity += quantity - currentQuantity;
+      if (quantity < currentQuantity + requested) unavailable.push(product.name || "An item");
+      nextItems.set(id, { ...existing, ...product, id, quantity });
+    });
+
+    if (addedQuantity > 0) {
+      saveItems([...nextItems.values()]);
+      setDrawerOpen(true);
+    }
+
+    return { addedQuantity, unavailable };
   };
   const updateQuantity = (id, amount) => saveItems(items.map((item) => item.id === id ? { ...item, quantity: Math.min(Number(item.stock ?? Number.MAX_SAFE_INTEGER), Math.max(1, item.quantity + amount)) } : item));
   const removeFromCart = (id) => saveItems(items.filter((item) => item.id !== id));
@@ -88,6 +121,6 @@ export const CartProvider = ({ children }) => {
     return total + itemDiscount * item.quantity;
   }, 0);
   const originalSubtotal = subtotal + discountTotal;
-  const value = { items, itemCount, subtotal, originalSubtotal, discountTotal, promoCode: promo.code, promoDiscount: promo.discount, promoTitle: promo.title, promoError, applyPromo, removePromo, addToCart, updateQuantity, removeFromCart, syncCartStock, clearCart, drawerOpen, setDrawerOpen };
+  const value = { items, itemCount, subtotal, originalSubtotal, discountTotal, promoCode: promo.code, promoDiscount: promo.discount, promoTitle: promo.title, promoError, applyPromo, removePromo, addToCart, addProductsToCart, updateQuantity, removeFromCart, syncCartStock, clearCart, drawerOpen, setDrawerOpen };
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };

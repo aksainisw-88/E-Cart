@@ -37,6 +37,8 @@ const Products = () => {
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get("search") || "");
   const [priceLimit, setPriceLimit] = useState("all");
+  const [brandFilter, setBrandFilter] = useState("all");
+  const [inStockOnly, setInStockOnly] = useState(false);
   const [sortOrder, setSortOrder] = useState("featured");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [products, setProducts] = useState([]);
@@ -85,12 +87,14 @@ const Products = () => {
       const productCategory = product.category || "General";
       const categoryMatch = selectedCategory === "All Products" ||
         normalizeCategory(productCategory) === normalizeCategory(selectedCategory);
-      const matchesSearch = `${product.name} ${productCategory}`
+      const matchesSearch = `${product.name} ${productCategory} ${product.brand || ""}`
         .toLowerCase()
         .includes(searchTerm.toLowerCase());
       const matchesPrice = priceLimit === "all" || Number(product.price) <= Number(priceLimit);
+      const matchesBrand = brandFilter === "all" || product.brand === brandFilter;
+      const matchesAvailability = !inStockOnly || Number(product.stock) > 0;
 
-      return categoryMatch && matchesSearch && matchesPrice;
+      return categoryMatch && matchesSearch && matchesPrice && matchesBrand && matchesAvailability;
     });
 
     return [...filtered].sort((first, second) => {
@@ -99,12 +103,16 @@ const Products = () => {
       if (sortOrder === "rating") return Number(second.rating || 0) - Number(first.rating || 0);
       return Number(first.id) - Number(second.id);
     });
-  }, [priceLimit, products, searchTerm, selectedCategory, sortOrder]);
+  }, [brandFilter, inStockOnly, priceLimit, products, searchTerm, selectedCategory, sortOrder]);
+
+  const brandOptions = useMemo(() => [...new Set(products.map((product) => product.brand).filter(Boolean))].sort((first, second) => first.localeCompare(second)), [products]);
 
   const clearFilters = () => {
     setSelectedCategory("All Products");
     setSearchTerm("");
     setPriceLimit("all");
+    setBrandFilter("all");
+    setInStockOnly(false);
     setSortOrder("featured");
   };
 
@@ -189,6 +197,19 @@ const Products = () => {
               </div>
 
               <div className="mt-7 border-t border-gray-100 pt-6">
+                <label htmlFor="brand-filter" className="text-sm font-semibold text-gray-900">Brand</label>
+                <select id="brand-filter" value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)} className="mt-3 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-primary">
+                  <option value="all">All brands</option>
+                  {brandOptions.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
+                </select>
+              </div>
+
+              <label className="mt-6 flex cursor-pointer items-start gap-2 border-t border-gray-100 pt-5 text-sm text-gray-700">
+                <input type="checkbox" checked={inStockOnly} onChange={(event) => setInStockOnly(event.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-primary" />
+                <span><span className="block font-semibold">In stock only</span><span className="mt-0.5 block text-xs text-gray-500">Hide unavailable products</span></span>
+              </label>
+
+              <div className="mt-6 border-t border-gray-100 pt-6">
                 <p className="text-sm font-semibold text-gray-900">Price range</p>
                 <div className="mt-3 space-y-2.5">
                   {[
@@ -214,13 +235,13 @@ const Products = () => {
             </aside>
 
             <div>
-              {selectedCategory !== "All Products" && (
-                <div className="mb-5 flex items-center gap-2 text-sm text-gray-600">
-                  <span>Showing:</span>
-                  <button type="button" onClick={() => setSelectedCategory("All Products")} className="flex items-center gap-1 rounded-full bg-teal-50 px-3 py-1 font-medium text-primary">
-                    {selectedCategory}
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+              {(selectedCategory !== "All Products" || brandFilter !== "all" || inStockOnly) && (
+                <div className="mb-5 flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                  <span>Filters:</span>
+                  {selectedCategory !== "All Products" && <button type="button" onClick={() => setSelectedCategory("All Products")} className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-3 py-1 font-medium text-primary">{selectedCategory}<X className="h-3.5 w-3.5" /></button>}
+                  {brandFilter !== "all" && <button type="button" onClick={() => setBrandFilter("all")} className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-3 py-1 font-medium text-primary">{brandFilter}<X className="h-3.5 w-3.5" /></button>}
+                  {inStockOnly && <button type="button" onClick={() => setInStockOnly(false)} className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-3 py-1 font-medium text-primary">In stock<X className="h-3.5 w-3.5" /></button>}
+                  <button type="button" onClick={clearFilters} className="ml-1 text-xs font-semibold text-primary hover:text-primary-dark">Clear all</button>
                 </div>
               )}
 
