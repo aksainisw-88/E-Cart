@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, CircleDollarSign, Clock3, Package, Plus, ShoppingCart, Users } from "lucide-react";
+import { ArrowUpRight, CircleDollarSign, ClipboardList, Clock3, CreditCard, Package, Plus, RotateCcw, ShoppingCart, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -10,6 +10,13 @@ const statusStyles = {
   Delivered: "bg-emerald-50 text-emerald-700",
   Cancelled: "bg-red-50 text-red-700",
 };
+const dashboardShortcuts = [
+  { label: "Purchase Entry", description: "Receive stock", to: "/admin/purchase-entry", icon: Package, tone: "bg-amber-50 text-amber-700" },
+  { label: "POS", description: "Create an in-store sale", to: "/admin/pos", icon: ShoppingCart, tone: "bg-violet-50 text-violet-700" },
+  { label: "Orders", description: "Review and fulfill orders", to: "/admin/orders", icon: ClipboardList, tone: "bg-blue-50 text-blue-700" },
+  { label: "Payments", description: "Review received payments", to: "/admin/payments", icon: CreditCard, tone: "bg-emerald-50 text-emerald-700" },
+  { label: "Returns", description: "Process return requests", to: "/admin/returns", icon: RotateCcw, tone: "bg-rose-50 text-rose-700" },
+];
 
 const AdminDashboardOverview = () => {
   const [overview, setOverview] = useState(null);
@@ -72,6 +79,16 @@ const AdminDashboardOverview = () => {
           <Link to="/admin/products" className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"><Plus className="h-4 w-4" />Add product</Link>
         </div>
       </div>
+
+      <section aria-label="Admin shortcuts" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {dashboardShortcuts.map(({ label, description, to, icon: Icon, tone }) => (
+          <Link key={to} to={to} className="group flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md hover:shadow-slate-900/5 focus-visible:outline-primary">
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone}`}><Icon className="h-5 w-5" /></span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800 group-hover:text-primary">{label}</span><span className="mt-0.5 block truncate text-xs text-slate-500">{description}</span></span>
+            <ArrowUpRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
+          </Link>
+        ))}
+      </section>
 
       {loadError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{loadError}</p>}
 
