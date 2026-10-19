@@ -1,11 +1,23 @@
 import { useEffect, useState } from "react";
-import { BarChart3, CalendarDays, Crown, Package, RefreshCw, Users } from "lucide-react";
+import { ArrowUpRight, BarChart3, CalendarDays, ClipboardList, CreditCard, Crown, Package, Percent, RefreshCw, Store, UserRound, Users } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const today = new Date();
 const initialTo = today.toISOString().slice(0, 10);
 const initialFrom = new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 const emptyReport = { totals: { revenue: 0, orders: 0, customers: 0, cost: 0, profit: 0, promoSavings: 0 }, trend: [], topProducts: [], repeatCustomers: [] };
+const reportLinks = [
+  { label: "Sales transactions", description: "Sales invoices by customer, product, batch, and payment.", to: "/admin/sales-transactions", icon: ClipboardList },
+  { label: "Purchase transactions", description: "Vendor invoices, stock received, tax, and payment status.", to: "/admin/reports/purchase-transactions", icon: Package },
+  { label: "Profit report", description: "Paid sales revenue compared with product cost.", to: "/admin/reports/profit", icon: CreditCard },
+  { label: "Margin report", description: "Product level gross profit and margin percentage.", to: "/admin/reports/margin", icon: Percent },
+  { label: "Top-selling products", description: "Rank best sellers by units and sales value.", to: "/admin/reports/top-products", icon: BarChart3 },
+  { label: "Vendor ledger", description: "Purchases, payments, adjustments, and balances.", to: "/admin/reports/vendor-ledger", icon: Store },
+  { label: "Customer ledger", description: "Customer sales, receipts, and running balances.", to: "/admin/reports/customer-ledger", icon: Users },
+  { label: "Customer outstanding", description: "Open customer invoices and amounts due.", to: "/admin/reports/outstanding-customers", icon: UserRound },
+  { label: "Vendor outstanding", description: "Open vendor invoices and payable balances.", to: "/admin/reports/outstanding-vendors", icon: CreditCard },
+];
 
 const money = (value) => `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 const dateLabel = (value) => value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-";
@@ -70,6 +82,16 @@ const AdminReports = () => {
 
       {error && <p className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       <p className="mt-5 flex items-center gap-2 text-xs text-slate-500"><CalendarDays className="h-4 w-4" /> {dateLabel(from)} to {dateLabel(to)} · Paid, non-cancelled orders</p>
+
+      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
+        <div className="mb-4"><h2 className="font-semibold text-slate-900">Report modules</h2><p className="mt-1 text-xs text-slate-500">Open a detailed report with date filters, searchable rows, and CSV export.</p></div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {reportLinks.map(({ label, description, to, icon: Icon }) => <Link key={to} to={to} className="group flex items-start gap-3 rounded-lg border border-slate-200 p-4 transition hover:border-primary/40 hover:bg-emerald-50/40">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span>
+            <span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2 text-sm font-semibold text-slate-800">{label}<ArrowUpRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-primary" /></span><span className="mt-1 block text-xs leading-5 text-slate-500">{description}</span></span>
+          </Link>)}
+        </div>
+      </section>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map(({ label, value, icon: Icon, tone }) => <div key={label} className="rounded-xl border border-slate-200 bg-white p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-500">{label}</p><p className="mt-2 text-2xl font-bold text-slate-900">{loading ? "..." : value}</p></div><span className={`flex h-10 w-10 items-center justify-center rounded-lg ${tone}`}><Icon className="h-5 w-5" /></span></div>{label === "Estimated profit" && <p className="mt-3 text-xs text-slate-400">Uses product cost price when available.</p>}</div>)}

@@ -19,6 +19,7 @@ import CustomerOrders from "./pages/CustomerOrders";
 import ProductDetails from "./pages/ProductDetails";
 import AdminReports from "./pages/AdminReports";
 import AdminSalesTransactions from "./pages/AdminSalesTransactions";
+import AdminReportModule from "./pages/AdminReportModule";
 import AdminDeliveryArea from "./pages/AdminDeliveryArea";
 import AdminTestimonials from "./pages/AdminTestimonials";
 import AdminHeroSlider from "./pages/AdminHeroSlider";
@@ -87,6 +88,7 @@ function App() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboardOverview />} />
           <Route path="reports" element={<AdminReports />} />
+          <Route path="reports/:reportType" element={<AdminReportModule />} />
           <Route path="sales-transactions" element={<AdminSalesTransactions />} />
           <Route path="products" element={<AdminSection section="products" />} />
           <Route path="inventory" element={<AdminInventory />} />

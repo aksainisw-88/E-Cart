@@ -83,21 +83,15 @@ const clearUploadDirectory = async (directory) => {
     return entry.isDirectory() ? fs.rm(target, { recursive: true, force: true }) : fs.unlink(target);
   }));
 };
-const zeroInventoryStock = async (session) => {
-  const options = session ? { session } : {};
+const zeroInventoryStock = async () => {
   const products = await Product.updateMany({}, [{ $set: {
     stock: 0,
     locationStock: { $map: { input: { $ifNull: ["$locationStock", []] }, as: "location", in: { $mergeObjects: ["$$location", { quantity: 0 }] } } },
     variants: { $map: { input: { $ifNull: ["$variants", []] }, as: "variant", in: { $mergeObjects: ["$$variant", { locationStock: { $map: { input: { $ifNull: ["$$variant.locationStock", []] }, as: "stock", in: { $mergeObjects: ["$$stock", { quantity: 0 }] } } } }] } } },
-  } }], options);
-  const batches = await Purchase.updateMany({ remainingQuantity: { $ne: 0 } }, { $set: { remainingQuantity: 0 } }, options);
+  } }]);
+  const batches = await Purchase.updateMany({ remainingQuantity: { $ne: 0 } }, { $set: { remainingQuantity: 0 } });
   return { products: products.matchedCount, batches: batches.modifiedCount };
 };
-const isTransactionUnsupported = (error) => (
-  error.code === 20 ||
-  error.codeName === "IllegalOperation" ||
-  /transactions? (?:are |is )?not supported|requires? (?:a )?replica set|replica set (?:is )?required|transaction numbers are only allowed|does not support sessions/i.test(error.message || "")
-);
 
 router.post("/inventory-reset/otp", async (request, response, next) => {
   try {
@@ -147,35 +141,23 @@ router.post("/inventory-reset/confirm", async (request, response, next) => {
       return response.status(400).json({ success: false, message: "The reset code is incorrect." });
     }
 
-    let session;
     let resultCounts;
     try {
-      session = await mongoose.startSession();
-      await session.withTransaction(async () => {
-        const currentChallenge = await InventoryResetOtp.findOne({ _id: challenge._id, user: admin._id, expiresAt: { $gt: new Date() } }).session(session);
-        if (!currentChallenge || currentChallenge.otpHash !== challenge.otpHash) {
-          throw Object.assign(new Error("Reset code was already used or expired. Request a new code."), { statusCode: 400 });
-        }
-        await InventoryResetOtp.deleteOne({ _id: currentChallenge._id }, { session });
-        resultCounts = await zeroInventoryStock(session);
-      });
-    } catch (error) {
-      if (isTransactionUnsupported(error)) {
-        try {
-          // Inventory updates are idempotent, so retrying this path can finish a partial reset
-          // on MongoDB deployments that do not support multi-document transactions.
-          resultCounts = await zeroInventoryStock();
-          await InventoryResetOtp.deleteOne({ _id: challenge._id, user: admin._id, otpHash: challenge.otpHash });
-        } catch (resetError) {
-          console.error("Inventory reset could not complete without transaction support:", resetError);
-          return response.status(503).json({ success: false, message: "Inventory reset could not finish because the database does not support transactions. The code remains valid; retry after the database issue is resolved." });
-        }
-      } else {
-        if (error.statusCode) return response.status(error.statusCode).json({ success: false, message: error.message });
-        return next(error);
+      const currentChallenge = await InventoryResetOtp.findOne({ _id: challenge._id, user: admin._id, expiresAt: { $gt: new Date() } }).select("otpHash").lean();
+      if (!currentChallenge || currentChallenge.otpHash !== challenge.otpHash) {
+        return response.status(400).json({ success: false, message: "Reset code was already used or expired. Request a new code." });
       }
-    } finally {
-      await session?.endSession();
+
+      // Setting quantities to zero is idempotent, so an interrupted reset can safely be retried.
+      // Keep the OTP until both stock updates finish; this also works on MongoDB standalone deployments.
+      resultCounts = await zeroInventoryStock();
+      await InventoryResetOtp.deleteOne({ _id: challenge._id, user: admin._id, otpHash: challenge.otpHash });
+    } catch (error) {
+      console.error("Inventory reset failed:", error);
+      return response.status(503).json({
+        success: false,
+        message: "Inventory reset could not finish because a database update failed. Any completed stock updates are safe to retry; use this code again, or request a new one if it has expired or was consumed.",
+      });
     }
     response.json({ success: true, message: "Inventory quantities were reset to zero. Store records and transaction history were preserved.", data: resultCounts });
   } catch (error) { next(error); }

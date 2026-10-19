@@ -22,8 +22,18 @@ import {
 
 export const adminNavigation = [
   { label: "Overview", to: "/admin", icon: LayoutDashboard, roles: ["admin"] },
-  { label: "Reports", to: "/admin/reports", icon: BarChart3, roles: ["admin", "manager", "user"] },
-  { label: "Sales transactions", to: "/admin/sales-transactions", icon: ClipboardList, roles: ["admin", "manager", "user"] },
+  { label: "Reports", to: "/admin/reports", icon: BarChart3, roles: ["admin", "manager", "user"], children: [
+    { label: "Reports overview", to: "/admin/reports", icon: LayoutDashboard, permission: "/admin/reports", roles: ["admin", "manager", "user"] },
+    { label: "Sales transactions", to: "/admin/sales-transactions", icon: ClipboardList, permission: ["/admin/sales-transactions", "/admin/reports"], roles: ["admin", "manager", "user"] },
+    { label: "Purchase transactions", to: "/admin/reports/purchase-transactions", icon: Package, permission: "/admin/reports", roles: ["admin", "manager", "user"] },
+    { label: "Profit report", to: "/admin/reports/profit", icon: CreditCard, permission: "/admin/reports", roles: ["admin", "manager", "user"] },
+    { label: "Margin report", to: "/admin/reports/margin", icon: Percent, permission: "/admin/reports", roles: ["admin", "manager", "user"] },
+    { label: "Top-selling products", to: "/admin/reports/top-products", icon: BarChart3, permission: "/admin/reports", roles: ["admin", "manager", "user"] },
+    { label: "Vendor ledger", to: "/admin/reports/vendor-ledger", icon: Store, permission: "/admin/reports", roles: ["admin", "manager", "user"] },
+    { label: "Customer ledger", to: "/admin/reports/customer-ledger", icon: Users, permission: "/admin/reports", roles: ["admin", "manager", "user"] },
+    { label: "Customer outstanding", to: "/admin/reports/outstanding-customers", icon: UserRound, permission: "/admin/reports", roles: ["admin", "manager", "user"] },
+    { label: "Vendor outstanding", to: "/admin/reports/outstanding-vendors", icon: CreditCard, permission: "/admin/reports", roles: ["admin", "manager", "user"] },
+  ] },
   { label: "Products", to: "/admin/products", icon: Package, roles: ["admin", "manager", "user"] },
   { label: "Inventory", to: "/admin/inventory", icon: Boxes, roles: ["admin", "manager", "user"] },
   { label: "Categories", to: "/admin/categories", icon: Layers3, roles: ["admin", "manager", "user"] },

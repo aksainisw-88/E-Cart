@@ -10,9 +10,11 @@ import { useStore } from "../../context/storeContext";
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [storeMenuOpen, setStoreMenuOpen] = useState(() => {
+  const [expandedMenu, setExpandedMenu] = useState(() => {
     const path = window.location.pathname;
-    return path.startsWith("/admin/store/") || ["/admin/stores", "/admin/testimonials", "/admin/hero-slider"].includes(path);
+    if (path === "/admin/reports" || path.startsWith("/admin/reports/") || path === "/admin/sales-transactions") return "/admin/reports";
+    if (path.startsWith("/admin/store/") || ["/admin/store", "/admin/stores", "/admin/testimonials", "/admin/hero-slider"].includes(path)) return "/admin/store";
+    return "";
   });
   const [authState, setAuthState] = useState("checking");
   const [adminUser, setAdminUser] = useState(null);
@@ -130,8 +132,13 @@ const AdminLayout = () => {
 
   if (authState !== "authorized") return null;
 
-  const hasMenuAccess = (item) => item.roles.includes(adminUser.role)
-    && (!Array.isArray(adminUser.menuPermissions) || adminUser.menuPermissions.includes(item.to));
+  const hasOwnMenuAccess = (item) => {
+    if (!item.roles.includes(adminUser.role)) return false;
+    if (!Array.isArray(adminUser.menuPermissions)) return true;
+    const requiredPermissions = Array.isArray(item.permission) ? item.permission : [item.permission || item.to];
+    return requiredPermissions.some((permission) => adminUser.menuPermissions.includes(permission));
+  };
+  const hasMenuAccess = (item) => hasOwnMenuAccess(item) || Boolean(item.children?.some(hasOwnMenuAccess));
   const visibleNavigation = adminNavigation.filter(hasMenuAccess);
   const visibleSecondaryNavigation = adminSecondaryNavigation.filter(hasMenuAccess);
   const navigationItems = adminNavigation.flatMap((item) => [item, ...(item.children || [])]);
@@ -139,14 +146,15 @@ const AdminLayout = () => {
   const currentMenu = availableMenus
     .filter((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`))
     .sort((first, second) => second.to.length - first.to.length)[0];
-  const canAccessCurrentRoute = currentMenu && hasMenuAccess(currentMenu);
+  const canAccessCurrentRoute = currentMenu && hasOwnMenuAccess(currentMenu);
   const searchableMenus = [...visibleNavigation.flatMap((item) => [item, ...(item.children || []).filter(hasMenuAccess)]), ...visibleSecondaryNavigation]
     .filter((item, index, collection) => collection.findIndex((candidate) => candidate.to === item.to && candidate.label === item.label) === index);
   const searchResults = adminSearch.trim()
     ? searchableMenus.filter((item) => `${item.label} ${item.to}`.toLowerCase().includes(adminSearch.trim().toLowerCase())).slice(0, 6)
     : [];
   if (!canAccessCurrentRoute && visibleNavigation.length > 0) {
-    return <Navigate to={visibleNavigation[0].to} replace />;
+    const fallback = visibleNavigation[0].children?.find(hasOwnMenuAccess) || visibleNavigation[0];
+    return <Navigate to={fallback.to} replace />;
   }
   const initials = adminUser.name.split(" ").map((part) => part[0]).join("").slice(0, 2);
   const renderNavItem = (item) => {
@@ -157,11 +165,11 @@ const AdminLayout = () => {
       const active = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`) || childActive;
       return (
         <div key={item.to}>
-          <button type="button" aria-expanded={storeMenuOpen} onClick={() => setStoreMenuOpen((open) => !open)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${active ? "bg-primary/5 text-primary" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}>
+          <button type="button" aria-expanded={expandedMenu === item.to} onClick={() => setExpandedMenu((current) => current === item.to ? "" : item.to)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${active ? "bg-primary/5 text-primary" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}>
             <Icon className="h-[18px] w-[18px] shrink-0" /><span className="min-w-0 flex-1 truncate">{item.label}</span>
-            <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 transition-transform ${storeMenuOpen ? "rotate-180" : ""}`} />
+            <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 transition-transform ${expandedMenu === item.to ? "rotate-180" : ""}`} />
           </button>
-          {storeMenuOpen && <div className="ml-5 mt-1 space-y-1 border-l border-slate-200 pl-3">{item.children.filter(hasMenuAccess).map((child) => <NavLink key={child.to} to={child.to} onClick={() => setSidebarOpen(false)} className={({ isActive }) => `block rounded-lg px-3 py-2 text-xs font-medium transition ${isActive ? "bg-primary text-white" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}>{child.label}</NavLink>)}</div>}
+          {expandedMenu === item.to && <div className="ml-5 mt-1 space-y-1 border-l border-slate-200 pl-3">{item.children.filter(hasMenuAccess).map((child) => <NavLink key={child.to} to={child.to} end onClick={() => setSidebarOpen(false)} className={({ isActive }) => `block rounded-lg px-3 py-2 text-xs font-medium transition ${isActive ? "bg-primary text-white" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}>{child.label}</NavLink>)}</div>}
         </div>
       );
     }
