@@ -129,11 +129,15 @@ router.get("/sources", async (request, response, next) => {
           id: purchase.invoiceGroupId || purchase._id.toString(),
           entryNumber: purchase.vendorInvoiceNumber || purchase.invoiceNumber,
           invoiceDate: purchase.purchaseDate,
+          partyId: purchase.vendor?._id?.toString() || "",
           partyName: purchase.vendor?.name || "Vendor",
           location: purchase.location,
+          total: 0,
           items: [],
         });
-        groups.get(groupKey).items.push({
+        const group = groups.get(groupKey);
+        group.total += Number(purchase.total) || Number(purchase.amount) || 0;
+        group.items.push({
           purchaseId: purchase._id,
           productName: purchase.productName,
           productId: purchase.product?._id || purchase.product,
@@ -170,6 +174,7 @@ router.get("/sources", async (request, response, next) => {
         id: sale._id,
         entryNumber: sale.invoiceNumber,
         invoiceDate: sale.createdAt,
+        partyId: sale.customer?._id?.toString() || "",
         partyName: sale.customer?.name || sale.customerName || "Walk-in Customer",
         location: sale.location,
         total: Number(sale.total) || 0,

@@ -15,6 +15,7 @@ const AdminTransactionReturns = ({ type }) => {
   const isReplacement = type === "Replacement";
   const [sources, setSources] = useState([]);
   const [entries, setEntries] = useState([]);
+  const [partyId, setPartyId] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(dateInputValue());
   const [quantities, setQuantities] = useState({});
@@ -37,6 +38,7 @@ const AdminTransactionReturns = ({ type }) => {
       setSources(sourceResult.data || []);
       setEntries(entryResult.data || []);
       setSourceId((current) => (sourceResult.data || []).some((source) => source.id === current) ? current : "");
+      setPartyId((current) => (sourceResult.data || []).some((source) => (source.partyId || `name:${source.partyName || "Unknown"}`) === current) ? current : "");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -49,6 +51,16 @@ const AdminTransactionReturns = ({ type }) => {
   }, [loadData]);
 
   const source = useMemo(() => sources.find((entry) => entry.id === sourceId) || null, [sources, sourceId]);
+  const parties = useMemo(() => {
+    const partyMap = new Map();
+    sources.forEach((entry) => {
+      const key = entry.partyId || `name:${entry.partyName || "Unknown"}`;
+      if (!partyMap.has(key)) partyMap.set(key, { id: key, name: entry.partyName || "Unknown", invoiceCount: 0 });
+      partyMap.get(key).invoiceCount += 1;
+    });
+    return [...partyMap.values()].sort((left, right) => left.name.localeCompare(right.name));
+  }, [sources]);
+  const partySources = useMemo(() => sources.filter((entry) => (entry.partyId || `name:${entry.partyName || "Unknown"}`) === partyId), [partyId, sources]);
   const selectedLines = useMemo(() => (source?.items || []).filter((item) => Number(quantities[isPurchaseReturn ? item.purchaseId : item.sourceItemIndex] || 0) > 0), [isPurchaseReturn, quantities, source]);
   const returnTotal = useMemo(() => selectedLines.reduce((sum, item) => {
     const key = isPurchaseReturn ? item.purchaseId : item.sourceItemIndex;
@@ -65,6 +77,7 @@ const AdminTransactionReturns = ({ type }) => {
 
   const saveReturn = async (event) => {
     event.preventDefault();
+    if (!partyId) return setError(`Select a ${isPurchaseReturn ? "vendor" : "customer"} first.`);
     if (!source) return setError(`Select the original ${isPurchaseReturn ? "purchase" : "sales"} entry first.`);
     if (!selectedLines.length) return setError("Enter a return quantity for at least one invoice line.");
     setSaving(true);
@@ -95,7 +108,7 @@ const AdminTransactionReturns = ({ type }) => {
 
   const visibleEntries = entries.filter((entry) => `${entry.returnNumber} ${entry.sourceEntryNo} ${entry.partyName}`.toLowerCase().includes(query.trim().toLowerCase()));
   const title = isPurchaseReturn ? "Purchase return" : type;
-  const sourceLabel = isPurchaseReturn ? "Purchase entry no." : "Sales entry no.";
+  const sourceLabel = isPurchaseReturn ? "Purchase invoice" : "Sales invoice";
   const originalRateLabel = isPurchaseReturn ? "Purchase rate" : "Sale rate";
 
   return (
@@ -106,10 +119,10 @@ const AdminTransactionReturns = ({ type }) => {
           <h1 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">{title}</h1>
           <p className="mt-2 text-sm text-slate-500">
             {isPurchaseReturn
-              ? "Select a purchase invoice, enter the returned quantities, and update branch stock and vendor balance."
+              ? "Select a vendor, choose one of their purchase invoices, then enter returned quantities."
               : isReplacement
-                ? "Select a sales invoice and record same-product replacements against its remaining returnable quantities."
-                : "Select a sales invoice, enter returned quantities, and put eligible goods back into stock."}
+                ? "Select a customer, choose one of their sales invoices, then record remaining replacement quantities."
+                : "Select a customer, choose one of their sales invoices, then enter returned quantities."}
           </p>
         </div>
         <button type="button" onClick={() => { setLoading(true); setError(""); loadData(); }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 self-start rounded-lg border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 lg:self-auto">
@@ -122,18 +135,24 @@ const AdminTransactionReturns = ({ type }) => {
 
       <form onSubmit={saveReturn} className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-100 p-4 sm:p-5">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <label className="text-xs font-semibold text-slate-500">{isPurchaseReturn ? "Vendor" : "Customer"}
+              <select value={partyId} onChange={(event) => { setPartyId(event.target.value); setSourceId(""); setQuantities({}); setError(""); }} required className="mt-1 block h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 outline-none focus:border-primary">
+                <option value="">Select {isPurchaseReturn ? "a vendor" : "a customer"} first</option>
+                {parties.map((party) => <option key={party.id} value={party.id}>{party.name} · {party.invoiceCount} {party.invoiceCount === 1 ? "invoice" : "invoices"}</option>)}
+              </select>
+            </label>
             <label className="text-xs font-semibold text-slate-500">{sourceLabel}
-              <select value={sourceId} onChange={(event) => { setSourceId(event.target.value); setQuantities({}); setError(""); }} className="mt-1 block h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 outline-none focus:border-primary">
-                <option value="">Select an original entry</option>
-                {sources.map((entry) => <option key={entry.id} value={entry.id}>{entry.entryNumber} · {entry.partyName} · {formatDate(entry.invoiceDate)}</option>)}
+              <select value={sourceId} disabled={!partyId} onChange={(event) => { setSourceId(event.target.value); setQuantities({}); setError(""); }} required className="mt-1 block h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 outline-none focus:border-primary disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400">
+                <option value="">{partyId ? "Select an invoice" : "Select a party first"}</option>
+                {partySources.map((entry) => <option key={entry.id} value={entry.id}>{entry.entryNumber} · {formatDate(entry.invoiceDate)} · {money(entry.total)}</option>)}
               </select>
             </label>
             <label className="text-xs font-semibold text-slate-500">Return invoice date
               <span className="relative mt-1 block"><CalendarDays aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input type="date" value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} required className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm font-medium text-slate-800 outline-none focus:border-primary" /></span>
             </label>
             <div className="grid grid-cols-2 gap-3">
-              <div><p className="text-xs font-semibold text-slate-500">Customer / vendor</p><p className="mt-1 flex h-11 items-center truncate rounded-lg bg-slate-50 px-3 text-sm font-medium text-slate-800">{source?.partyName || "Select an entry"}</p></div>
+              <div><p className="text-xs font-semibold text-slate-500">Customer / vendor</p><p className="mt-1 flex h-11 items-center truncate rounded-lg bg-slate-50 px-3 text-sm font-medium text-slate-800">{source?.partyName || (partyId ? parties.find((party) => party.id === partyId)?.name : "Select a party") || "Select a party"}</p></div>
               <div><p className="text-xs font-semibold text-slate-500">Original invoice date</p><p className="mt-1 flex h-11 items-center rounded-lg bg-slate-50 px-3 text-sm font-medium text-slate-800">{formatDate(source?.invoiceDate)}</p></div>
             </div>
           </div>
@@ -169,7 +188,7 @@ const AdminTransactionReturns = ({ type }) => {
                   <td className="whitespace-nowrap px-3 py-3 font-semibold text-slate-800">{money(amount)}</td>
                 </tr>;
               })}
-              {!source && <tr><td colSpan="10" className="px-5 py-14 text-center text-sm text-slate-500">Choose an original invoice to load its returnable product lines.</td></tr>}
+              {!source && <tr><td colSpan="10" className="px-5 py-14 text-center text-sm text-slate-500">{partyId ? `Choose an original ${isPurchaseReturn ? "purchase" : "sales"} invoice to load its returnable product lines.` : `Select a ${isPurchaseReturn ? "vendor" : "customer"} to view their invoices.`}</td></tr>}
               {source && !source.items.length && <tr><td colSpan="10" className="px-5 py-14 text-center text-sm text-slate-500">This invoice has no product lines.</td></tr>}
             </tbody>
             {source && <tfoot className="border-t border-slate-200 bg-slate-50"><tr>
