@@ -17,7 +17,14 @@ const emptyProduct = {
   name: "",
   brand: "",
   unit: "unit",
+  unit1Contains: "1",
+  unit2: "",
+  unit2Contains: "0",
+  unit3: "",
   category: "",
+  size: "",
+  hsnCode: "",
+  shelfNo: "",
   price: "",
   costPrice: "",
   originalPrice: "",
@@ -120,7 +127,14 @@ const AdminProducts = () => {
       name: product.name,
       brand: product.brand || "",
       unit: product.unit || "unit",
+      unit1Contains: product.unit1Contains ?? 1,
+      unit2: product.unit2 || "",
+      unit2Contains: product.unit2Contains ?? 0,
+      unit3: product.unit3 || "",
       category: product.category,
+      size: product.size || "",
+      hsnCode: product.hsnCode || "",
+      shelfNo: product.shelfNo || "",
       price: product.price,
       costPrice: product.costPrice || "",
       originalPrice: product.originalPrice || "",
@@ -224,9 +238,9 @@ const AdminProducts = () => {
 
   const downloadSampleCsv = () => {
     const rows = [
-      ["name", "brand", "unit", "category", "price", "costPrice", "originalPrice", "discount", "rating", "reviews", "status", "description"],
-      ["Paracetamol 500mg", "Example Pharma", "strip", "Medicines", "55", "35", "70", "10", "4.5", "25", "Published", "Pain relief tablets"],
-      ["Digital Thermometer", "Example Health", "piece", "Medical Devices", "249", "150", "299", "17", "4", "10", "Published", "Fast and accurate temperature readings"],
+      ["name", "brand", "unit", "unit1Contains", "unit2", "unit2Contains", "unit3", "category", "size", "hsnCode", "shelfNo", "price", "costPrice", "originalPrice", "discount", "rating", "reviews", "status", "description"],
+      ["Paracetamol 500mg", "Example Pharma", "strip", "1", "tablet", "10", "", "Medicines", "500 mg", "30049099", "A-01", "55", "35", "70", "10", "4.5", "25", "Published", "Pain relief tablets"],
+      ["Digital Thermometer", "Example Health", "piece", "1", "", "0", "", "Medical Devices", "Digital", "90251910", "B-04", "249", "150", "299", "17", "4", "10", "Published", "Fast and accurate temperature readings"],
     ];
     const csv = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\n");
     const link = document.createElement("a");
@@ -238,7 +252,7 @@ const AdminProducts = () => {
   };
 
   const visibleProducts = products.filter((product) => {
-    const matchesQuery = `${product.name} ${product.brand || ""} ${product.category}`.toLowerCase().includes(query.toLowerCase());
+    const matchesQuery = `${product.name} ${product.brand || ""} ${product.category} ${product.hsnCode || ""} ${product.size || ""} ${product.shelfNo || ""}`.toLowerCase().includes(query.toLowerCase());
     const matchesCategory = categoryFilter === "All" || product.category === categoryFilter;
     const matchesStatus = statusFilter === "All" || product.status === statusFilter;
     const matchesStock = stockFilter === "All" || (stockFilter === "In stock" ? Number(product.stock) > 0 : Number(product.stock) === 0);
@@ -364,6 +378,8 @@ const AdminProducts = () => {
                         <span className="block font-semibold text-slate-700">{product.name}</span>
                         {product.brand && <span className="mt-1 block text-xs text-slate-400">{product.brand}</span>}
                         <span className="mt-1 block text-xs text-slate-400">Unit: {product.unit || "unit"}</span>
+                        {(product.size || product.hsnCode) && <span className="mt-1 block text-xs text-slate-400">{[product.size && `Size: ${product.size}`, product.hsnCode && `HSN: ${product.hsnCode}`].filter(Boolean).join(" · ")}</span>}
+                        {product.shelfNo && <span className="mt-1 block text-xs text-slate-400">Shelf: {product.shelfNo}</span>}
                       </div>
                     </div>
                   </td>
@@ -451,9 +467,33 @@ const AdminProducts = () => {
                   <div className="mt-5 grid gap-4 sm:grid-cols-2">
                     <label className="text-sm font-medium text-slate-700 sm:col-span-2">Product name<input required value={form.name} onChange={updateField("name")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
                     <label className="text-sm font-medium text-slate-700">Brand<input value={form.brand} onChange={updateField("brand")} placeholder="e.g. Philips" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
-                    <label className="text-sm font-medium text-slate-700">Unit<input required list="product-unit-options" maxLength="40" value={form.unit} onChange={updateField("unit")} placeholder="e.g. piece, kg, bottle" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /><datalist id="product-unit-options">{["unit", "piece", "pack", "box", "bottle", "strip", "tablet", "capsule", "kg", "g", "l", "ml"].map((unit) => <option key={unit} value={unit} />)}</datalist></label>
                     <label className="text-sm font-medium text-slate-700">Category<select required value={form.category} onChange={updateField("category")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-primary"><option value="">Select a category</option>{categories.map((category) => <option key={category._id || category.name} value={category.name}>{category.parentCategory ? `${category.parentCategory.name} / ${category.name}` : category.name}</option>)}</select><Link to="/admin/categories" className="mt-2 inline-block text-xs font-semibold text-primary hover:underline">Manage categories</Link></label>
+                    <label className="text-sm font-medium text-slate-700">Size / strength<input maxLength="120" value={form.size} onChange={updateField("size")} placeholder="e.g. 500 mg, 100 ml" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
                     <label className="text-sm font-medium text-slate-700 sm:col-span-2">Description<textarea value={form.description} onChange={updateField("description")} rows="4" className="mt-2 w-full resize-y rounded-lg border border-slate-200 p-3 outline-none focus:border-primary" /></label>
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+                  <h3 className="text-sm font-semibold text-slate-800">Tax and product identification</h3>
+                  <p className="mt-1 text-xs text-slate-500">Choose the tax codes used automatically on purchase entry and POS sales.</p>
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <label className="text-sm font-medium text-slate-700">HSN / SAC code<input maxLength="30" value={form.hsnCode} onChange={updateField("hsnCode")} placeholder="e.g. 30049099" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+                    <label className="text-sm font-medium text-slate-700">Purchase tax<select value={form.purchaseTaxCategory} onChange={updateField("purchaseTaxCategory")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-primary"><option value="">No purchase tax</option>{taxCategories.filter((tax) => ["Purchase", "Both"].includes(tax.appliedOn) && (tax.active || tax._id === form.purchaseTaxCategory)).map((tax) => <option key={tax._id} value={tax._id}>{tax.taxCode} · {tax.taxRate}%{tax.active ? "" : " · Inactive"}{tax.description ? ` · ${tax.description}` : ""}</option>)}</select></label>
+                    <label className="text-sm font-medium text-slate-700">Sales tax<select value={form.salesTaxCategory} onChange={updateField("salesTaxCategory")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-primary"><option value="">No sales tax</option>{taxCategories.filter((tax) => ["Sales", "Both"].includes(tax.appliedOn) && (tax.active || tax._id === form.salesTaxCategory)).map((tax) => <option key={tax._id} value={tax._id}>{tax.taxCode} · {tax.taxRate}%{tax.active ? "" : " · Inactive"}{tax.description ? ` · ${tax.description}` : ""}</option>)}</select></label>
+                    <p className="self-center text-xs leading-5 text-slate-500">Manage available codes in <Link to="/admin/tax-categories" className="font-semibold text-primary hover:underline">Tax categories</Link>.</p>
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+                  <h3 className="text-sm font-semibold text-slate-800">Billing units and storage</h3>
+                  <p className="mt-1 text-xs text-slate-500">Unit 1 remains the stock and sales unit. Add optional pack labels and counts for reference.</p>
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <label className="text-sm font-medium text-slate-700">Unit 1<input required list="product-unit-options" maxLength="40" value={form.unit} onChange={updateField("unit")} placeholder="e.g. piece, pack, bottle" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /><datalist id="product-unit-options">{["unit", "piece", "pack", "box", "bottle", "strip", "tablet", "capsule", "kg", "g", "l", "ml"].map((unit) => <option key={unit} value={unit} />)}</datalist></label>
+                    <label className="text-sm font-medium text-slate-700">Unit 1 contains<input type="number" min="0" step="1" value={form.unit1Contains} onChange={updateField("unit1Contains")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+                    <label className="text-sm font-medium text-slate-700">Unit 2<input maxLength="40" value={form.unit2} onChange={updateField("unit2")} placeholder="e.g. tablet, piece" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+                    <label className="text-sm font-medium text-slate-700">Unit 2 contains<input type="number" min="0" step="1" value={form.unit2Contains} onChange={updateField("unit2Contains")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+                    <label className="text-sm font-medium text-slate-700">Unit 3<input maxLength="40" value={form.unit3} onChange={updateField("unit3")} placeholder="Optional smallest unit" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+                    <label className="text-sm font-medium text-slate-700">Shelf number<input maxLength="80" value={form.shelfNo} onChange={updateField("shelfNo")} placeholder="e.g. A-01" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
                   </div>
                 </section>
 
@@ -465,9 +505,6 @@ const AdminProducts = () => {
                     <label className="text-sm font-medium text-slate-700">Original price<input type="number" min="0" value={form.originalPrice} onChange={updateField("originalPrice")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
                     <label className="text-sm font-medium text-slate-700">Cost price<input type="number" min="0" value={form.costPrice} onChange={updateField("costPrice")} placeholder="Used for profit reports" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
                     <label className="text-sm font-medium text-slate-700">Discount %<input type="number" min="0" max="100" value={form.discount} onChange={updateField("discount")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
-                    <label className="text-sm font-medium text-slate-700">Purchase tax code<select value={form.purchaseTaxCategory} onChange={updateField("purchaseTaxCategory")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-primary"><option value="">No purchase tax</option>{taxCategories.filter((tax) => ["Purchase", "Both"].includes(tax.appliedOn) && (tax.active || tax._id === form.purchaseTaxCategory)).map((tax) => <option key={tax._id} value={tax._id}>{tax.taxCode} · {tax.taxRate}%{tax.active ? "" : " · Inactive"}{tax.description ? ` · ${tax.description}` : ""}</option>)}</select></label>
-                    <label className="text-sm font-medium text-slate-700">Sales tax code<select value={form.salesTaxCategory} onChange={updateField("salesTaxCategory")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-primary"><option value="">No sales tax</option>{taxCategories.filter((tax) => ["Sales", "Both"].includes(tax.appliedOn) && (tax.active || tax._id === form.salesTaxCategory)).map((tax) => <option key={tax._id} value={tax._id}>{tax.taxCode} · {tax.taxRate}%{tax.active ? "" : " · Inactive"}{tax.description ? ` · ${tax.description}` : ""}</option>)}</select></label>
-                    <p className="text-xs leading-5 text-slate-500 sm:col-span-2">Assigned codes automatically set the tax rate in purchase entry and POS sales. Create tax codes in <Link to="/admin/tax-categories" className="font-semibold text-primary hover:underline">Tax categories</Link>.</p>
                     <div className="grid grid-cols-2 gap-3">
                       <label className="text-sm font-medium text-slate-700">Rating<input required type="number" min="0" max="5" step="0.1" value={form.rating} onChange={updateField("rating")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
                       <label className="text-sm font-medium text-slate-700">Reviews<input required type="number" min="0" value={form.reviews} onChange={updateField("reviews")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
