@@ -2,6 +2,7 @@ const express = require("express");
 const { z } = require("zod");
 
 const Product = require("../models/Product");
+const Purchase = require("../models/Purchase");
 const StoreLocation = require("../models/StoreLocation");
 
 const router = express.Router();
@@ -27,6 +28,20 @@ router.get("/", async (request, response, next) => {
       Product.find().select("name brand unit category price stock locationStock variants").sort({ name: 1 }).lean(),
     ]);
     response.json({ success: true, data: { locations, products } });
+  } catch (error) { next(error); }
+});
+
+router.get("/:productId/purchases", async (request, response, next) => {
+  try {
+    if (!/^[a-f\d]{24}$/i.test(request.params.productId)) {
+      return response.status(400).json({ success: false, message: "Product ID is invalid." });
+    }
+    const purchases = await Purchase.find({ product: request.params.productId, variant: { $ne: "" } })
+      .select("invoiceNumber variant batchNumber expiryDate mrp rate unitCost quantity freeQuantity remainingQuantity purchaseDate location")
+      .populate("location", "name")
+      .sort({ purchaseDate: -1, createdAt: -1 })
+      .lean();
+    response.json({ success: true, data: purchases });
   } catch (error) { next(error); }
 });
 
