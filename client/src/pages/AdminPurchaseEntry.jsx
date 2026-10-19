@@ -46,7 +46,7 @@ const AdminPurchaseEntry = () => {
       fetch(`${apiUrl}/api/vendors`, { credentials: "include" }),
       fetch(`${apiUrl}/api/products`, { credentials: "include" }),
       fetch(`${apiUrl}/api/purchases/adjustments`, { credentials: "include" }),
-      fetch(`${apiUrl}/api/stores`),
+      fetch(`${apiUrl}/api/stores`, { credentials: "include" }),
     ]);
     const [purchaseResult, vendorResult, productResult, adjustmentResult, locationResult] = await Promise.all([purchaseResponse.json(), vendorResponse.json(), productResponse.json(), adjustmentResponse.json(), locationResponse.json()]);
     if (!purchaseResponse.ok || !vendorResponse.ok || !productResponse.ok || !adjustmentResponse.ok || !locationResponse.ok) throw new Error(purchaseResult.message || vendorResult.message || productResult.message || adjustmentResult.message || locationResult.message || "Unable to load purchase data.");

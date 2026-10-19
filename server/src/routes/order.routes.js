@@ -13,6 +13,10 @@ const { requireAnyRole } = require("../middleware/auth");
 const { calculateOfferDiscount } = require("../utils/offerPricing");
 
 const router = express.Router();
+const staffOrderFilter = (request, orderId) => ({
+  ...(orderId ? { _id: orderId } : {}),
+  ...(request.user.locationId ? { store: request.user.locationId } : {}),
+});
 const orderSchema = z.object({
   items: z.array(z.object({ id: z.string(), name: z.string(), price: z.coerce.number().min(0), originalPrice: z.coerce.number().min(0).optional(), discount: z.coerce.number().min(0).max(100).optional(), quantity: z.coerce.number().int().positive(), image: z.string().optional() })).min(1),
   shipping: z.object({ name: z.string().min(2), phone: z.string().min(10), address: z.string().min(3), city: z.string().min(2), pincode: z.string().min(6) }),
@@ -58,14 +62,16 @@ const createRazorpayClient = (config) => {
   return new Razorpay({ key_id: config.keyId, key_secret: config.keySecret });
 };
 
-router.post("/", async (request, response, next) => {
+router.post("/", requireAnyRole("customer"), async (request, response, next) => {
   try {
     const data = orderSchema.parse(request.body);
     const customer = await User.findById(request.user.id).select("customerType").lean();
     let selectedStore = null;
     if (data.storeId) {
-      selectedStore = await StoreLocation.findOne({ _id: data.storeId, active: true }).select("_id").lean();
+      selectedStore = await StoreLocation.findOne({ _id: data.storeId, active: true }).select("_id isDefault").lean();
       if (!selectedStore) return response.status(400).json({ success: false, message: "Select an active store before placing your order." });
+    } else {
+      selectedStore = await StoreLocation.findOne({ isDefault: true, active: true }).select("_id isDefault").lean();
     }
     if (customer?.customerType === "B2B" && !selectedStore) {
       return response.status(400).json({ success: false, message: "Select a store for this business order." });
@@ -92,16 +98,24 @@ router.post("/", async (request, response, next) => {
     }
     const isRazorpay = data.paymentMethod === "razorpay";
     const productIds = data.items.map((item) => item.id);
-    const products = await Product.find({ _id: { $in: productIds }, status: "Published" }).select("_id name stock costPrice locationStock returnEligible replaceEligible").lean();
+    const products = await Product.find({ _id: { $in: productIds }, status: "Published" }).select("_id name stock costPrice locationStock returnEligible replaceEligible");
     const productMap = new Map(products.map((product) => [product._id.toString(), product]));
     const availableStockFor = (product) => {
       if (selectedStore && product?.locationStock?.length) {
         return Number(product.locationStock.find((entry) => entry.location.toString() === selectedStore._id.toString())?.quantity) || 0;
       }
-      return Number(product?.stock) || 0;
+      return selectedStore?.isDefault || !selectedStore ? Number(product?.stock) || 0 : 0;
     };
     const unavailableItem = data.items.find((item) => !productMap.has(item.id) || availableStockFor(productMap.get(item.id)) < item.quantity);
     if (unavailableItem) return response.status(409).json({ success: false, message: `${unavailableItem.name} is out of stock or has insufficient stock.` });
+    if (selectedStore?.isDefault) {
+      for (const product of products) {
+        if (!product.locationStock.length && Number(product.stock) > 0) {
+          product.locationStock.push({ location: selectedStore._id, quantity: Number(product.stock) });
+          await product.save();
+        }
+      }
+    }
     const costPrices = new Map(products.map((product) => [product._id.toString(), Number(product.costPrice) || 0]));
     const razorpayConfig = isRazorpay ? await getRazorpayConfig(request) : null;
     if (isRazorpay && !razorpayConfig) {
@@ -243,14 +257,14 @@ router.patch("/:id/return", requireAnyRole("customer"), async (request, response
 
 router.get("/", requireAnyRole("admin", "manager", "user"), async (request, response, next) => {
   try {
-    const orders = await Order.find().populate("customer", "name email").populate("store", "name city").sort({ createdAt: -1 });
+    const orders = await Order.find(request.user.locationId ? { store: request.user.locationId } : {}).populate("customer", "name email").populate("store", "name city").sort({ createdAt: -1 });
     response.json({ success: true, data: orders });
   } catch (error) { next(error); }
 });
 
 router.get("/:id", requireAnyRole("admin", "manager", "user"), async (request, response, next) => {
   try {
-    const order = await Order.findById(request.params.id).populate("customer", "name email customerType businessName").populate("store", "name city address").lean();
+    const order = await Order.findOne(staffOrderFilter(request, request.params.id)).populate("customer", "name email customerType businessName").populate("store", "name city address").lean();
     if (!order) return response.status(404).json({ success: false, message: "Order not found." });
     response.json({ success: true, data: order });
   } catch (error) { next(error); }
@@ -293,7 +307,7 @@ router.patch("/:id/payment", requireAnyRole("admin", "manager", "user"), async (
       paymentNotes: paymentData.paymentNotes,
       paidAt: paymentData.paymentStatus === "Paid" ? new Date() : null,
     };
-    const order = await Order.findByIdAndUpdate(request.params.id, update, { new: true, runValidators: true }).populate("customer", "name email");
+    const order = await Order.findOneAndUpdate(staffOrderFilter(request, request.params.id), update, { new: true, runValidators: true }).populate("customer", "name email");
     if (!order) return response.status(404).json({ success: false, message: "Order not found" });
     response.json({ success: true, data: order });
   } catch (error) { next(error); }
@@ -301,7 +315,7 @@ router.patch("/:id/payment", requireAnyRole("admin", "manager", "user"), async (
 
 router.patch("/:id/status", requireAnyRole("admin", "manager", "user"), async (request, response, next) => {
   try {
-    const order = await Order.findByIdAndUpdate(request.params.id, { status: request.body.status }, { new: true, runValidators: true });
+    const order = await Order.findOneAndUpdate(staffOrderFilter(request, request.params.id), { status: request.body.status }, { new: true, runValidators: true });
     if (!order) return response.status(404).json({ success: false, message: "Order not found" });
     response.json({ success: true, data: order });
   } catch (error) { next(error); }
@@ -311,7 +325,7 @@ router.patch("/:id/return-status", requireAnyRole("admin", "manager", "user"), a
   try {
     const resolution = returnResolutionSchema.safeParse(request.body);
     if (!resolution.success) return response.status(400).json({ success: false, message: "Choose a valid return status and provide a note of up to 500 characters." });
-    const order = await Order.findById(request.params.id);
+    const order = await Order.findOne(staffOrderFilter(request, request.params.id));
     if (!order) return response.status(404).json({ success: false, message: "Order not found." });
     const allowedNextStatuses = order.returnStatus === "Requested"
       ? ["Approved", "Rejected"]
@@ -334,7 +348,7 @@ router.post("/:id/refund", requireAnyRole("admin", "manager", "user"), async (re
   try {
     const refundData = refundSchema.safeParse(request.body);
     if (!refundData.success) return response.status(400).json({ success: false, message: "Enter a valid refund amount and method." });
-    const order = await Order.findById(request.params.id);
+    const order = await Order.findOne(staffOrderFilter(request, request.params.id));
     if (!order) return response.status(404).json({ success: false, message: "Order not found." });
     if (order.returnStatus !== "Completed" || order.returnType !== "Return") return response.status(400).json({ success: false, message: "Only completed return requests can be refunded." });
     if (order.refundStatus && !["Not refunded", "Failed"].includes(order.refundStatus)) return response.status(409).json({ success: false, message: "A refund has already been started for this order." });
@@ -351,7 +365,7 @@ router.post("/:id/refund", requireAnyRole("admin", "manager", "user"), async (re
       return response.status(503).json({ success: false, message: "Razorpay is not configured on the server." });
     }
     const claimedOrder = await Order.findOneAndUpdate(
-      { _id: order._id, returnStatus: "Completed", $or: [{ refundStatus: "Not refunded" }, { refundStatus: { $exists: false } }, { refundStatus: "Failed" }] },
+      { ...staffOrderFilter(request, order._id), returnStatus: "Completed", $or: [{ refundStatus: "Not refunded" }, { refundStatus: { $exists: false } }, { refundStatus: "Failed" }] },
       { $set: { refundStatus: "Processing", refundAmount: amount, refundNote: refundData.data.note, refundId: "", refundMethod: "" } },
       { new: true },
     );

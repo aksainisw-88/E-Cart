@@ -24,9 +24,10 @@ const customerSchema = z.object({
 router.get("/", async (request, response, next) => {
   try {
     const customers = await User.find({ role: "customer" }).select("name email phone address locality pincode district state gstin panNumber gender status customerSource createdAt addresses").sort({ createdAt: -1 }).lean();
+    const locationId = request.user.locationId || "";
     const [orders, posSales] = await Promise.all([
-      Order.aggregate([{ $group: { _id: "$customer", count: { $sum: 1 }, total: { $sum: "$total" } } }]),
-      PosSale.aggregate([{ $match: { customer: { $exists: true } } }, { $group: { _id: "$customer", count: { $sum: 1 }, total: { $sum: "$total" } } }]),
+      Order.aggregate([{ $match: locationId ? { store: locationId } : {} }, { $group: { _id: "$customer", count: { $sum: 1 }, total: { $sum: "$total" } } }]),
+      PosSale.aggregate([{ $match: { ...(locationId ? { location: locationId } : {}), customer: { $exists: true } } }, { $group: { _id: "$customer", count: { $sum: 1 }, total: { $sum: "$total" } } }]),
     ]);
     const summary = new Map();
     [...orders, ...posSales].forEach((item) => {

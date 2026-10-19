@@ -9,6 +9,7 @@ const { z } = require("zod");
 const Product = require("../models/Product");
 const ProductCategory = require("../models/ProductCategory");
 const TaxCategory = require("../models/TaxCategory");
+const StoreLocation = require("../models/StoreLocation");
 const builtInCategories = ["Medicines", "Health Care", "Personal Care", "Baby Care", "Medical Devices", "Wellness", "Vitamins & Supplements", "First Aid"];
 
 const uploadDirectory = path.join(__dirname, "../../uploads/products");
@@ -76,6 +77,24 @@ const validateProductTaxCategories = async (data, existingProduct = null) => {
 };
 
 const router = express.Router();
+const productsForLocation = (products, locationId, isDefault) => products.map((product) => {
+  const data = typeof product.toObject === "function" ? product.toObject() : product;
+  if (!locationId) return data;
+  const locationStock = (data.locationStock || []).filter((entry) => entry.location?.toString() === locationId);
+  return {
+    ...data,
+    stock: locationStock.length ? locationStock.reduce((sum, entry) => sum + (Number(entry.quantity) || 0), 0) : isDefault && !(data.locationStock || []).length ? Number(data.stock) || 0 : 0,
+    locationStock,
+    variants: (data.variants || []).map((variant) => ({
+      ...variant,
+      locationStock: (variant.locationStock || []).filter((entry) => entry.location?.toString() === locationId),
+    })),
+  };
+});
+const staffLocation = async (request) => {
+  if (!request.user.locationId) return null;
+  return StoreLocation.findOne({ _id: request.user.locationId, active: true }).select("_id isDefault").lean();
+};
 const uploadImage = (request, response, next) => {
   imageUpload.array("images", 6)(request, response, (error) => {
     if (!error) return next();
@@ -181,16 +200,18 @@ router.delete("/categories/:id", async (request, response, next) => {
 
 router.get("/", async (request, response, next) => {
   try {
+    const location = await staffLocation(request);
     const products = await Product.find().populate("purchaseTaxCategory", "taxCode taxRate taxType active").populate("salesTaxCategory", "taxCode taxRate taxType active").sort({ createdAt: -1 });
-    response.json({ success: true, data: products });
+    response.json({ success: true, data: productsForLocation(products, location?._id.toString() || "", Boolean(location?.isDefault)) });
   } catch (error) { next(error); }
 });
 
 router.get("/:id", async (request, response, next) => {
   try {
+    const location = await staffLocation(request);
     const product = await Product.findById(request.params.id).populate("purchaseTaxCategory", "taxCode taxRate taxType active").populate("salesTaxCategory", "taxCode taxRate taxType active");
     if (!product) return response.status(404).json({ success: false, message: "Product not found" });
-    response.json({ success: true, data: product });
+    response.json({ success: true, data: productsForLocation([product], location?._id.toString() || "", Boolean(location?.isDefault))[0] });
   } catch (error) { next(error); }
 });
 

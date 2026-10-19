@@ -39,6 +39,7 @@ const publicUser = (user) => ({
   email: user.email,
   role: user.role,
   ...(user.role === "customer" ? { customerType: user.customerType || "B2C", businessName: user.businessName || "", gstin: user.gstin || "" } : {}),
+  ...(user.role !== "customer" ? { location: user.location || null } : {}),
   ...(Array.isArray(user.menuPermissions) ? { menuPermissions: user.menuPermissions } : {}),
 });
 
@@ -89,6 +90,7 @@ const createLoginHandler = (allowedRoles) => async (request, response, next) => 
       return response.status(403).json({ success: false, message: "These credentials cannot be used on this sign-in page." });
     }
 
+    await user.populate("location", "name city");
     setAuthCookie(response, user, request.app.locals.env);
     return response.json({ success: true, user: publicUser(user) });
   } catch (error) {
@@ -229,7 +231,7 @@ router.post("/login/admin", createLoginHandler(["admin", "manager", "user"]));
 
 router.get("/me", requireAuth, async (request, response, next) => {
   try {
-    const user = await User.findById(request.user.id);
+    const user = await User.findById(request.user.id).populate("location", "name city");
     if (!user) {
       return response.status(401).json({ success: false, message: "Account no longer exists." });
     }

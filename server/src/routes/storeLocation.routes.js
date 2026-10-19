@@ -3,7 +3,8 @@ const { z } = require("zod");
 const Order = require("../models/Order");
 const StoreLocation = require("../models/StoreLocation");
 const StoreSettings = require("../models/StoreSettings");
-const { requireAuth, requireRole, requireAnyMenuPermission } = require("../middleware/auth");
+const User = require("../models/User");
+const { requireAuth, requireRole, requireAnyMenuPermission, requireOptionalAuth } = require("../middleware/auth");
 
 const router = express.Router();
 const storeSchema = z.object({
@@ -36,10 +37,16 @@ const ensureDefaultLocation = async () => {
   return StoreLocation.findOneAndUpdate({ isDefault: true }, { $setOnInsert: values }, { new: true, upsert: true, setDefaultsOnInsert: true }).lean();
 };
 
-router.get("/", async (request, response, next) => {
+router.get("/", requireOptionalAuth, async (request, response, next) => {
   try {
     await ensureDefaultLocation();
-    const stores = await StoreLocation.find({ active: true }).select("name description phone email address city pincode active").sort({ name: 1 }).lean();
+    const filter = { active: true };
+    if (["user", "manager"].includes(request.user?.role)) {
+      const staff = await User.findById(request.user.id).select("role location").lean();
+      if (staff?.role === "user" && !staff.location) return response.status(403).json({ success: false, message: "Your staff account is not assigned a store location. Ask an admin to assign one." });
+      if (staff?.location) filter._id = staff.location;
+    }
+    const stores = await StoreLocation.find(filter).select("name description phone email address city pincode active isDefault").sort({ name: 1 }).lean();
     response.json({ success: true, data: stores });
   } catch (error) { next(error); }
 });
@@ -66,6 +73,7 @@ router.put("/:id", ...adminOnly, async (request, response, next) => {
     const store = await StoreLocation.findById(request.params.id);
     if (!store) return response.status(404).json({ success: false, message: "Store not found." });
     if (store.isDefault && !data.active) return response.status(400).json({ success: false, message: "The default store must remain active." });
+    if (!data.active && await User.exists({ location: store._id, role: { $in: ["manager", "user"] } })) return response.status(409).json({ success: false, message: "This location is assigned to staff. Reassign them before deactivating it." });
     Object.assign(store, data);
     await store.save();
     response.json({ success: true, data: store });
@@ -77,6 +85,7 @@ router.delete("/:id", ...adminOnly, async (request, response, next) => {
     const store = await StoreLocation.findById(request.params.id);
     if (!store) return response.status(404).json({ success: false, message: "Store not found." });
     if (store.isDefault) return response.status(400).json({ success: false, message: "The default store cannot be deleted." });
+    if (await User.exists({ location: store._id, role: { $in: ["manager", "user"] } })) return response.status(409).json({ success: false, message: "This location is assigned to staff. Reassign them before deleting it." });
     if (await Order.exists({ store: store._id })) return response.status(409).json({ success: false, message: "This store has orders. Deactivate it instead." });
     await store.deleteOne();
     response.json({ success: true, message: "Store deleted." });

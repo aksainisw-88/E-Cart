@@ -50,8 +50,13 @@ const requireAnyRole = (...roles) => (request, response, next) => {
 
 const requireAnyMenuPermission = (...permissions) => async (request, response, next) => {
   try {
-    const user = await User.findById(request.user.id).select("menuPermissions").lean();
+    const user = await User.findById(request.user.id).select("menuPermissions role location").lean();
     if (!user) return response.status(401).json({ success: false, message: "Account no longer exists." });
+    if (user.role !== request.user.role) return response.status(403).json({ success: false, message: "Your staff access changed. Sign in again to continue." });
+    if (user.role === "user" && !user.location) {
+      return response.status(403).json({ success: false, message: "Your staff account is not assigned a store location. Ask an admin to assign one." });
+    }
+    request.user.locationId = ["user", "manager"].includes(user.role) ? user.location?.toString() || "" : "";
     const requiredPermissions = permissions.length === 1 && typeof permissions[0] === "function"
       ? permissions[0](request)
       : permissions;

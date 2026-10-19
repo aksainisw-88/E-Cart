@@ -16,12 +16,13 @@ import {
 } from "../data/adminNavigation";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
-const emptyForm = { name: "", email: "", password: "", role: "user", menuPermissions: [] };
+const emptyForm = { name: "", email: "", password: "", role: "user", locationId: "", menuPermissions: [] };
 const allAdminMenus = [...adminNavigation, ...adminSecondaryNavigation];
 const permissionsForRole = (role) => allAdminMenus.filter((item) => item.roles.includes(role)).map((item) => item.to);
 
 const AdminUsers = () => {
   const [users, setUsers] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -31,16 +32,25 @@ const AdminUsers = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const load = () =>
-    fetch(`${API_URL}/api/users`, { credentials: "include" })
-      .then(async (response) => {
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.message);
-        setUsers(result.data);
-      })
-      .catch((requestError) => setError(requestError.message));
   useEffect(() => {
-    load();
+    let active = true;
+    const loadUsersAndLocations = async () => {
+      try {
+        const [usersResponse, locationResponse] = await Promise.all([
+          fetch(`${API_URL}/api/users`, { credentials: "include" }),
+          fetch(`${API_URL}/api/stores`, { credentials: "include" }),
+        ]);
+        const [usersResult, locationResult] = await Promise.all([usersResponse.json(), locationResponse.json()]);
+        if (!usersResponse.ok || !locationResponse.ok) throw new Error(usersResult.message || locationResult.message || "Unable to load staff and store locations.");
+        if (!active) return;
+        setUsers(usersResult.data || []);
+        setLocations(locationResult.data || []);
+      } catch (requestError) {
+        if (active) setError(requestError.message);
+      }
+    };
+    loadUsersAndLocations();
+    return () => { active = false; };
   }, []);
   const updateForm = (field) => (event) =>
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -57,6 +67,7 @@ const AdminUsers = () => {
       email: user.email,
       password: "",
       role: user.role,
+      locationId: user.location?._id || user.location || "",
       menuPermissions: user.menuPermissions ?? permissionsForRole(user.role),
     });
     setError("");
@@ -65,7 +76,7 @@ const AdminUsers = () => {
   const saveUser = async (event) => {
     event.preventDefault();
     const payload = editingId
-      ? { name: form.name, email: form.email, role: form.role, menuPermissions: form.menuPermissions }
+      ? { name: form.name, email: form.email, role: form.role, locationId: form.locationId, menuPermissions: form.menuPermissions }
       : form;
     const response = await fetch(
       `${API_URL}/api/users${editingId ? `/${editingId}` : ""}`,
@@ -159,10 +170,10 @@ const AdminUsers = () => {
           <div className="flex flex-wrap items-center gap-3"><select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"><option value="All">All roles</option><option value="admin">Admin</option><option value="manager">Manager</option><option value="user">User</option></select><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"><option value="All">All statuses</option><option value="Active">Active</option><option value="Blocked">Blocked</option></select><span className="text-sm text-slate-500">{visible.length} users</span></div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-left text-sm">
+          <table className="w-full min-w-[920px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
               <tr>
-                {["User", "Role", "Status", "Last updated", "Actions"].map(
+                {["User", "Role", "Location", "Status", "Last updated", "Actions"].map(
                   (heading) => (
                     <th key={heading} className="px-5 py-3 font-semibold">
                       {heading}
@@ -193,6 +204,7 @@ const AdminUsers = () => {
                       {user.role}
                     </span>
                   </td>
+                  <td className="px-5 py-4 text-slate-600">{user.location?.name || "All locations"}</td>
                   <td className="px-5 py-4">
                     <span
                       className={`rounded-full px-2.5 py-1 text-xs font-semibold ${user.status === "Active" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}
@@ -290,6 +302,10 @@ const AdminUsers = () => {
                 </dd>
               </div>
               <div className="rounded-lg bg-slate-50 p-4">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Store location</dt>
+                <dd className="mt-1 font-semibold text-slate-800">{selectedUser.location?.name || "All locations"}</dd>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-4">
                 <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Created</dt>
                 <dd className="mt-1 font-medium text-slate-700">
                   {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleString() : "Not available"}
@@ -368,7 +384,7 @@ const AdminUsers = () => {
                 <select
                   required
                   value={form.role}
-                  onChange={(event) => setForm((current) => ({ ...current, role: event.target.value, menuPermissions: permissionsForRole(event.target.value) }))}
+                  onChange={(event) => setForm((current) => ({ ...current, role: event.target.value, locationId: event.target.value === "admin" ? "" : current.locationId, menuPermissions: permissionsForRole(event.target.value) }))}
                   className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 capitalize outline-none focus:border-primary"
                 >
                   <option value="user">User</option>
@@ -376,6 +392,14 @@ const AdminUsers = () => {
                   <option value="admin">Admin</option>
                 </select>
               </label>
+              {form.role !== "admin" && <label className="block text-sm font-medium text-slate-700">
+                Assigned store location{form.role === "user" ? " *" : ""}
+                <select required={form.role === "user"} value={form.locationId} onChange={updateForm("locationId")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-primary">
+                  <option value="">{form.role === "user" ? "Select a location" : "All locations (no restriction)"}</option>
+                  {locations.map((location) => <option key={location._id} value={location._id}>{location.name}{location.city ? ` · ${location.city}` : ""}</option>)}
+                </select>
+                <span className="mt-1 block text-xs font-normal text-slate-500">{form.role === "user" ? "This staff account will only see transactions and stock for this location." : "Assign a location to restrict this manager to that branch."}</span>
+              </label>}
                 <fieldset className="rounded-lg border border-slate-200 p-4">
                   <legend className="px-1 text-sm font-semibold text-slate-700">Admin menu access</legend>
                   <div className="mb-3 flex justify-end">

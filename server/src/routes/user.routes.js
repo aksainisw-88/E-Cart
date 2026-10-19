@@ -54,14 +54,18 @@ const menuPermissionSchema = z.array(z.enum([
 const adminOnlyMenus = ["/admin", "/admin/tax-categories", "/admin/users", "/admin/store", "/admin/stores", "/admin/testimonials", "/admin/hero-slider", "/admin/store/delivery", "/admin/offers", "/admin/support", "/admin/settings"];
 const withRoleMenuValidation = (schema) => schema.superRefine((data, context) => {
   if (data.role === "admin") return;
+  if (data.role === "user" && !data.locationId) {
+    context.addIssue({ code: "custom", path: ["locationId"], message: "Assign a store location to this staff user." });
+  }
   data.menuPermissions.forEach((permission, index) => {
     if (adminOnlyMenus.includes(permission)) {
       context.addIssue({ code: "custom", path: ["menuPermissions", index], message: "This menu is only available to admin users." });
     }
   });
 });
-const userSchema = withRoleMenuValidation(z.object({ name: z.string().trim().min(2).max(80), email: z.string().email(), password: z.string().min(8).max(128), role: z.enum(["admin", "manager", "user"]), menuPermissions: menuPermissionSchema }));
-const editSchema = withRoleMenuValidation(z.object({ name: z.string().trim().min(2).max(80), email: z.string().email(), role: z.enum(["admin", "manager", "user"]), menuPermissions: menuPermissionSchema }));
+const userLocationSchema = z.string().regex(/^[a-f\d]{24}$/i).or(z.literal("")).default("");
+const userSchema = withRoleMenuValidation(z.object({ name: z.string().trim().min(2).max(80), email: z.string().email(), password: z.string().min(8).max(128), role: z.enum(["admin", "manager", "user"]), locationId: userLocationSchema, menuPermissions: menuPermissionSchema }));
+const editSchema = withRoleMenuValidation(z.object({ name: z.string().trim().min(2).max(80), email: z.string().email(), role: z.enum(["admin", "manager", "user"]), locationId: userLocationSchema, menuPermissions: menuPermissionSchema }));
 const inventoryResetConfirmSchema = z.object({ otp: z.string().regex(/^\d{6}$/) });
 const storeResetConfirmSchema = z.object({ otp: z.string().regex(/^\d{6}$/) });
 const hashInventoryResetOtp = (userId, otp, secret) => crypto.createHmac("sha256", secret).update(`${userId}:${otp}`).digest("hex");
@@ -278,7 +282,7 @@ router.post("/store-reset/confirm", async (request, response, next) => {
 
 router.get("/", async (request, response, next) => {
   try {
-    const users = await User.find({ role: { $in: ["admin", "manager", "user"] } }).select("name email role status menuPermissions createdAt updatedAt").sort({ createdAt: -1 });
+    const users = await User.find({ role: { $in: ["admin", "manager", "user"] } }).select("name email role status menuPermissions location createdAt updatedAt").populate("location", "name city").sort({ createdAt: -1 });
     response.json({ success: true, data: users });
   } catch (error) { next(error); }
 });
@@ -290,8 +294,11 @@ router.post("/", async (request, response, next) => {
     const data = parsed.data;
     const email = data.email.toLowerCase();
     if (await User.exists({ email })) return response.status(409).json({ success: false, message: "A user with this email already exists." });
-    const user = await User.create({ name: data.name, email, password: await bcrypt.hash(data.password, 12), role: data.role, menuPermissions: data.menuPermissions });
-    response.status(201).json({ success: true, data: { _id: user._id, name: user.name, email: user.email, role: user.role, status: user.status, menuPermissions: user.menuPermissions } });
+    const location = data.locationId ? await StoreLocation.findOne({ _id: data.locationId, active: true }).select("_id").lean() : null;
+    if (data.locationId && !location) return response.status(400).json({ success: false, message: "Select an active store location." });
+    const user = await User.create({ name: data.name, email, password: await bcrypt.hash(data.password, 12), role: data.role, location: location?._id || null, menuPermissions: data.menuPermissions });
+    await user.populate("location", "name city");
+    response.status(201).json({ success: true, data: { _id: user._id, name: user.name, email: user.email, role: user.role, status: user.status, menuPermissions: user.menuPermissions, location: user.location } });
   } catch (error) { next(error); }
 });
 
@@ -300,8 +307,13 @@ router.put("/:id", async (request, response, next) => {
     const parsed = editSchema.safeParse(request.body);
     if (!parsed.success) return response.status(400).json({ success: false, message: parsed.error.issues[0]?.message || "Check the user details and menu access." });
     const data = parsed.data;
-    const user = await User.findOneAndUpdate({ _id: request.params.id, role: { $in: ["admin", "manager", "user"] } }, data, { new: true, runValidators: true }).select("name email role status menuPermissions createdAt updatedAt");
+    const location = data.locationId ? await StoreLocation.findOne({ _id: data.locationId, active: true }).select("_id").lean() : null;
+    if (data.locationId && !location) return response.status(400).json({ success: false, message: "Select an active store location." });
+    const user = await User.findOne({ _id: request.params.id, role: { $in: ["admin", "manager", "user"] } });
     if (!user) return response.status(404).json({ success: false, message: "Admin user not found" });
+    Object.assign(user, { name: data.name, email: data.email.toLowerCase(), role: data.role, location: location?._id || null, menuPermissions: data.menuPermissions });
+    await user.save();
+    await user.populate("location", "name city");
     response.json({ success: true, data: user });
   } catch (error) { next(error); }
 });

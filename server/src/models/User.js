@@ -48,6 +48,7 @@ const userSchema = new mongoose.Schema(
     customerSource: { type: String, enum: ["Online", "Offline"], default: "Online" },
     businessName: { type: String, trim: true, maxlength: 120, default: "" },
     gstin: { type: String, trim: true, uppercase: true, maxlength: 15, default: "" },
+    location: { type: mongoose.Schema.Types.ObjectId, ref: "StoreLocation", default: null },
     status: {
       type: String,
       enum: ["Active", "Blocked"],

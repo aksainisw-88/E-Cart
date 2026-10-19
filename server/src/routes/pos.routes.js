@@ -40,7 +40,10 @@ router.get("/batches", async (request, response, next) => {
       locationId: z.string().regex(/^[a-f\d]{24}$/i),
     }).safeParse(request.query);
     if (!query.success) return response.status(400).json({ success: false, message: "Select a product and store location." });
-    const { productId, locationId } = query.data;
+    const { productId } = query.data;
+    const assignedLocationId = request.user.locationId || "";
+    if (assignedLocationId && query.data.locationId !== assignedLocationId) return response.status(403).json({ success: false, message: "You can only view batches for your assigned store location." });
+    const locationId = assignedLocationId || query.data.locationId;
     const location = await StoreLocation.findOne({ _id: locationId, active: true }).select("_id isDefault").lean();
     if (!location) return response.status(400).json({ success: false, message: "Select an active store location." });
     const purchaseLocationFilter = location.isDefault
@@ -65,17 +68,19 @@ router.get("/batches", async (request, response, next) => {
 
 router.get("/sales", async (request, response, next) => {
   try {
-    const sales = await PosSale.find().populate("location", "name city").populate("customer", "name email phone customerSource").sort({ createdAt: -1 }).limit(100).lean();
+    const sales = await PosSale.find(request.user.locationId ? { location: request.user.locationId } : {}).populate("location", "name city").populate("customer", "name email phone customerSource").sort({ createdAt: -1 }).limit(100).lean();
     response.json({ success: true, data: sales });
   } catch (error) { next(error); }
 });
 
 router.get("/orders", async (request, response, next) => {
   try {
-    const orders = await Order.find({
+    const orderFilter = {
       status: "Processing",
       $or: [{ posInvoiceNumber: "" }, { posInvoiceNumber: { $exists: false } }],
-    }).populate("customer", "name email phone customerSource").populate("store", "name city").sort({ createdAt: 1 }).limit(100).lean();
+    };
+    if (request.user.locationId) orderFilter.store = request.user.locationId;
+    const orders = await Order.find(orderFilter).populate("customer", "name email phone customerSource").populate("store", "name city").sort({ createdAt: 1 }).limit(100).lean();
     const existingInvoices = await PosSale.find({ order: { $in: orders.map((order) => order._id) } }).select("order").lean();
     const invoicedOrderIds = new Set(existingInvoices.map((sale) => sale.order.toString()));
     response.json({ success: true, data: orders.filter((order) => !invoicedOrderIds.has(order._id.toString())) });
@@ -88,13 +93,15 @@ router.post("/orders/:orderId/invoice", async (request, response, next) => {
     if (!fulfillment.success) return response.status(400).json({ success: false, message: "Select a batch for every customer order item." });
     const order = await Order.findById(request.params.orderId).populate("customer", "name email phone customerSource").populate("store", "name city");
     if (!order) return response.status(404).json({ success: false, message: "Customer order not found." });
+    if (request.user.locationId && (!order.store || order.store._id.toString() !== request.user.locationId)) return response.status(403).json({ success: false, message: "You can only invoice orders assigned to your store location." });
     if (order.status !== "Processing") return response.status(409).json({ success: false, message: "Only processing customer orders can be invoiced from POS." });
     if (order.posInvoiceNumber || await PosSale.exists({ order: order._id })) return response.status(409).json({ success: false, message: "This customer order already has a POS invoice." });
     const orderItemIndexes = fulfillment.data.items.map((item) => item.orderItemIndex);
     if (orderItemIndexes.length !== order.items.length || new Set(orderItemIndexes).size !== order.items.length || order.items.some((_, index) => !orderItemIndexes.includes(index))) {
       return response.status(400).json({ success: false, message: "Select exactly one batch for each customer order item." });
     }
-    const location = await StoreLocation.findOne({ _id: fulfillment.data.locationId, active: true }).select("_id name isDefault").lean();
+    if (request.user.locationId && fulfillment.data.locationId !== request.user.locationId) return response.status(403).json({ success: false, message: "You can only fulfill orders at your assigned store location." });
+    const location = await StoreLocation.findOne({ _id: request.user.locationId || fulfillment.data.locationId, active: true }).select("_id name isDefault").lean();
     if (!location) return response.status(400).json({ success: false, message: "Select an active store location." });
     if (order.store && !order.store._id.equals(location._id)) return response.status(400).json({ success: false, message: `Fulfill this order at ${order.store.name}.` });
 
@@ -246,9 +253,10 @@ router.post("/sales", async (request, response, next) => {
     const parsed = saleSchema.safeParse(request.body);
     if (!parsed.success) return response.status(400).json({ success: false, message: "Check the invoice details and product quantities." });
     const data = parsed.data;
+    if (request.user.locationId && data.locationId !== request.user.locationId) return response.status(403).json({ success: false, message: "You can only create POS sales at your assigned store location." });
     const customer = data.customerId ? await User.findOne({ _id: data.customerId, role: "customer", status: "Active" }).select("name customerSource").lean() : null;
     if (data.customerId && !customer) return response.status(400).json({ success: false, message: "Select an active customer." });
-    const location = await StoreLocation.findOne({ _id: data.locationId, active: true }).select("_id name isDefault").lean();
+    const location = await StoreLocation.findOne({ _id: request.user.locationId || data.locationId, active: true }).select("_id name isDefault").lean();
     if (!location) return response.status(400).json({ success: false, message: "Select an active store location." });
 
     const productIds = [...new Set(data.items.map((item) => item.productId))];

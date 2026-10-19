@@ -75,7 +75,7 @@ const AdminPos = () => {
       try {
         const [productResponse, locationResponse, offerResponse, salesResponse, customerResponse, orderResponse] = await Promise.all([
           fetch(`${API_URL}/api/products`, { credentials: "include" }),
-          fetch(`${API_URL}/api/stores`),
+          fetch(`${API_URL}/api/stores`, { credentials: "include" }),
           fetch(`${API_URL}/api/catalog/offers`, { credentials: "include" }),
           fetch(`${API_URL}/api/pos/sales`, { credentials: "include" }),
           fetch(`${API_URL}/api/customers`, { credentials: "include" }),

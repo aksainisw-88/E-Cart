@@ -6,6 +6,7 @@ const Purchase = require("../models/Purchase");
 const Vendor = require("../models/Vendor");
 const VendorPayment = require("../models/VendorPayment");
 const PurchaseAdjustment = require("../models/PurchaseAdjustment");
+const StoreLocation = require("../models/StoreLocation");
 
 const router = express.Router();
 const REPORT_ROW_LIMIT = 5000;
@@ -17,14 +18,25 @@ const sendReportRows = (response, rows, summary) => response.json({
   data: { rows: rows.slice(0, REPORT_ROW_LIMIT), summary, total: rows.length, limited: rows.length > REPORT_ROW_LIMIT },
 });
 
-const getProfitSales = async (from, to) => {
+const scopedFilter = (filter, scope) => scope ? { $and: [filter, scope] } : filter;
+const getReportLocation = async (request) => {
+  if (!request.user.locationId) return null;
+  const location = await StoreLocation.findOne({ _id: request.user.locationId, active: true }).select("_id isDefault").lean();
+  if (!location) throw Object.assign(new Error("Your assigned store location is no longer available."), { statusCode: 403 });
+  return location;
+};
+const purchaseLocationScope = (location) => location?.isDefault
+  ? { $or: [{ location: location._id }, { location: null }] }
+  : location ? { location: location._id } : null;
+
+const getProfitSales = async (from, to, location) => {
   const dateFilter = { createdAt: { $gte: from, $lte: to } };
   const [posSales, onlineOrders] = await Promise.all([
-    PosSale.find({ ...dateFilter, paymentStatus: "Paid" })
+    PosSale.find(scopedFilter({ ...dateFilter, paymentStatus: "Paid" }, location ? { location: location._id } : null))
       .populate("customer", "name")
       .populate("items.purchase", "unitCost")
       .sort({ createdAt: -1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
-    Order.find({ ...dateFilter, paymentStatus: "Paid", status: { $ne: "Cancelled" }, $or: [{ posInvoiceNumber: "" }, { posInvoiceNumber: { $exists: false } }] })
+    Order.find(scopedFilter({ ...dateFilter, paymentStatus: "Paid", status: { $ne: "Cancelled" }, $or: [{ posInvoiceNumber: "" }, { posInvoiceNumber: { $exists: false } }] }, location ? { store: location._id } : null))
       .populate("customer", "name")
       .sort({ createdAt: -1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
   ]);
@@ -88,15 +100,17 @@ const getDateRange = (request) => {
 
 router.get("/sales-transactions", async (request, response, next) => {
   try {
+    const location = await getReportLocation(request);
     const { from, to } = getDateRange(request);
+    const filter = scopedFilter({ createdAt: { $gte: from, $lte: to } }, location ? { location: location._id } : null);
     const [sales, total] = await Promise.all([
-      PosSale.find({ createdAt: { $gte: from, $lte: to } })
+      PosSale.find(filter)
         .populate("customer", "name email phone customerSource")
         .populate("location", "name city")
         .sort({ createdAt: -1 })
         .limit(5000)
         .lean(),
-      PosSale.countDocuments({ createdAt: { $gte: from, $lte: to } }),
+      PosSale.countDocuments(filter),
     ]);
     response.json({ success: true, data: { sales, total, from, to, limited: total > sales.length } });
   } catch (error) {
@@ -107,14 +121,16 @@ router.get("/sales-transactions", async (request, response, next) => {
 
 router.get("/:reportType", async (request, response, next) => {
   try {
+    const location = await getReportLocation(request);
     const { from, to } = getDateRange(request);
     const { reportType } = request.params;
     const dateFilter = { $gte: from, $lte: to };
+    const purchaseScope = purchaseLocationScope(location);
 
     if (reportType === "purchase-transactions") {
       const [entries, total] = await Promise.all([
-        Purchase.find({ purchaseDate: dateFilter }).populate("vendor", "name email phone").populate("product", "name").populate("location", "name").sort({ purchaseDate: -1, createdAt: -1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
-        Purchase.countDocuments({ purchaseDate: dateFilter }),
+        Purchase.find(scopedFilter({ purchaseDate: dateFilter }, purchaseScope)).populate("vendor", "name email phone").populate("product", "name").populate("location", "name").sort({ purchaseDate: -1, createdAt: -1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
+        Purchase.countDocuments(scopedFilter({ purchaseDate: dateFilter }, purchaseScope)),
       ]);
       const rows = entries.map((entry) => ({
         key: String(entry._id), date: entry.purchaseDate, invoice: entry.invoiceNumber,
@@ -133,7 +149,7 @@ router.get("/:reportType", async (request, response, next) => {
     }
 
     if (reportType === "profit" || reportType === "margin") {
-      const sales = await getProfitSales(from, to);
+      const sales = await getProfitSales(from, to, location);
       if (reportType === "profit") {
         const rows = sales.map((sale) => ({
           key: sale.key, date: sale.date, invoice: sale.invoice, source: sale.source, customer: sale.customer,
@@ -177,8 +193,8 @@ router.get("/:reportType", async (request, response, next) => {
 
     if (reportType === "top-products") {
       const [posSales, orders] = await Promise.all([
-        PosSale.find({ createdAt: dateFilter }).select("invoiceNumber items").sort({ createdAt: -1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
-        Order.find({ createdAt: dateFilter, status: { $ne: "Cancelled" }, paymentStatus: { $ne: "Failed" }, $or: [{ posInvoiceNumber: "" }, { posInvoiceNumber: { $exists: false } }] }).select("orderNumber items promoDiscount").sort({ createdAt: -1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
+        PosSale.find(scopedFilter({ createdAt: dateFilter }, location ? { location: location._id } : null)).select("invoiceNumber items promotionDiscount").sort({ createdAt: -1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
+        Order.find(scopedFilter({ createdAt: dateFilter, status: { $ne: "Cancelled" }, paymentStatus: { $ne: "Failed" }, $or: [{ posInvoiceNumber: "" }, { posInvoiceNumber: { $exists: false } }] }, location ? { store: location._id } : null)).select("orderNumber items promoDiscount").sort({ createdAt: -1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
       ]);
       const products = new Map();
       const addProduct = (productId, name, quantity, freeQuantity, revenue, invoice) => {
@@ -218,11 +234,16 @@ router.get("/:reportType", async (request, response, next) => {
     }
 
     if (reportType === "vendor-ledger") {
-      const [purchases, payments, adjustments] = await Promise.all([
-        Purchase.find({ purchaseDate: dateFilter }).populate("vendor", "name").sort({ purchaseDate: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
-        VendorPayment.find({ paymentDate: dateFilter }).populate("vendor", "name").sort({ paymentDate: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
-        PurchaseAdjustment.find({ adjustmentDate: dateFilter, vendor: { $ne: null } }).populate("vendor", "name").sort({ adjustmentDate: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
+      const [purchases, adjustments] = await Promise.all([
+        Purchase.find(scopedFilter({ purchaseDate: dateFilter }, purchaseScope)).populate("vendor", "name").sort({ purchaseDate: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
+        PurchaseAdjustment.find(scopedFilter({ adjustmentDate: dateFilter, vendor: { $ne: null } }, location ? { location: location._id } : null)).populate("vendor", "name").sort({ adjustmentDate: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
       ]);
+      const paymentFilter = { paymentDate: dateFilter };
+      if (location) {
+        const locationPurchaseIds = await Purchase.distinct("_id", scopedFilter({}, purchaseScope));
+        paymentFilter.purchase = { $in: locationPurchaseIds };
+      }
+      const payments = await VendorPayment.find(paymentFilter).populate("vendor", "name").sort({ paymentDate: 1 }).limit(REPORT_ROW_LIMIT + 1).lean();
       const events = [
         ...purchases.map((entry) => ({ date: entry.purchaseDate, accountId: entityId(entry.vendor), account: entityName(entry.vendor), invoice: entry.invoiceNumber, description: `Purchase · ${entry.productName}`, debit: Number(entry.total) || 0, credit: 0 })),
         ...payments.map((entry) => ({ date: entry.paymentDate, accountId: entityId(entry.vendor), account: entityName(entry.vendor), invoice: entry.purchase ? "Payment" : "Advance payment", description: entry.notes || entry.paymentMode || "Vendor payment", debit: 0, credit: Number(entry.amount) || 0 })),
@@ -243,8 +264,8 @@ router.get("/:reportType", async (request, response, next) => {
 
     if (reportType === "customer-ledger") {
       const [orders, posSales] = await Promise.all([
-        Order.find({ status: { $ne: "Cancelled" }, paymentStatus: { $in: ["Paid", "Pending"] }, $and: [{ $or: [{ createdAt: dateFilter }, { paidAt: dateFilter }] }, { $or: [{ posInvoiceNumber: "" }, { posInvoiceNumber: { $exists: false } }] }] }).populate("customer", "name email").sort({ createdAt: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
-        PosSale.find({ createdAt: dateFilter, customer: { $ne: null } }).populate("customer", "name email").sort({ createdAt: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
+        Order.find(scopedFilter({ status: { $ne: "Cancelled" }, paymentStatus: { $in: ["Paid", "Pending"] }, $and: [{ $or: [{ createdAt: dateFilter }, { paidAt: dateFilter }] }, { $or: [{ posInvoiceNumber: "" }, { posInvoiceNumber: { $exists: false } }] }] }, location ? { store: location._id } : null)).populate("customer", "name email").sort({ createdAt: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
+        PosSale.find(scopedFilter({ createdAt: dateFilter, customer: { $ne: null } }, location ? { location: location._id } : null)).populate("customer", "name email").sort({ createdAt: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
       ]);
       const events = [];
       orders.forEach((order) => {
@@ -280,8 +301,8 @@ router.get("/:reportType", async (request, response, next) => {
     if (reportType === "outstanding-customers") {
       const asOf = { $lte: to };
       const [orders, posSales] = await Promise.all([
-        Order.find({ createdAt: asOf, paymentStatus: { $in: ["Pending", "Paid"] }, $or: [{ posInvoiceNumber: "" }, { posInvoiceNumber: { $exists: false } }] }).populate("customer", "name email phone").sort({ createdAt: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
-        PosSale.find({ createdAt: asOf, paymentStatus: "Pending", customer: { $ne: null } }).populate("customer", "name email phone").sort({ createdAt: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
+        Order.find(scopedFilter({ createdAt: asOf, paymentStatus: { $in: ["Pending", "Paid"] }, $or: [{ posInvoiceNumber: "" }, { posInvoiceNumber: { $exists: false } }] }, location ? { store: location._id } : null)).populate("customer", "name email phone").sort({ createdAt: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
+        PosSale.find(scopedFilter({ createdAt: asOf, paymentStatus: "Pending", customer: { $ne: null } }, location ? { location: location._id } : null)).populate("customer", "name email phone").sort({ createdAt: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
       ]);
       const accounts = new Map();
       [...orders.filter((order) => {
@@ -303,6 +324,37 @@ router.get("/:reportType", async (request, response, next) => {
     }
 
     if (reportType === "outstanding-vendors") {
+      if (location) {
+        const [purchases, adjustments] = await Promise.all([
+          Purchase.find(scopedFilter({ purchaseDate: { $lte: to } }, purchaseScope)).select("vendor total paidAmount purchaseDate").sort({ purchaseDate: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
+          PurchaseAdjustment.find({ location: location._id, adjustmentDate: { $lte: to }, vendor: { $ne: null } }).select("vendor balanceAdjustment").lean(),
+        ]);
+        const balances = new Map();
+        purchases.forEach((purchase) => {
+          const id = entityId(purchase.vendor);
+          if (!id) return;
+          const balance = balances.get(id) || { outstanding: 0, invoices: 0 };
+          const due = Math.max(0, (Number(purchase.total) || 0) - (Number(purchase.paidAmount) || 0));
+          balance.outstanding += due;
+          if (due > 0) balance.invoices += 1;
+          balances.set(id, balance);
+        });
+        adjustments.forEach((adjustment) => {
+          const id = entityId(adjustment.vendor);
+          if (!id) return;
+          const balance = balances.get(id) || { outstanding: 0, invoices: 0 };
+          balance.outstanding += Number(adjustment.balanceAdjustment) || 0;
+          balances.set(id, balance);
+        });
+        const vendorIds = [...balances.keys()];
+        const vendors = vendorIds.length ? await Vendor.find({ _id: { $in: vendorIds } }).select("name email phone").sort({ name: 1 }).lean() : [];
+        const rows = vendors.map((vendor) => {
+          const balance = balances.get(String(vendor._id));
+          return { key: String(vendor._id), account: vendor.name, email: vendor.email || "-", phone: vendor.phone || "-", invoices: balance.invoices, outstanding: roundMoney(balance.outstanding), status: "Outstanding" };
+        }).filter((vendor) => vendor.outstanding > 0).sort((first, second) => second.outstanding - first.outstanding);
+        const summary = { accounts: rows.length, invoices: rows.reduce((sum, row) => sum + row.invoices, 0), outstanding: roundMoney(rows.reduce((sum, row) => sum + row.outstanding, 0)) };
+        return sendReportRows(response, rows, summary);
+      }
       const [vendors, purchases] = await Promise.all([
         Vendor.find({ pendingAmount: { $gt: 0 } }).sort({ pendingAmount: -1, name: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),
         Purchase.find({ purchaseDate: { $lte: to }, paymentStatus: { $ne: "Paid" } }).select("vendor total paidAmount purchaseDate").sort({ purchaseDate: 1 }).limit(REPORT_ROW_LIMIT + 1).lean(),

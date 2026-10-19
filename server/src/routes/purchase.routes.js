@@ -79,22 +79,36 @@ const getAmounts = (data) => {
 };
 const createInvoiceNumber = () => `PUR-${new Date().getFullYear()}-${Date.now().toString().slice(-8)}`;
 
-const changeProductStock = (product, locationId, quantityChange) => {
+const changeProductStock = (product, locationId, quantityChange, legacyStockLocationId = locationId) => {
   if (!locationId) {
     product.stock = Math.max(0, Number(product.stock || 0) + quantityChange);
     return;
   }
   product.locationStock ||= [];
   if (!product.locationStock.length && Number(product.stock) > 0) {
-    product.locationStock.push({ location: locationId, quantity: Number(product.stock) });
+    product.locationStock.push({ location: legacyStockLocationId, quantity: Number(product.stock) });
   }
   const locationEntry = product.locationStock.find((entry) => entry.location.toString() === locationId.toString());
   if (locationEntry) locationEntry.quantity = Math.max(0, locationEntry.quantity + quantityChange);
   else if (quantityChange > 0) product.locationStock.push({ location: locationId, quantity: quantityChange });
   product.stock = product.locationStock.reduce((total, entry) => total + (Number(entry.quantity) || 0), 0);
 };
+const changeProductStockAtLocation = async (product, locationId, quantityChange) => {
+  if (!product || !locationId) return changeProductStock(product, locationId, quantityChange);
+  const defaultLocation = await StoreLocation.findOne({ isDefault: true }).select("_id").lean();
+  changeProductStock(product, locationId, quantityChange, defaultLocation?._id || locationId);
+};
 
 const resolveActiveLocation = async (locationId) => resolveLocation(locationId);
+const assignedLocationFor = async (request) => {
+  if (!request.user.locationId) return null;
+  const location = await StoreLocation.findOne({ _id: request.user.locationId, active: true }).select("_id name isDefault").lean();
+  if (!location) throw Object.assign(new Error("Your assigned store location is no longer available."), { statusCode: 403 });
+  return location;
+};
+const purchaseBelongsToLocation = (purchase, location) => Boolean(
+  location && (purchase.location?.toString() === location._id.toString() || (location.isDefault && !purchase.location)),
+);
 
 const findVariant = (product, variantInput) => {
   const value = normalizeText(variantInput);
@@ -118,14 +132,14 @@ const updateVariantStock = (product, variantInput, locationId, quantityChange) =
   else if (quantityChange > 0) target.locationStock.push({ location: locationId, quantity: quantityChange });
 };
 
-const createPurchase = async (input, invoiceGroupId) => {
+const createPurchase = async (input, invoiceGroupId, assignedLocationId = "") => {
   const groupId = invoiceGroupId || `PINV-${randomUUID()}`;
   if (Array.isArray(input?.items) && input.items.length) {
     const created = [];
-    for (const item of input.items) created.push(await createPurchase(item, groupId));
+    for (const item of input.items) created.push(await createPurchase(item, groupId, assignedLocationId));
     return created;
   }
-  const data = purchaseSchema.parse(input);
+  const data = purchaseSchema.parse(assignedLocationId ? { ...input, location: assignedLocationId } : input);
   const [vendor, product] = await Promise.all([resolveVendor(data.vendor), resolveProduct(data.product)]);
   if (!product) throw new Error("Product not found. Use the product ID or exact product name.");
   await product.populate("purchaseTaxCategory", "taxCode taxRate");
@@ -138,7 +152,7 @@ const createPurchase = async (input, invoiceGroupId) => {
   const amounts = getAmounts(purchaseData);
   const purchase = await Purchase.create({ ...purchaseData, invoiceGroupId: groupId, variant: productVariant?.name || "", ...amounts, remainingQuantity: data.quantity + data.freeQuantity, invoiceNumber: createInvoiceNumber(), vendor: vendor._id, product: product._id, location: location?._id, productName: product.name });
   const purchaseQuantity = data.quantity + data.freeQuantity;
-  changeProductStock(product, location?._id, purchaseQuantity);
+  await changeProductStockAtLocation(product, location?._id, purchaseQuantity);
   if (productVariant) updateVariantStock(product, productVariant.name, location?._id, purchaseQuantity);
   product.costPrice = data.unitCost;
   if (data.mrp > 0) product.originalPrice = data.mrp;
@@ -147,27 +161,35 @@ const createPurchase = async (input, invoiceGroupId) => {
   await product.save();
   vendor.pendingAmount += amounts.total;
   await vendor.save();
-  return purchase.populate("vendor", "name").then((entry) => entry.populate("product", "name category price stock")).then((entry) => entry.populate("location", "name city"));
+  return purchase.populate("vendor", "name").then((entry) => entry.populate("product", "name category price")).then((entry) => entry.populate("location", "name city"));
 };
 
 router.get("/", async (request, response, next) => {
   try {
     const filter = request.query.vendor ? { vendor: request.query.vendor } : {};
-    const purchases = await Purchase.find(filter).populate("vendor", "name").populate("product", "name stock").populate("location", "name city").sort({ purchaseDate: -1, createdAt: -1 });
+    const assignedLocation = await assignedLocationFor(request);
+    if (assignedLocation) {
+      const locationFilter = assignedLocation.isDefault
+        ? { $or: [{ location: assignedLocation._id }, { location: null }] }
+        : { location: assignedLocation._id };
+      Object.assign(filter, locationFilter);
+    }
+    const purchases = await Purchase.find(filter).populate("vendor", "name").populate("product", "name").populate("location", "name city").sort({ purchaseDate: -1, createdAt: -1 });
     response.json({ success: true, data: purchases });
   } catch (error) { next(error); }
 });
 
 router.get("/adjustments", async (request, response, next) => {
   try {
-    const adjustments = await PurchaseAdjustment.find().populate("product", "name stock").populate("vendor", "name").populate("location", "name").sort({ adjustmentDate: -1, createdAt: -1 });
+    const assignedLocation = await assignedLocationFor(request);
+    const adjustments = await PurchaseAdjustment.find(assignedLocation ? { location: assignedLocation._id } : {}).populate("product", "name").populate("vendor", "name").populate("location", "name").sort({ adjustmentDate: -1, createdAt: -1 });
     response.json({ success: true, data: adjustments });
   } catch (error) { next(error); }
 });
 
 router.post("/", async (request, response, next) => {
   try {
-    const purchase = await createPurchase(request.body);
+    const purchase = await createPurchase(request.body, undefined, request.user.locationId || "");
     response.status(201).json({ success: true, data: purchase });
   } catch (error) { next(error); }
 });
@@ -194,15 +216,20 @@ router.post("/variants", async (request, response, next) => {
 
 router.post("/adjustment", async (request, response, next) => {
   try {
-    const data = adjustmentSchema.parse(request.body);
+    const assignedLocation = await assignedLocationFor(request);
+    if (assignedLocation && request.body.location && request.body.location !== assignedLocation._id.toString()) return response.status(403).json({ success: false, message: "You can only adjust stock at your assigned store location." });
+    const data = adjustmentSchema.parse(assignedLocation ? { ...request.body, location: assignedLocation._id.toString() } : request.body);
     if (!data.stockAdjustment && !data.balanceAdjustment) return response.status(400).json({ success: false, message: "Enter a stock or balance adjustment." });
     const product = await resolveProduct(data.product);
     if (!product) return response.status(404).json({ success: false, message: "Product not found." });
-    const location = data.stockAdjustment ? await resolveActiveLocation(data.location) : null;
+    const location = data.stockAdjustment || assignedLocation ? await resolveActiveLocation(data.location) : null;
     if (data.stockAdjustment && !location) return response.status(400).json({ success: false, message: "Select an active stock location for this adjustment." });
     if (data.stockAdjustment) {
       product.locationStock ||= [];
-      if (!product.locationStock.length && Number(product.stock) > 0) product.locationStock.push({ location: location._id, quantity: Number(product.stock) });
+      if (!product.locationStock.length && Number(product.stock) > 0) {
+        const defaultLocation = await StoreLocation.findOne({ isDefault: true }).select("_id").lean();
+        product.locationStock.push({ location: defaultLocation?._id || location._id, quantity: Number(product.stock) });
+      }
       const locationEntry = product.locationStock.find((entry) => entry.location.toString() === location._id.toString());
       const locationQuantity = Number(locationEntry?.quantity) || 0;
       if (locationQuantity + data.stockAdjustment < 0) return response.status(400).json({ success: false, message: `Stock adjustment cannot make ${location.name} inventory negative.` });
@@ -221,6 +248,7 @@ router.post("/adjustment", async (request, response, next) => {
 
 router.post("/import", csvUpload.single("file"), async (request, response, next) => {
   try {
+    const assignedLocation = await assignedLocationFor(request);
     if (!request.file) return response.status(400).json({ success: false, message: "CSV file is required" });
     const rows = parse(request.file.buffer, { columns: true, skip_empty_lines: true, trim: true, bom: true });
     if (!rows.length) return response.status(400).json({ success: false, message: "The CSV does not contain any purchase rows." });
@@ -232,7 +260,7 @@ router.post("/import", csvUpload.single("file"), async (request, response, next)
         variant: row.variant || row.variantName || row.variantSku || "",
         vendorInvoiceNumber: row.vendorInvoiceNumber || row.entryNo || row.entryNumber || row["entry no"] || row.invoiceNumber || row.invoiceNo || row.invoice || row.billNumber,
         referenceNumber: row.referenceNumber || row.ref || row.reference || "",
-        location: row.location || row.locationName || row.storeLocation || row.branch || "",
+        location: assignedLocation?._id.toString() || row.location || row.locationName || row.storeLocation || row.branch || "",
         batchNumber: row.batchNumber || row.batch || "",
         expiryDate: row.expiryDate || row.expiry || undefined,
         mrp: normalizeNumber(row.mrp ?? row.mrpPrice ?? row.price, 0),
@@ -279,7 +307,7 @@ router.post("/import", csvUpload.single("file"), async (request, response, next)
     });
 
     const imported = [];
-    for (const items of groups.values()) imported.push(...await createPurchase({ items }));
+    for (const items of groups.values()) imported.push(...await createPurchase({ items }, undefined, assignedLocation?._id.toString() || ""));
     response.status(201).json({ success: true, imported: groups.size, importedInvoices: groups.size, importedLines: imported.length, skippedRows, data: imported });
   } catch (error) { next(error); }
 });
@@ -288,7 +316,12 @@ router.put("/:id", async (request, response, next) => {
   try {
     const oldPurchase = await Purchase.findById(request.params.id);
     if (!oldPurchase) return response.status(404).json({ success: false, message: "Purchase entry not found" });
-    const data = purchaseSchema.parse(request.body);
+    const assignedLocation = await assignedLocationFor(request);
+    if (assignedLocation && !purchaseBelongsToLocation(oldPurchase, assignedLocation)) return response.status(404).json({ success: false, message: "Purchase entry not found at your assigned location." });
+    if (assignedLocation && request.body.location && request.body.location !== assignedLocation._id.toString()) return response.status(403).json({ success: false, message: "You can only edit purchases for your assigned store location." });
+    const data = purchaseSchema.parse(assignedLocation ? { ...request.body, location: assignedLocation._id.toString() } : request.body);
+    const defaultLocation = assignedLocation?.isDefault ? assignedLocation : await StoreLocation.findOne({ isDefault: true }).select("_id").lean();
+    const oldLocationId = oldPurchase.location || defaultLocation?._id;
     const [vendor, product] = await Promise.all([resolveVendor(data.vendor), resolveProduct(data.product)]);
     if (!product) return response.status(404).json({ success: false, message: "Product not found" });
     await product.populate("purchaseTaxCategory", "taxCode taxRate");
@@ -301,7 +334,7 @@ router.put("/:id", async (request, response, next) => {
     const oldVendor = await Vendor.findById(oldPurchase.vendor);
     const sameProduct = Boolean(oldProduct && oldProduct._id.equals(product._id));
     const stockProduct = sameProduct ? oldProduct : product;
-    const sameProductLocation = sameProduct && oldPurchase.location?.toString() === location?._id.toString();
+    const sameProductLocation = sameProduct && oldLocationId?.toString() === location?._id.toString();
     const oldPurchasedQuantity = Number(oldPurchase.quantity) + Number(oldPurchase.freeQuantity || 0);
     const oldRemainingQuantity = Math.min(oldPurchasedQuantity, Math.max(0, Number(oldPurchase.remainingQuantity ?? oldPurchasedQuantity)));
     const soldQuantity = oldPurchasedQuantity - oldRemainingQuantity;
@@ -314,18 +347,18 @@ router.put("/:id", async (request, response, next) => {
     const sameVendor = Boolean(oldVendor && oldVendor._id.equals(vendor._id));
     const balanceVendor = sameVendor ? oldVendor : vendor;
     if (sameProductLocation) {
-      changeProductStock(stockProduct, location?._id, remainingQuantity - oldRemainingQuantity);
+      await changeProductStockAtLocation(stockProduct, location?._id, remainingQuantity - oldRemainingQuantity);
     } else if (oldProduct) {
-      changeProductStock(oldProduct, oldPurchase.location, -oldRemainingQuantity);
+      await changeProductStockAtLocation(oldProduct, oldLocationId, -oldRemainingQuantity);
     }
-    if (oldProduct) updateVariantStock(oldProduct, oldPurchase.variant, oldPurchase.location, -oldRemainingQuantity);
+    if (oldProduct) updateVariantStock(oldProduct, oldPurchase.variant, oldLocationId, -oldRemainingQuantity);
     if (oldVendor) oldVendor.pendingAmount = Math.max(0, oldVendor.pendingAmount - oldPurchase.total);
     if (oldProduct && !sameProduct) await oldProduct.save();
     if (oldVendor && !sameVendor) await oldVendor.save();
     const purchaseData = { ...data, taxCode: product.purchaseTaxCategory?.taxCode || data.taxCode, taxRate: product.purchaseTaxCategory ? Number(product.purchaseTaxCategory.taxRate) || 0 : data.taxRate };
     const amounts = getAmounts(purchaseData);
-    const purchase = await Purchase.findByIdAndUpdate(request.params.id, { ...purchaseData, variant: productVariant?.name || "", ...amounts, remainingQuantity, invoiceNumber: oldPurchase.invoiceNumber, vendor: vendor._id, product: product._id, location: location?._id, productName: product.name }, { new: true, runValidators: true }).populate("vendor", "name").populate("product", "name stock").populate("location", "name city");
-    if (!sameProductLocation) changeProductStock(stockProduct, location?._id, remainingQuantity);
+    const purchase = await Purchase.findByIdAndUpdate(request.params.id, { ...purchaseData, variant: productVariant?.name || "", ...amounts, remainingQuantity, invoiceNumber: oldPurchase.invoiceNumber, vendor: vendor._id, product: product._id, location: location?._id, productName: product.name }, { new: true, runValidators: true }).populate("vendor", "name").populate("product", "name").populate("location", "name city");
+    if (!sameProductLocation) await changeProductStockAtLocation(stockProduct, location?._id, remainingQuantity);
     if (productVariant) updateVariantStock(stockProduct, productVariant.name, location?._id, remainingQuantity);
     stockProduct.costPrice = data.unitCost;
     if (data.mrp > 0) stockProduct.originalPrice = data.mrp;
@@ -342,13 +375,17 @@ router.delete("/:id", async (request, response, next) => {
   try {
     const purchase = await Purchase.findById(request.params.id);
     if (!purchase) return response.status(404).json({ success: false, message: "Purchase entry not found" });
+    const assignedLocation = await assignedLocationFor(request);
+    if (assignedLocation && !purchaseBelongsToLocation(purchase, assignedLocation)) return response.status(404).json({ success: false, message: "Purchase entry not found at your assigned location." });
+    const defaultLocation = assignedLocation?.isDefault ? assignedLocation : await StoreLocation.findOne({ isDefault: true }).select("_id").lean();
+    const purchaseLocationId = purchase.location || defaultLocation?._id;
     const product = await Product.findById(purchase.product);
     const vendor = await Vendor.findById(purchase.vendor);
     if (product) {
       const purchasedQuantity = Number(purchase.quantity) + Number(purchase.freeQuantity || 0);
       const remainingQuantity = Math.min(purchasedQuantity, Math.max(0, Number(purchase.remainingQuantity ?? purchasedQuantity)));
-      changeProductStock(product, purchase.location, -remainingQuantity);
-      updateVariantStock(product, purchase.variant, purchase.location, -remainingQuantity);
+      await changeProductStockAtLocation(product, purchaseLocationId, -remainingQuantity);
+      updateVariantStock(product, purchase.variant, purchaseLocationId, -remainingQuantity);
       await product.save();
     }
     if (vendor) { vendor.pendingAmount = Math.max(0, vendor.pendingAmount - purchase.total); await vendor.save(); }
