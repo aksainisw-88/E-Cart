@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { MapPin, Printer, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { MapPin, Printer, Plus, Save, Search, ShoppingCart, Trash2, X } from "lucide-react";
 import SearchableSelect from "../components/admin/SearchableSelect";
 
 const formatCurrency = (value) =>
@@ -35,6 +35,7 @@ const applyAutomaticPromotions = (items, availableOffers) => items.map((item) =>
 });
 
 const AdminPos = () => {
+  const [showPosForm, setShowPosForm] = useState(false);
   const [inventory, setInventory] = useState([]);
   const [locations, setLocations] = useState([]);
   const [selectedLocationId, setSelectedLocationId] = useState("");
@@ -451,6 +452,7 @@ const AdminPos = () => {
       setSelectedOfferId("");
       setSelectedProductId(inventory[0]?.id || "");
       setSelectedCustomerId("");
+      setShowPosForm(false);
       if (printAfterSave) printReceipt(receipt, receiptWindow);
     } catch (saveError) {
       receiptWindow?.close();
@@ -498,6 +500,7 @@ const AdminPos = () => {
       setOpenOrders((current) => current.filter((item) => item._id !== order._id));
       setSelectedOrderId("");
       setSelectedOrderBatches({});
+      setShowPosForm(false);
       setRecentInvoices((current) => [{
         id: sale.invoiceNumber,
         customer: sale.customerName,
@@ -596,15 +599,26 @@ const AdminPos = () => {
     });
   };
 
+  const hasPosDraft = Boolean(cart.length || selectedCustomerId || selectedOrderId);
+  const totalSales = recentInvoices.reduce((sum, invoice) => sum + (Number(invoice.total) || 0), 0);
+
   return (
     <div className="mx-auto max-w-375 space-y-6">
-      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div><p className="text-sm font-medium text-primary">Store operations</p><h1 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">POS sales</h1><p className="mt-2 text-sm text-slate-500">Create an invoice and deduct stock from the selected branch.</p></div>
-        <div className="flex flex-wrap items-center gap-2"><span className={`rounded-lg border px-3 py-2 text-xs font-semibold ${loading ? "border-slate-200 bg-slate-50 text-slate-500" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{loading ? "Loading POS data" : selectedLocation?.name || "Choose a location"}</span><button type="button" onClick={printReceipt} disabled={!lastReceipt} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"><Printer className="h-4 w-4" />Last receipt</button></div>
+      <header className="flex flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:flex-row xl:items-end xl:justify-between">
+        <div><p className="text-sm font-medium text-primary">Store operations</p><h1 className="mt-1 text-3xl font-bold text-slate-900">POS sales</h1><p className="mt-2 text-sm text-slate-500">Create an invoice and deduct stock from the selected branch.</p><p className="mt-3 text-xs font-semibold text-slate-500">{recentInvoices.length} recorded · {formatCurrency(totalSales)} total</p></div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`rounded-lg border px-3 py-2 text-xs font-semibold ${loading ? "border-slate-200 bg-slate-50 text-slate-500" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{loading ? "Loading POS data" : selectedLocation?.name || "Choose a location"}</span>
+          <button type="button" onClick={printReceipt} disabled={!lastReceipt} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"><Printer className="h-4 w-4" />Last receipt</button>
+          <button type="button" onClick={() => { if (showPosForm) { setShowPosForm(false); return; } if (!hasPosDraft) { setError(""); setMessage(""); } setShowPosForm(true); }} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white shadow-sm hover:bg-primary-dark">{showPosForm ? <X className="h-4 w-4" /> : <ShoppingCart className="h-4 w-4" />}{showPosForm ? "Back to sales" : hasPosDraft ? "Continue draft" : "New sale"}</button>
+        </div>
       </header>
 
       {(error || message) && <div role={error ? "alert" : "status"} className={`rounded-lg px-4 py-3 text-sm ${error ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-800"}`}>{error || message}<button type="button" onClick={() => { setError(""); setMessage(""); }} aria-label="Dismiss message" className="float-right"><X className="h-4 w-4" /></button></div>}
 
+      {showPosForm && <div className="space-y-6">
+      <section className="rounded-xl border border-slate-200 bg-white">
+        <div className="flex flex-col justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:px-6"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary"><ShoppingCart className="h-5 w-5" /></span><div><p className="text-xs font-semibold uppercase tracking-wide text-primary">New sale</p><h2 className="text-lg font-bold text-slate-900">Customer checkout</h2></div></div><p className="text-xs text-slate-500">Select a customer and location, add products, then complete payment.</p></div>
+      </section>
       <section className="rounded-xl border border-slate-200 bg-white">
         <div className="border-b border-slate-100 px-5 py-4 sm:px-6"><p className="text-xs font-semibold uppercase tracking-wide text-primary">Invoice details</p><h2 className="mt-1 text-lg font-bold text-slate-900">Customer and location</h2></div>
         <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
@@ -682,6 +696,7 @@ const AdminPos = () => {
         </div>
         <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end"><button type="button" onClick={cancelInvoice} disabled={saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"><X className="h-4 w-4" />Clear invoice</button><button type="button" onClick={() => saveInvoice(true)} disabled={saving || loading || !cart.length || !selectedLocationId} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-primary px-4 text-sm font-semibold text-primary hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"><Printer className="h-4 w-4" />{saving ? "Saving..." : "Save & print"}</button><button type="button" onClick={() => saveInvoice(false)} disabled={saving || loading || !cart.length || !selectedLocationId} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-4 w-4" />{saving ? "Saving sale..." : "Complete sale"}</button></div>
       </section>
+      </div>}
 
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-primary">POS register</p><h2 className="mt-1 text-lg font-bold text-slate-900">Recent sales <span className="ml-1 text-sm font-medium text-slate-400">{filteredInvoices.length}</span></h2></div><label className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 sm:w-80"><Search className="h-4 w-4 shrink-0 text-slate-400" /><input value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} placeholder="Search invoice, customer, location..." className="w-full bg-transparent text-sm outline-none" /></label></div>
