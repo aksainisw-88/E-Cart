@@ -49,7 +49,8 @@ const menuPermissionSchema = z.array(z.enum([
   "/admin/support",
   "/admin/settings",
   "/admin/stores",
-])).max(23);
+  "/admin/transaction-returns",
+])).max(24);
 const adminOnlyMenus = ["/admin", "/admin/tax-categories", "/admin/users", "/admin/store", "/admin/stores", "/admin/testimonials", "/admin/hero-slider", "/admin/store/delivery", "/admin/offers", "/admin/support", "/admin/settings"];
 const withRoleMenuValidation = (schema) => schema.superRefine((data, context) => {
   if (data.role === "admin") return;

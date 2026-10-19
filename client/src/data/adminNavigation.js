@@ -18,6 +18,7 @@ import {
   Boxes,
   ClipboardList,
   Percent,
+  FileMinus2,
 } from "lucide-react";
 
 export const adminNavigation = [
@@ -42,6 +43,11 @@ export const adminNavigation = [
   { label: "Customers", to: "/admin/customers", icon: Users, roles: ["admin", "manager", "user"] },
   { label: "Orders", to: "/admin/orders", icon: ShoppingCart, roles: ["admin", "manager", "user"] },
   { label: "Returns & replacements", to: "/admin/returns", icon: RotateCcw, roles: ["admin", "manager", "user"] },
+  { label: "Transaction returns", to: "/admin/transaction-returns", icon: FileMinus2, roles: ["admin", "manager", "user"], children: [
+    { label: "Sales return", to: "/admin/sales-return", icon: RotateCcw, permission: ["/admin/transaction-returns", "/admin/returns"], roles: ["admin", "manager", "user"] },
+    { label: "Replacement", to: "/admin/replacements", icon: RotateCcw, permission: ["/admin/transaction-returns", "/admin/returns"], roles: ["admin", "manager", "user"] },
+    { label: "Purchase return", to: "/admin/purchase-return", icon: Package, permission: ["/admin/transaction-returns", "/admin/returns"], roles: ["admin", "manager", "user"] },
+  ] },
   { label: "POS", to: "/admin/pos", icon: ShoppingCart, roles: ["admin", "manager", "user"] },
   { label: "Purchase entry", to: "/admin/purchase-entry", icon: Package, roles: ["admin", "manager", "user"] },
   { label: "Vendors", to: "/admin/vendors", icon: Store, roles: ["admin", "manager", "user"] },

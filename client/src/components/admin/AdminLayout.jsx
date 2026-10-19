@@ -13,6 +13,7 @@ const AdminLayout = () => {
   const [expandedMenu, setExpandedMenu] = useState(() => {
     const path = window.location.pathname;
     if (path === "/admin/reports" || path.startsWith("/admin/reports/") || path === "/admin/sales-transactions") return "/admin/reports";
+    if (["/admin/sales-return", "/admin/replacements", "/admin/purchase-return"].includes(path)) return "/admin/transaction-returns";
     if (path.startsWith("/admin/store/") || ["/admin/store", "/admin/stores", "/admin/testimonials", "/admin/hero-slider"].includes(path)) return "/admin/store";
     return "";
   });

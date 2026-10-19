@@ -31,6 +31,7 @@ import AdminInventory from "./pages/AdminInventory";
 import AdminReturns from "./pages/AdminReturns";
 import ResetPassword from "./pages/ResetPassword";
 import AdminLogin from "./pages/AdminLogin";
+import AdminTransactionReturns from "./pages/AdminTransactionReturns";
 
 const RequireCustomerAuth = ({ children }) => {
   const location = useLocation();
@@ -99,6 +100,10 @@ function App() {
           <Route path="orders" element={<AdminSection section="orders" />} />
           <Route path="orders/:orderId" element={<AdminOrderDetails />} />
           <Route path="returns" element={<AdminReturns />} />
+          <Route path="transaction-returns" element={<Navigate to="/admin/sales-return" replace />} />
+          <Route path="sales-return" element={<AdminTransactionReturns type="Sales Return" />} />
+          <Route path="replacements" element={<AdminTransactionReturns type="Replacement" />} />
+          <Route path="purchase-return" element={<AdminTransactionReturns type="Purchase Return" />} />
           <Route path="pos" element={<AdminSection section="pos" />} />
           <Route path="purchase-entry" element={<AdminSection section="purchase-entry" />} />
           <Route path="vendors" element={<AdminSection section="vendors" />} />
