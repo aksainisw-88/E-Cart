@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from "react";
-import { CheckCircle2, MessageCircle, Search } from "lucide-react";
+import { CheckCircle2, MessageCircle, Search, Send } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -20,6 +20,8 @@ const AdminSupport = () => {
   const [tickets, setTickets] = useState([]);
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
+  const [replyDrafts, setReplyDrafts] = useState({});
+  const [replySavingId, setReplySavingId] = useState("");
 
   const load = () => {
     fetch(`${API_URL}/api/admin/support`, { credentials: "include" })
@@ -56,8 +58,36 @@ const AdminSupport = () => {
     }
   };
 
+  const saveReply = async (event, ticket) => {
+    event.preventDefault();
+    const adminReply = String(replyDrafts[ticket._id] ?? ticket.adminReply ?? "").trim();
+    if (!adminReply) {
+      setError("Enter a reply before sending it to the customer.");
+      return;
+    }
+
+    setReplySavingId(ticket._id);
+    setError("");
+    try {
+      const response = await fetch(`${API_URL}/api/admin/support/${ticket._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ adminReply }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to send your reply.");
+      setTickets((items) => items.map((item) => (item._id === ticket._id ? result.data : item)));
+      setReplyDrafts((items) => ({ ...items, [ticket._id]: result.data.adminReply || adminReply }));
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setReplySavingId("");
+    }
+  };
+
   const visibleTickets = tickets.filter((ticket) => {
-    const searchable = `${ticket.name || ""} ${ticket.email || ""} ${ticket.subject || ""} ${ticket.message || ""}`;
+    const searchable = `${ticket.name || ""} ${ticket.email || ""} ${ticket.orderNumber || ""} ${ticket.subject || ""} ${ticket.message || ""}`;
     return searchable.toLowerCase().includes(query.toLowerCase());
   });
 
@@ -105,6 +135,7 @@ const AdminSupport = () => {
                       <span>{ticket.name || "Customer"}</span>
                       <span>{ticket.email || "No email"}</span>
                       <span>{new Date(ticket.createdAt).toLocaleDateString()}</span>
+                      {ticket.orderNumber && <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700">Order #{ticket.orderNumber}</span>}
                     </div>
 
                     <p className="mt-4 text-sm leading-6 text-slate-600">{ticket.message}</p>
@@ -145,6 +176,22 @@ const AdminSupport = () => {
                     {ticket.adminReply}
                   </div>
                 )}
+                <form onSubmit={(event) => saveReply(event, ticket)} className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <label htmlFor={`support-reply-${ticket._id}`} className="block text-xs font-bold uppercase tracking-wide text-slate-600">Reply to customer</label>
+                  <textarea
+                    id={`support-reply-${ticket._id}`}
+                    value={replyDrafts[ticket._id] ?? ticket.adminReply ?? ""}
+                    onChange={(event) => setReplyDrafts((items) => ({ ...items, [ticket._id]: event.target.value }))}
+                    maxLength={2000}
+                    rows={3}
+                    placeholder="Write an update or answer for the customer..."
+                    className="mt-2 w-full resize-y rounded-lg border border-slate-200 bg-white p-3 text-sm outline-none focus:border-primary"
+                  />
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] text-slate-400">The customer will see this reply in their order history.</span>
+                    <button type="submit" disabled={replySavingId === ticket._id} className="inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-white transition hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60"><Send className="h-3.5 w-3.5" />{replySavingId === ticket._id ? "Sending..." : ticket.adminReply ? "Update reply" : "Send reply"}</button>
+                  </div>
+                </form>
               </article>
             ))
           )}

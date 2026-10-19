@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 
 const supportTicketSchema = new mongoose.Schema({
   customer: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  order: { type: mongoose.Schema.Types.ObjectId, ref: "Order", default: null },
+  orderNumber: { type: String, trim: true, default: "" },
   name: { type: String, required: true, trim: true },
   email: { type: String, required: true, lowercase: true, trim: true },
   subject: { type: String, required: true, trim: true },

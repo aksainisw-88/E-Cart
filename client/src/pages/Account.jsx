@@ -31,6 +31,7 @@ const Account = ({ initialMode = "login" }) => {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [developmentResetUrl, setDevelopmentResetUrl] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
+  const [pendingCustomer, setPendingCustomer] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [recentOrders, setRecentOrders] = useState([]);
   const [supportTickets, setSupportTickets] = useState([]);
@@ -132,11 +133,21 @@ const Account = ({ initialMode = "login" }) => {
       setStorePickerLoading(false);
     }
   };
+  const getCustomerLandingPath = () => {
+    const requestedPath = location.state?.from;
+    if (typeof requestedPath !== "string" || !requestedPath.startsWith("/") || requestedPath.startsWith("//")) return "/account";
+    if (requestedPath === "/account" || requestedPath.startsWith("/account/") || requestedPath === "/wishlist") return "/account";
+    return requestedPath;
+  };
   const confirmStoreLocation = () => {
     if (!stores.some((location) => location._id === selectedStoreId)) return;
     localStorage.setItem("e-mart-b2b-store", selectedStoreId);
     setStorePickerOpen(false);
-    navigate("/");
+    if (pendingCustomer) {
+      setCurrentUser(pendingCustomer);
+      setPendingCustomer(null);
+    }
+    navigate(getCustomerLandingPath(), { replace: true });
   };
   const saveAddress = async (event) => {
     event.preventDefault();
@@ -231,11 +242,12 @@ const Account = ({ initialMode = "login" }) => {
       if (["admin", "manager", "user"].includes(result.user.role)) {
         navigate("/admin/login", { replace: true });
       } else if (result.user.customerType === "B2B") {
+        setPendingCustomer(result.user);
         setStorePickerOpen(true);
         await loadStoreLocations();
       } else {
-        const requestedPath = location.state?.from;
-        navigate(typeof requestedPath === "string" && requestedPath.startsWith("/") && !requestedPath.startsWith("//") ? requestedPath : "/");
+        setCurrentUser(result.user);
+        navigate(getCustomerLandingPath(), { replace: true });
       }
     } catch (requestError) {
       setError(requestError instanceof TypeError ? "Unable to reach the server. Start the backend with npm run dev from the server folder." : requestError.message);
@@ -478,10 +490,12 @@ const Account = ({ initialMode = "login" }) => {
     <>
       <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f2f6f3] px-3 py-6 sm:px-6 sm:py-10">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_18%,rgba(16,185,129,0.13),transparent_28%),radial-gradient(circle_at_90%_82%,rgba(14,116,144,0.10),transparent_30%)]" />
-        <div className="relative mx-auto grid w-full max-w-6xl overflow-hidden rounded-[28px] border border-white/80 bg-white shadow-[0_28px_90px_-35px_rgba(15,55,43,0.35)] lg:min-h-[680px] lg:grid-cols-[0.95fr_1.05fr]">
-          <section className="relative order-1 flex min-h-[250px] overflow-hidden bg-slate-100 lg:min-h-[680px]">
+        <div className="relative mx-auto grid w-full max-w-[1440px] overflow-hidden rounded-[28px] border border-white/80 bg-white shadow-[0_32px_100px_-38px_rgba(15,55,43,0.4)] lg:min-h-[760px] lg:grid-cols-[1.08fr_0.92fr]">
+          <section className="relative order-1 flex min-h-[280px] overflow-hidden bg-slate-100 lg:min-h-[760px]">
             <img src={authImage} alt="Healthcare professional holding essential medicines" className="absolute inset-0 h-full w-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-b from-[#063d34]/75 via-[#063d34]/35 to-[#062d2c]/90" />
+            <div className="pointer-events-none absolute -right-24 top-20 h-80 w-80 rounded-full border border-white/10" />
+            <div className="pointer-events-none absolute -right-10 top-36 h-52 w-52 rounded-full border border-white/10" />
             <div className="relative flex w-full flex-col justify-between p-6 text-white sm:p-9 lg:p-11">
               <Link to="/" aria-label="Go to home" className="flex w-fit items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-3 py-2.5 backdrop-blur-sm">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white text-xl font-bold text-primary shadow-sm">
@@ -501,9 +515,15 @@ const Account = ({ initialMode = "login" }) => {
               </div>
               <p className="hidden text-xs text-white/60 lg:block">A convenient way to care for yourself and your family.</p>
             </div>
+            <div className="absolute bottom-8 right-8 hidden w-56 rounded-2xl border border-white/20 bg-white/10 p-4 text-white shadow-xl backdrop-blur-md lg:block">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15"><Package className="h-5 w-5" /></span>
+                <div><p className="text-xs font-bold">Your account, in one place</p><p className="mt-1 text-[10px] text-white/70">Orders · addresses · support</p></div>
+              </div>
+            </div>
           </section>
 
-          <section className="order-2 min-w-0 bg-white px-6 py-7 sm:px-10 sm:py-10 lg:px-12 lg:py-11">
+          <section className="order-2 flex min-w-0 flex-col justify-center bg-white px-6 py-8 sm:px-10 sm:py-10 lg:px-14 lg:py-12">
             <div className="mb-8 flex items-center justify-between gap-3">
               <p className="text-xs font-semibold text-slate-400">Customer portal</p>
               <Link to="/" className="shrink-0 rounded-full px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 hover:text-primary">Back to store <ArrowRight className="ml-1 inline h-3.5 w-3.5" /></Link>
@@ -647,7 +667,7 @@ const Account = ({ initialMode = "login" }) => {
                   {mode === "login" && <div className="flex justify-end"><button type="button" onClick={() => { setForgotEmail(formData.email); setForgotOpen((open) => !open); setForgotMessage(""); setForgotError(""); }} className="text-sm font-medium text-primary hover:text-primary-dark">Forgot password?</button></div>}
                   {error && <p role="alert" className="rounded-xl border border-red-100 bg-red-50 p-3.5 text-sm text-red-700">{error}</p>}
                   <button disabled={loading} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary font-bold text-white shadow-lg shadow-emerald-900/15 transition hover:-translate-y-0.5 hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60" type="submit">{loading ? "Please wait..." : mode === "login" ? "Sign in" : otpSent ? "Verify code & create account" : "Send verification code"}<ArrowRight className="h-4 w-4" /></button>
-                  <p className="text-center text-sm text-slate-500">{mode === "login" ? "Don&apos;t have an account?" : "Already have an account?"}{" "}<Link to={mode === "login" ? "/customer/register" : "/customer/login"} className="font-bold text-primary hover:text-primary-dark">{mode === "login" ? "Create account" : "Sign in"}</Link></p>
+                  <p className="text-center text-sm text-slate-500">{mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}<Link to={mode === "login" ? "/customer/register" : "/customer/login"} className="font-bold text-primary hover:text-primary-dark">{mode === "login" ? "Create account" : "Sign in"}</Link></p>
                   {mode === "login" && <p className="border-t border-slate-100 pt-4 text-center text-sm text-slate-500">Store staff? <Link to="/admin/login" className="font-bold text-primary hover:text-primary-dark">Admin sign in</Link></p>}
                 </form>
               )}
