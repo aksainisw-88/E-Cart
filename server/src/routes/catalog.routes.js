@@ -1,10 +1,12 @@
 const express = require("express");
 const fs = require("fs");
 const multer = require("multer");
+const mongoose = require("mongoose");
 const path = require("path");
 const sharp = require("sharp");
 
 const Product = require("../models/Product");
+const ProductReview = require("../models/ProductReview");
 const StoreSettings = require("../models/StoreSettings");
 const Offer = require("../models/Offer");
 const { calculateOfferDiscount } = require("../utils/offerPricing");
@@ -37,6 +39,46 @@ router.get("/products", async (request, response, next) => {
       product.replaceEligible ??= false;
     });
     response.json({ success: true, data: products });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/products/:productId/reviews", async (request, response, next) => {
+  try {
+    if (!mongoose.isValidObjectId(request.params.productId)) {
+      return response.status(404).json({ success: false, message: "Product not found." });
+    }
+    const product = await Product.findOne({ _id: request.params.productId, status: "Published" }).select("_id").lean();
+    if (!product) return response.status(404).json({ success: false, message: "Product not found." });
+
+    const [reviews, summary] = await Promise.all([
+      ProductReview.find({ product: product._id })
+        .populate("customer", "name")
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .lean(),
+      ProductReview.aggregate([
+        { $match: { product: product._id } },
+        { $group: { _id: "$product", averageRating: { $avg: "$rating" }, reviewCount: { $sum: 1 } } },
+      ]),
+    ]);
+
+    response.json({
+      success: true,
+      data: {
+        reviews: reviews.map((review) => ({
+          _id: review._id,
+          name: review.customer?.name || "Customer",
+          rating: review.rating,
+          comment: review.comment,
+          createdAt: review.createdAt,
+          verifiedPurchase: true,
+        })),
+        averageRating: Number((summary[0]?.averageRating || 0).toFixed(1)),
+        reviewCount: summary[0]?.reviewCount || 0,
+      },
+    });
   } catch (error) {
     next(error);
   }

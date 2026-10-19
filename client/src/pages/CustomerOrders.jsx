@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from "react";
-import { Check, Clock3, MessageCircle, Package, Send, ShoppingCart, X, XCircle } from "lucide-react";
+import { Check, Clock3, MessageCircle, Package, Send, ShoppingCart, Star, X, XCircle } from "lucide-react";
 import CustomerAccountNav from "../components/customer/CustomerAccountNav";
 import Footer from "../components/home/Footer";
 import { useCart } from "../context/cartContext";
@@ -90,6 +90,9 @@ const CustomerOrders = () => {
   const [supportMessage, setSupportMessage] = useState("");
   const [supportError, setSupportError] = useState("");
   const [supportSaving, setSupportSaving] = useState(false);
+  const [reviewDrafts, setReviewDrafts] = useState({});
+  const [reviewErrors, setReviewErrors] = useState({});
+  const [savingReviewKey, setSavingReviewKey] = useState("");
 
   const load = () =>
     fetch(`${API_URL}/api/orders/mine`, { credentials: "include" })
@@ -248,6 +251,43 @@ const CustomerOrders = () => {
     }
   };
 
+  const updateReviewDraft = (key, changes) => setReviewDrafts((current) => ({
+    ...current,
+    [key]: { rating: 0, comment: "", ...current[key], ...changes },
+  }));
+
+  const submitProductReview = async (event, order, item, reviewKey, draft) => {
+    event.preventDefault();
+    const comment = draft.comment.trim();
+    if (!draft.rating || comment.length < 3) {
+      setReviewErrors((current) => ({ ...current, [reviewKey]: "Choose a star rating and add a short comment." }));
+      return;
+    }
+
+    setSavingReviewKey(reviewKey);
+    setReviewErrors((current) => ({ ...current, [reviewKey]: "" }));
+    try {
+      const response = await fetch(`${API_URL}/api/orders/${order._id}/reviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ productId: String(item.product), rating: draft.rating, comment }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to save your feedback.");
+      setOrders((current) => current.map((currentOrder) => currentOrder._id !== order._id ? currentOrder : {
+        ...currentOrder,
+        items: (currentOrder.items || []).map((currentItem) => String(currentItem.product) === String(item.product)
+          ? { ...currentItem, review: result.data }
+          : currentItem),
+      }));
+    } catch (requestError) {
+      setReviewErrors((current) => ({ ...current, [reviewKey]: requestError.message }));
+    } finally {
+      setSavingReviewKey("");
+    }
+  };
+
   const downloadPdf = (order) => {
     const printWindow = window.open("", "_blank", "width=900,height=700");
     if (!printWindow) return;
@@ -350,6 +390,7 @@ const CustomerOrders = () => {
             <div className="mt-6 space-y-4">
               {orders.map((order) => {
                 const orderQueries = ticketsForOrder(supportTickets, order._id);
+                const feedbackItems = [...new Map((order.items || []).filter((item) => item.product).map((item) => [String(item.product), item])).values()];
                 return <article
                   key={order._id}
                   className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:border-emerald-200 sm:p-6"
@@ -422,6 +463,48 @@ const CustomerOrders = () => {
                   ) : (
                     <OrderTimeline status={order.status} />
                   )}
+
+                  {order.status === "Delivered" && feedbackItems.length > 0 && <section className="mt-5 rounded-2xl border border-amber-100 bg-amber-50/60 p-4 sm:p-5">
+                    <div className="flex items-start gap-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-amber-500 shadow-sm"><Star className="h-4 w-4 fill-current" /></span>
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">How were your products?</h3>
+                        <p className="mt-1 text-xs leading-5 text-slate-600">Your feedback helps other shoppers make confident choices.</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {feedbackItems.map((item) => {
+                        const reviewKey = `${order._id}:${item.product}`;
+                        const draft = reviewDrafts[reviewKey] || { rating: 0, comment: "" };
+                        if (item.review) return <div key={reviewKey} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white px-3.5 py-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800">{item.name || "Purchased product"}</p>
+                            <p className="mt-1 text-xs text-emerald-700">Thanks for sharing your verified purchase feedback.</p>
+                          </div>
+                          <div className="flex items-center gap-1" aria-label={`${item.review.rating} out of 5 stars`}>
+                            {[1, 2, 3, 4, 5].map((rating) => <Star key={rating} className={`h-4 w-4 ${rating <= item.review.rating ? "fill-amber-400 text-amber-400" : "text-slate-200"}`} />)}
+                          </div>
+                        </div>;
+                        return <form key={reviewKey} onSubmit={(event) => submitProductReview(event, order, item, reviewKey, draft)} className="rounded-xl border border-amber-100 bg-white p-3.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-semibold text-slate-800">{item.name || "Purchased product"}</p>
+                            <div className="flex items-center gap-1" role="group" aria-label={`Rate ${item.name || "product"}`}>
+                              {[1, 2, 3, 4, 5].map((rating) => <button key={rating} type="button" onClick={() => updateReviewDraft(reviewKey, { rating })} aria-label={`${rating} star${rating === 1 ? "" : "s"}`} aria-pressed={draft.rating === rating} className="rounded p-0.5 transition hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500">
+                                <Star className={`h-5 w-5 ${rating <= draft.rating ? "fill-amber-400 text-amber-400" : "text-slate-300"}`} />
+                              </button>)}
+                            </div>
+                          </div>
+                          <textarea value={draft.comment} onChange={(event) => updateReviewDraft(reviewKey, { comment: event.target.value })} maxLength={1000} rows={2} placeholder="Share a few words about this product..." className="mt-3 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                            {reviewErrors[reviewKey] ? <p role="alert" className="text-xs text-red-600">{reviewErrors[reviewKey]}</p> : <p className="text-[11px] text-slate-400">Your review will appear on this product’s details page.</p>}
+                            <button type="submit" disabled={savingReviewKey === reviewKey} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60">
+                              <Send className="h-3.5 w-3.5" />{savingReviewKey === reviewKey ? "Sending..." : "Submit feedback"}
+                            </button>
+                          </div>
+                        </form>;
+                      })}
+                    </div>
+                  </section>}
 
                   {order.returnStatus && order.returnStatus !== "Not requested" && (
                     <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">

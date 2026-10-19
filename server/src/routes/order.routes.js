@@ -1,7 +1,9 @@
 const crypto = require("crypto");
 const express = require("express");
+const mongoose = require("mongoose");
 const { z } = require("zod");
 const Order = require("../models/Order");
+const ProductReview = require("../models/ProductReview");
 const StoreSettings = require("../models/StoreSettings");
 const Offer = require("../models/Offer");
 const Product = require("../models/Product");
@@ -31,6 +33,11 @@ const refundSchema = z.object({
   amount: z.coerce.number().positive(),
   mode: z.enum(["razorpay", "manual"]),
   note: z.string().trim().max(500).optional().default(""),
+});
+const productReviewSchema = z.object({
+  productId: z.string().refine((value) => mongoose.isValidObjectId(value), "Invalid product."),
+  rating: z.coerce.number().int().min(1).max(5),
+  comment: z.string().trim().min(3).max(1000),
 });
 
 const getRazorpayConfig = async (request) => {
@@ -136,16 +143,63 @@ router.post("/", async (request, response, next) => {
 
 router.get("/mine", async (request, response, next) => {
   try {
-    const orders = await Order.find({ customer: request.user.id }).populate("store", "name city").sort({ createdAt: -1 }).limit(10);
+    const orders = await Order.find({ customer: request.user.id }).populate("store", "name city").sort({ createdAt: -1 }).limit(10).lean();
     const productIds = orders.flatMap((order) => order.items.map((item) => item.product).filter(Boolean));
     const products = await Product.find({ _id: { $in: productIds } }).select("_id returnEligible replaceEligible");
     const productPolicies = new Map(products.map((product) => [product._id.toString(), product]));
+    const reviews = await ProductReview.find({ customer: request.user.id, order: { $in: orders.map((order) => order._id) } })
+      .select("product order rating comment createdAt")
+      .lean();
+    const reviewByOrderAndProduct = new Map(reviews.map((review) => [`${review.order}:${review.product}`, review]));
     orders.forEach((order) => order.items.forEach((item) => {
-      const policy = productPolicies.get(item.product?.toString());
+      const productId = item.product?.toString();
+      const policy = productPolicies.get(productId);
       item.returnEligible = item.returnEligible === true || policy?.returnEligible === true;
       item.replaceEligible = item.replaceEligible === true || policy?.replaceEligible === true;
+      item.review = reviewByOrderAndProduct.get(`${order._id}:${productId}`) || null;
     }));
     response.json({ success: true, data: orders });
+  } catch (error) { next(error); }
+});
+
+router.post("/:id/reviews", requireAnyRole("customer"), async (request, response, next) => {
+  try {
+    if (!mongoose.isValidObjectId(request.params.id)) return response.status(404).json({ success: false, message: "Order not found." });
+    const parsed = productReviewSchema.safeParse(request.body);
+    if (!parsed.success) return response.status(400).json({ success: false, message: "Choose a rating and enter feedback of at least 3 characters." });
+
+    const { productId, rating, comment } = parsed.data;
+    const order = await Order.findOne({
+      _id: request.params.id,
+      customer: request.user.id,
+      status: "Delivered",
+      "items.product": productId,
+    }).select("_id").lean();
+    if (!order) return response.status(403).json({ success: false, message: "Feedback is available only for products in your delivered orders." });
+
+    const existingReview = await ProductReview.findOne({ product: productId, customer: request.user.id, order: order._id }).select("_id").lean();
+    if (existingReview) return response.status(409).json({ success: false, message: "You have already reviewed this product from this order." });
+
+    try {
+      const review = await ProductReview.create({ product: productId, customer: request.user.id, order: order._id, rating, comment });
+      await review.populate("customer", "name");
+      response.status(201).json({
+        success: true,
+        data: {
+          _id: review._id,
+          product: review.product,
+          order: review.order,
+          name: review.customer?.name || "Customer",
+          rating: review.rating,
+          comment: review.comment,
+          createdAt: review.createdAt,
+          verifiedPurchase: true,
+        },
+      });
+    } catch (error) {
+      if (error.code === 11000) return response.status(409).json({ success: false, message: "You have already reviewed this product from this order." });
+      throw error;
+    }
   } catch (error) { next(error); }
 });
 

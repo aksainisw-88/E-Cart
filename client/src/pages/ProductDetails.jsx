@@ -11,13 +11,6 @@ import { getBusinessProfile, splitProductSizes } from "../data/businessTypes";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
-const ALL_REVIEWS = [
-  { name: "Aarav", rating: 5, comment: "Excellent quality and delivery was fast." },
-  { name: "Meera", rating: 4, comment: "Very useful product. Works exactly as expected." },
-  { name: "Karan", rating: 5, comment: "Looks premium and feels reliable. Highly recommended." },
-  { name: "Nisha", rating: 4, comment: "Good packaging and support was responsive." },
-];
-
 const ProductDetails = () => {
   const { productId } = useParams();
   const navigate = useNavigate();
@@ -29,6 +22,7 @@ const ProductDetails = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState("");
+  const [reviewResult, setReviewResult] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -63,10 +57,38 @@ const ProductDetails = () => {
     };
   }, [productId]);
 
+  useEffect(() => {
+    let active = true;
+    fetch(`${API_URL}/api/catalog/products/${productId}/reviews`)
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "Unable to load customer feedback.");
+        return result.data;
+      })
+      .then((data) => {
+        if (!active) return;
+        setReviewResult({
+          productId,
+          reviews: data.reviews || [],
+          stats: { averageRating: Number(data.averageRating) || 0, reviewCount: Number(data.reviewCount) || 0 },
+          error: "",
+        });
+      })
+      .catch((error) => {
+        if (!active) return;
+        setReviewResult({ productId, reviews: [], stats: { averageRating: 0, reviewCount: 0 }, error: error.message });
+      });
+    return () => { active = false; };
+  }, [productId]);
+
   const product = useMemo(
     () => products.find((item) => String(item.id) === String(productId)) || null,
     [productId, products]
   );
+  const reviewsLoading = reviewResult?.productId !== productId;
+  const reviews = reviewsLoading ? [] : reviewResult?.reviews || [];
+  const reviewStats = reviewsLoading ? { averageRating: 0, reviewCount: 0 } : reviewResult?.stats || { averageRating: 0, reviewCount: 0 };
+  const reviewsError = reviewsLoading ? "" : reviewResult?.error || "";
 
   const similarProducts = useMemo(
     () =>
@@ -78,9 +100,7 @@ const ProductDetails = () => {
     [product, products]
   );
 
-  const averageRating = product
-    ? (product.rating + (ALL_REVIEWS.reduce((total, review) => total + review.rating, 0) / ALL_REVIEWS.length)) / 2
-    : 0;
+  const averageRating = reviewStats.averageRating;
 
   const increaseQty = () => setQuantity((value) => value + 1);
   const decreaseQty = () => setQuantity((value) => Math.max(1, value - 1));
@@ -195,12 +215,12 @@ const ProductDetails = () => {
                   <Star
                     key={index}
                     size={16}
-                    className={index < Math.round(product.rating) ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}
+                    className={index < Math.round(averageRating) ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}
                   />
                 ))}
               </div>
-              <span className="text-sm font-medium text-gray-700">{product.rating}.0</span>
-              <span className="text-sm text-gray-500">({product.reviews} reviews)</span>
+              <span className="text-sm font-medium text-gray-700">{averageRating.toFixed(1)}</span>
+              <span className="text-sm text-gray-500">({reviewStats.reviewCount} {reviewStats.reviewCount === 1 ? "review" : "reviews"})</span>
             </div>
 
             <div className="mt-6 flex items-end gap-3">
@@ -306,32 +326,39 @@ const ProductDetails = () => {
             </section>
 
             <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-900">Customer feedback</h2>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Customer feedback</h2>
+                  <p className="mt-1 text-sm text-gray-500">Reviews from customers who purchased this product.</p>
+                </div>
                 <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
-                  {averageRating.toFixed(1)} avg rating
+                  {averageRating.toFixed(1)} avg · {reviewStats.reviewCount} {reviewStats.reviewCount === 1 ? "review" : "reviews"}
                 </span>
               </div>
 
-              <div className="mt-5 space-y-4">
-                {ALL_REVIEWS.map((review) => (
-                  <div key={review.name} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold text-gray-900">{review.name}</p>
-                      <div className="flex items-center gap-1">
-                        {[...Array(5)].map((_, index) => (
-                          <Star
-                            key={index}
-                            size={14}
-                            className={index < review.rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-gray-600">{review.comment}</p>
-                  </div>
-                ))}
-              </div>
+              {reviewsLoading ? <p className="mt-5 rounded-2xl bg-gray-50 p-5 text-sm text-gray-500">Loading customer feedback...</p>
+                : reviewsError ? <p role="status" className="mt-5 rounded-2xl bg-amber-50 p-5 text-sm text-amber-800">{reviewsError}</p>
+                  : reviews.length ? <div className="mt-5 space-y-4">
+                    {reviews.map((review) => (
+                      <article key={review._id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-gray-900">{review.name}</p>
+                            <p className="mt-1 text-xs text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</p>
+                          </div>
+                          <div className="flex items-center gap-1" aria-label={`${review.rating} out of 5 stars`}>
+                            {[1, 2, 3, 4, 5].map((rating) => <Star key={rating} size={14} className={rating <= review.rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"} />)}
+                          </div>
+                        </div>
+                        <p className="mt-3 text-sm leading-6 text-gray-600">{review.comment}</p>
+                        {review.verifiedPurchase && <span className="mt-3 inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">Verified purchase</span>}
+                      </article>
+                    ))}
+                  </div> : <div className="mt-5 rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-10 text-center">
+                    <Star className="mx-auto h-6 w-6 text-gray-300" />
+                    <p className="mt-3 text-sm font-semibold text-gray-700">No customer feedback yet</p>
+                    <p className="mt-1 text-xs text-gray-500">After a delivered order, customers can share their experience here.</p>
+                  </div>}
             </section>
           </div>
         </div>
