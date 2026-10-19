@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { productCategories } from "../data/products";
+import { useStore } from "../context/storeContext";
+import { getBusinessProfile } from "../data/businessTypes";
 
 const emptyProduct = {
   name: "",
@@ -41,6 +43,8 @@ const emptyProduct = {
 const apiUrl = import.meta.env.VITE_API_URL || "";
 
 const AdminProducts = () => {
+  const store = useStore();
+  const businessProfile = getBusinessProfile(store.businessType);
   const [products, setProducts] = useState([]);
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -102,15 +106,22 @@ const AdminProducts = () => {
   }, []);
 
   useEffect(() => {
+    let active = true;
     fetch(`${apiUrl}/api/products/categories`, { credentials: "include" })
       .then(async (response) => {
         const result = await response.json();
         if (!response.ok) throw new Error(result.message || "Unable to load categories.");
         return result.data || [];
       })
-      .then(setCategories)
-      .catch((requestError) => setError(requestError.message));
-  }, []);
+      .then((catalogCategories) => {
+        if (!active) return;
+        const merged = new Map(businessProfile.categories.map((name) => [name.toLowerCase(), { name, parentCategory: null }]));
+        catalogCategories.forEach((category) => merged.set(category.name.toLowerCase(), category));
+        setCategories([...merged.values()]);
+      })
+      .catch((requestError) => { if (active) setError(requestError.message); });
+    return () => { active = false; };
+  }, [businessProfile]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -378,7 +389,7 @@ const AdminProducts = () => {
                         <span className="block font-semibold text-slate-700">{product.name}</span>
                         {product.brand && <span className="mt-1 block text-xs text-slate-400">{product.brand}</span>}
                         <span className="mt-1 block text-xs text-slate-400">Unit: {product.unit || "unit"}</span>
-                        {(product.size || product.hsnCode) && <span className="mt-1 block text-xs text-slate-400">{[product.size && `Size: ${product.size}`, product.hsnCode && `HSN: ${product.hsnCode}`].filter(Boolean).join(" · ")}</span>}
+                        {(product.size || product.hsnCode) && <span className="mt-1 block text-xs text-slate-400">{[product.size && `${businessProfile.attributeLabel}: ${product.size}`, product.hsnCode && `HSN: ${product.hsnCode}`].filter(Boolean).join(" · ")}</span>}
                         {product.shelfNo && <span className="mt-1 block text-xs text-slate-400">Shelf: {product.shelfNo}</span>}
                       </div>
                     </div>
@@ -468,7 +479,7 @@ const AdminProducts = () => {
                     <label className="text-sm font-medium text-slate-700 sm:col-span-2">Product name<input required value={form.name} onChange={updateField("name")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
                     <label className="text-sm font-medium text-slate-700">Brand<input value={form.brand} onChange={updateField("brand")} placeholder="e.g. Philips" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
                     <label className="text-sm font-medium text-slate-700">Category<select required value={form.category} onChange={updateField("category")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-primary"><option value="">Select a category</option>{categories.map((category) => <option key={category._id || category.name} value={category.name}>{category.parentCategory ? `${category.parentCategory.name} / ${category.name}` : category.name}</option>)}</select><Link to="/admin/categories" className="mt-2 inline-block text-xs font-semibold text-primary hover:underline">Manage categories</Link></label>
-                    <label className="text-sm font-medium text-slate-700">Size / strength<input maxLength="120" value={form.size} onChange={updateField("size")} placeholder="e.g. 500 mg, 100 ml" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+                    <label className="text-sm font-medium text-slate-700">{businessProfile.attributeLabel}<input maxLength="120" value={form.size} onChange={updateField("size")} placeholder={businessProfile.attributeExample} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /><span className="mt-1 block text-xs font-normal text-slate-400">Use commas to separate values customers can compare.</span></label>
                     <label className="text-sm font-medium text-slate-700 sm:col-span-2">Description<textarea value={form.description} onChange={updateField("description")} rows="4" className="mt-2 w-full resize-y rounded-lg border border-slate-200 p-3 outline-none focus:border-primary" /></label>
                   </div>
                 </section>

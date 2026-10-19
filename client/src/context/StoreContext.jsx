@@ -9,7 +9,7 @@ const themes = {
 };
 
 export const StoreProvider = ({ children }) => {
-  const [store, setStore] = useState({ name: "My Medical Store", tagline: "Your Health, Our Priority", theme: "teal", logo: "", deliveryFee: 49, freeDeliveryAbove: 999 });
+  const [store, setStore] = useState({ businessType: "pharmacy", heroSlidesConfigured: false, name: "My Medical Store", tagline: "Your Health, Our Priority", theme: "teal", logo: "", deliveryFee: 49, freeDeliveryAbove: 999 });
 
   const loadStore = () => {
     fetch(`${API_URL}/api/catalog/store?updated=${Date.now()}`, { cache: "no-store" })

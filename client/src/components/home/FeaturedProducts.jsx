@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useStore } from "../../context/storeContext";
+import { getBusinessProfile } from "../../data/businessTypes";
 
 import ProductCard from "./ProductCard";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
 const FeaturedProducts = () => {
+  const store = useStore();
+  const businessProfile = getBusinessProfile(store.businessType);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -52,13 +56,13 @@ const FeaturedProducts = () => {
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4 sm:mb-8">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
-              Ready to order
+              Popular picks
             </p>
 
             <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              Essentials available now
+              Popular in {businessProfile.label}
             </h2>
-            <p className="mt-2 text-sm text-slate-500">Explore products currently in stock and add what you need to your basket.</p>
+            <p className="mt-2 text-sm text-slate-500">{businessProfile.productDescription}</p>
           </div>
 
           <Link

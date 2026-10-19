@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Navigation, Pagination } from "swiper/modules";
 import { useStore } from "../../context/storeContext";
+import { getBusinessProfile } from "../../data/businessTypes";
 
 import "swiper/css";
 import "swiper/css/pagination";
@@ -40,10 +41,38 @@ const defaultSlides = [
   },
 ];
 
+const businessImages = {
+  garments: "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1800&q=90",
+  footwear: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1800&q=90",
+  supermarket: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1800&q=90",
+  grocery: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1800&q=90",
+  electronics: "https://images.unsplash.com/photo-1498049794561-7780e7231661?auto=format&fit=crop&w=1800&q=90",
+  beauty: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=1800&q=90",
+  home_living: "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1800&q=90",
+  furniture: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1800&q=90",
+  jewelry: "https://images.unsplash.com/photo-1611652022419-a9419f74343d?auto=format&fit=crop&w=1800&q=90",
+  toys: "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?auto=format&fit=crop&w=1800&q=90",
+  books_stationery: "https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=1800&q=90",
+  sports: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1800&q=90",
+  pet_supplies: "https://images.unsplash.com/photo-1450778869180-41d0601e046e?auto=format&fit=crop&w=1800&q=90",
+  general: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1800&q=90",
+};
+
 const HeroSlider = () => {
   const store = useStore();
   const { heroSlides = [] } = store;
-  const activeSlides = heroSlides.length === 3 ? heroSlides : defaultSlides;
+  const businessProfile = getBusinessProfile(store.businessType);
+  const businessDefaultSlide = {
+    ...defaultSlides[0],
+    eyebrow: businessProfile.label,
+    title: businessProfile.productHeading,
+    description: businessProfile.productDescription,
+    button: "Shop collection",
+    image: businessImages[store.businessType] || defaultSlides[0].image,
+  };
+  const activeSlides = store.heroSlidesConfigured && heroSlides.length === 3
+    ? heroSlides
+    : store.businessType === "pharmacy" ? defaultSlides : [businessDefaultSlide];
   const freeDeliveryAbove = Number(store.freeDeliveryAbove ?? 999);
 
   return (
@@ -51,10 +80,10 @@ const HeroSlider = () => {
       <div className="mx-auto max-w-[1440px]">
         <Swiper
           modules={[Autoplay, Pagination, Navigation]}
-          autoplay={{ delay: 6500, disableOnInteraction: false }}
+          autoplay={activeSlides.length > 1 ? { delay: 6500, disableOnInteraction: false } : false}
           pagination={{ clickable: true }}
           navigation
-          loop
+          loop={activeSlides.length > 1}
           className="hero-slider overflow-hidden rounded-[24px] shadow-[0_24px_60px_-28px_rgba(6,64,47,0.5)] sm:rounded-[30px]"
         >
           {activeSlides.map((slide, index) => (

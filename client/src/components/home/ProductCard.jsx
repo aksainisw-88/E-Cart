@@ -6,10 +6,14 @@ import {
 import { Link } from "react-router-dom";
 import { useCart } from "../../context/cartContext";
 import { useWishlist } from "../../context/wishlistContext";
+import { useStore } from "../../context/storeContext";
+import { getBusinessProfile, splitProductSizes } from "../../data/businessTypes";
 
 const ProductCard = ({ product }) => {
   const { addToCart } = useCart();
   const { isSaved, toggleWishlist } = useWishlist();
+  const store = useStore();
+  const businessProfile = getBusinessProfile(store.businessType);
   const saved = isSaved(product);
   const stock = Number(product.stock ?? 0);
   const outOfStock = stock <= 0;
@@ -49,6 +53,14 @@ const ProductCard = ({ product }) => {
         <h3 className="mt-1 min-h-[36px] text-xs font-semibold text-gray-900 sm:text-sm">
           <Link to={`/products/${product.id}`} className="line-clamp-2 rounded-sm hover:text-primary focus-visible:outline-primary">{product.name}</Link>
         </h3>
+
+        {product.size && (businessProfile.sizeOptions ? (
+          <div className="mt-2 flex min-h-7 flex-wrap items-center gap-1.5" aria-label={`${businessProfile.attributeLabel}: ${product.size}`}>
+            {splitProductSizes(product.size).slice(0, 5).map((size) => <span key={size} className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-600">{size}</span>)}
+          </div>
+        ) : (
+          <p className="mt-2 truncate text-[11px] text-slate-500"><span className="font-semibold text-slate-600">{businessProfile.attributeLabel}:</span> {product.size}</p>
+        ))}
 
         <div className="mt-2 flex items-center gap-1">
           <div className="flex">

@@ -1,23 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Filter, Search, SlidersHorizontal, X } from "lucide-react";
-import { useLocation, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 
 import Footer from "../components/home/Footer";
 import ProductCard from "../components/home/ProductCard";
-import { productCategories } from "../data/products";
+import { useStore } from "../context/storeContext";
+import { getBusinessProfile } from "../data/businessTypes";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
-
-const categoryLabels = {
-  medicines: "Medicines",
-  "health-care": "Health Care",
-  "personal-care": "Personal Care",
-  "baby-care": "Baby Care",
-  devices: "Medical Devices",
-  wellness: "Wellness",
-  vitamins: "Vitamins & Supplements",
-  "first-aid": "First Aid",
-};
 
 const normalizeCategory = (value = "") =>
   String(value)
@@ -28,13 +18,13 @@ const normalizeCategory = (value = "") =>
     .replace(/^-+|-+$/g, "") || "all";
 
 const Products = () => {
-  const { category } = useParams();
   const location = useLocation();
-  const [searchParams] = useSearchParams();
-  const routeCategory = category ? categoryLabels[category] || category : "All Products";
-  const initialCategory = productCategories.includes(routeCategory) ? routeCategory : "All Products";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const categoryParam = searchParams.get("category") || "";
+  const store = useStore();
+  const businessProfile = getBusinessProfile(store.businessType);
 
-  const [selectedCategory, setSelectedCategory] = useState(initialCategory);
+  const [selectedCategory, setSelectedCategory] = useState("All Products");
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get("search") || "");
   const [priceLimit, setPriceLimit] = useState("all");
   const [brandFilter, setBrandFilter] = useState("all");
@@ -44,12 +34,6 @@ const Products = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-
-  useEffect(() => {
-    // Route category changes need to reset the selected filter.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSelectedCategory(initialCategory);
-  }, [initialCategory]);
 
   useEffect(() => {
     let active = true;
@@ -81,6 +65,21 @@ const Products = () => {
 
     return () => { active = false; };
   }, [location.state?.imageSearchResults]);
+
+  const categoryOptions = useMemo(() => {
+    const catalogCategories = [...new Set(products.map((product) => product.category).filter(Boolean))]
+      .sort((first, second) => first.localeCompare(second));
+    return [...new Map([...businessProfile.categories, ...catalogCategories].map((categoryName) => [normalizeCategory(categoryName), categoryName])).values()];
+  }, [businessProfile.categories, products]);
+
+  useEffect(() => {
+    if (!categoryParam) {
+      setSelectedCategory("All Products");
+      return;
+    }
+    const selected = categoryOptions.find((categoryName) => normalizeCategory(categoryName) === normalizeCategory(categoryParam));
+    setSelectedCategory(selected || "All Products");
+  }, [categoryOptions, categoryParam]);
 
   const visibleProducts = useMemo(() => {
     const filtered = products.filter((product) => {
@@ -114,6 +113,10 @@ const Products = () => {
     setBrandFilter("all");
     setInStockOnly(false);
     setSortOrder("featured");
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete("category");
+    nextSearchParams.delete("search");
+    setSearchParams(nextSearchParams, { replace: true });
   };
 
   return (
@@ -121,10 +124,10 @@ const Products = () => {
       <main className="bg-[#f4f7f4]">
         <section className="border-b border-emerald-100 bg-gradient-to-br from-white via-white to-emerald-50/70">
           <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-            <p className="text-sm font-semibold uppercase tracking-wide text-primary">Our Products</p>
-            <h1 className="mt-2 text-3xl font-bold text-gray-900 sm:text-4xl">Healthcare for every day</h1>
+            <p className="text-sm font-semibold uppercase tracking-wide text-primary">{businessProfile.label}</p>
+            <h1 className="mt-2 text-3xl font-bold text-gray-900 sm:text-4xl">{businessProfile.productHeading}</h1>
             <p className="mt-3 max-w-2xl text-gray-500">
-              Browse trusted medicines, wellness essentials, and healthcare devices delivered to your door.
+              {businessProfile.productDescription}
             </p>
 
             <div className="relative mt-7 max-w-2xl">
@@ -183,7 +186,7 @@ const Products = () => {
               <div className="mt-6">
                 <p className="text-sm font-semibold text-gray-900">Categories</p>
                 <div className="mt-3 space-y-2.5">
-                  {productCategories.map((productCategory) => (
+                  {["All Products", ...categoryOptions].map((productCategory) => (
                     <button
                       key={productCategory}
                       type="button"

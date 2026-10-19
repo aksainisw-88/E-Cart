@@ -6,6 +6,8 @@ import Footer from "../components/home/Footer";
 import ProductCard from "../components/home/ProductCard";
 import { useCart } from "../context/cartContext";
 import { useWishlist } from "../context/wishlistContext";
+import { useStore } from "../context/storeContext";
+import { getBusinessProfile, splitProductSizes } from "../data/businessTypes";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -21,6 +23,8 @@ const ProductDetails = () => {
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const { isSaved, toggleWishlist } = useWishlist();
+  const store = useStore();
+  const businessProfile = getBusinessProfile(store.businessType);
   const [quantity, setQuantity] = useState(1);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -121,6 +125,13 @@ const ProductDetails = () => {
 
   const gallery = product.images?.length ? product.images : [product.image].filter(Boolean);
   const imageUrl = selectedImage || gallery[0] || "https://placehold.co/900x900/f3f4f6/111827?text=Product";
+  const productFacts = [
+    product.brand && { label: "Brand", value: product.brand },
+    product.category && { label: "Category", value: product.category },
+    product.size && { label: businessProfile.attributeLabel, value: product.size },
+    product.unit && { label: "Selling unit", value: product.unit },
+    { label: "Availability", value: outOfStock ? "Out of stock" : `${stock} in stock` },
+  ].filter(Boolean);
 
   return (
     <>
@@ -200,8 +211,19 @@ const ProductDetails = () => {
             </div>
 
             <p className="mt-5 text-sm leading-7 text-gray-600">
-              Crafted with care for everyday wellness and reliable healthcare support. Ideal for home use, travel, and daily routines.
+              {product.description || businessProfile.description}
             </p>
+
+            {product.size && (
+              <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{businessProfile.attributeLabel}</p>
+                {businessProfile.sizeOptions ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {splitProductSizes(product.size).map((size) => <span key={size} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">{size}</span>)}
+                  </div>
+                ) : <p className="mt-2 text-sm font-semibold text-slate-800">{product.size}</p>}
+              </div>
+            )}
 
             <div className="mt-6 flex items-center gap-3">
               <div className="flex items-center rounded-full border border-gray-200 bg-gray-50">
@@ -268,20 +290,17 @@ const ProductDetails = () => {
               <h2 className="text-xl font-bold text-gray-900">Product details</h2>
               <div className="mt-5 space-y-4 text-sm leading-7 text-gray-600">
                 <p>
-                  This product is selected for quality, efficacy, and everyday comfort. It supports a balanced wellness routine and is suitable for personal care and household use.
+                  {product.description || `${product.name} is part of our ${businessProfile.label.toLowerCase()} collection. ${businessProfile.productDescription}`}
                 </p>
                 <p>
-                  Each item is sourced from trusted partners and checked for authenticity before reaching your doorstep.
+                  Review the product information and availability before adding it to your cart.
                 </p>
               </div>
 
               <div className="mt-8 rounded-2xl bg-gray-50 p-5">
                 <h3 className="text-lg font-semibold text-gray-900">Specs</h3>
                 <ul className="mt-4 space-y-2 text-sm text-gray-600">
-                  <li>• Premium build quality and safe materials</li>
-                  <li>• Compact and travel-friendly design</li>
-                  <li>• Easy-to-use everyday application</li>
-                  <li>• Trusted by thousands of customers</li>
+                  {productFacts.map((fact) => <li key={fact.label} className="flex justify-between gap-4 border-b border-gray-200/70 pb-2 last:border-0 last:pb-0"><span className="text-gray-500">{fact.label}</span><span className="text-right font-medium text-gray-800">{fact.value}</span></li>)}
                 </ul>
               </div>
             </section>

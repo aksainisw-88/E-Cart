@@ -65,6 +65,7 @@ router.get("/store", async (request, response, next) => {
   try {
     const settings = await StoreSettings.findOne({ key: "default" }).lean();
     const payload = settings || {
+      businessType: "pharmacy",
       name: "My Medical Store",
       tagline: "Your Health, Our Priority",
       theme: "teal",
@@ -77,6 +78,8 @@ router.get("/store", async (request, response, next) => {
       success: true,
       data: {
         ...payload,
+        businessType: payload.businessType || "pharmacy",
+        heroSlidesConfigured: payload.heroSlides?.length === 3,
         testimonials: payload.testimonials?.length === 4 ? payload.testimonials : defaultTestimonials,
         heroSlides: payload.heroSlides?.length === 3 ? payload.heroSlides : defaultHeroSlides,
         deliveryFee: Number(payload.deliveryFee ?? 49),
