@@ -35,6 +35,8 @@ Use your provider's SMTP host, port, TLS mode, and credentials. In development o
 
 Forgot-password requests use the same SMTP settings. Reset links expire after one hour and can only be used once. When SMTP is unset in development, the reset screen displays a local-only link for testing.
 
+Admin inventory and store resets also send a six-digit OTP to the signed-in admin email. Configure `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM` on the production API service (Render service `e-mart-api`) before requesting a reset code. `SMTP_FROM` may be omitted when the provider's sender address is the same as `SMTP_USER`. The code expires after 10 minutes; production does not return it in the browser when email delivery is unavailable.
+
 ## Promotions and POS integrations
 
 Active offer codes can be claimed from the customer Offers page and applied during checkout. The server validates the code, dates, minimum order, and discount again when the order is created.

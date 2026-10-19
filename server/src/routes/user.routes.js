@@ -28,11 +28,15 @@ const router = express.Router();
 const menuPermissionSchema = z.array(z.enum([
   "/admin",
   "/admin/reports",
+  "/admin/sales-transactions",
   "/admin/products",
+  "/admin/inventory",
   "/admin/categories",
+  "/admin/tax-categories",
   "/admin/users",
   "/admin/customers",
   "/admin/orders",
+  "/admin/returns",
   "/admin/pos",
   "/admin/purchase-entry",
   "/admin/vendors",
@@ -45,8 +49,8 @@ const menuPermissionSchema = z.array(z.enum([
   "/admin/support",
   "/admin/settings",
   "/admin/stores",
-])).max(19);
-const adminOnlyMenus = ["/admin", "/admin/users", "/admin/store", "/admin/stores", "/admin/testimonials", "/admin/hero-slider", "/admin/store/delivery", "/admin/offers", "/admin/support", "/admin/settings"];
+])).max(23);
+const adminOnlyMenus = ["/admin", "/admin/tax-categories", "/admin/users", "/admin/store", "/admin/stores", "/admin/testimonials", "/admin/hero-slider", "/admin/store/delivery", "/admin/offers", "/admin/support", "/admin/settings"];
 const withRoleMenuValidation = (schema) => schema.superRefine((data, context) => {
   if (data.role === "admin") return;
   data.menuPermissions.forEach((permission, index) => {
@@ -98,7 +102,7 @@ router.post("/inventory-reset/otp", async (request, response, next) => {
     );
     response.json({ success: true, message: `Reset code sent to ${maskEmail(admin.email)}. It expires in 10 minutes.`, ...(!sent ? { developmentOtp: otp } : {}) });
   } catch (error) {
-    if (error.message === "Email delivery is not configured.") return response.status(503).json({ success: false, message: "Admin email delivery is not configured." });
+    if (error.message === "Email delivery is not configured.") return response.status(503).json({ success: false, message: "Admin email delivery is not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_FROM (or use SMTP_USER as the sender) in the Render API environment, then redeploy." });
     next(error);
   }
 });
@@ -170,7 +174,7 @@ router.post("/store-reset/otp", async (request, response, next) => {
     );
     response.json({ success: true, message: `Store reset code sent to ${maskEmail(admin.email)}. It expires in 10 minutes.`, ...(!sent ? { developmentOtp: otp } : {}) });
   } catch (error) {
-    if (error.message === "Email delivery is not configured.") return response.status(503).json({ success: false, message: "Admin email delivery is not configured." });
+    if (error.message === "Email delivery is not configured.") return response.status(503).json({ success: false, message: "Admin email delivery is not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_FROM (or use SMTP_USER as the sender) in the Render API environment, then redeploy." });
     next(error);
   }
 });
@@ -274,7 +278,9 @@ router.get("/", async (request, response, next) => {
 
 router.post("/", async (request, response, next) => {
   try {
-    const data = userSchema.parse(request.body);
+    const parsed = userSchema.safeParse(request.body);
+    if (!parsed.success) return response.status(400).json({ success: false, message: parsed.error.issues[0]?.message || "Check the user details and menu access." });
+    const data = parsed.data;
     const email = data.email.toLowerCase();
     if (await User.exists({ email })) return response.status(409).json({ success: false, message: "A user with this email already exists." });
     const user = await User.create({ name: data.name, email, password: await bcrypt.hash(data.password, 12), role: data.role, menuPermissions: data.menuPermissions });
@@ -284,7 +290,9 @@ router.post("/", async (request, response, next) => {
 
 router.put("/:id", async (request, response, next) => {
   try {
-    const data = editSchema.parse(request.body);
+    const parsed = editSchema.safeParse(request.body);
+    if (!parsed.success) return response.status(400).json({ success: false, message: parsed.error.issues[0]?.message || "Check the user details and menu access." });
+    const data = parsed.data;
     const user = await User.findOneAndUpdate({ _id: request.params.id, role: { $in: ["admin", "manager", "user"] } }, data, { new: true, runValidators: true }).select("name email role status menuPermissions createdAt updatedAt");
     if (!user) return response.status(404).json({ success: false, message: "Admin user not found" });
     response.json({ success: true, data: user });
