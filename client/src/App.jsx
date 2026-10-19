@@ -24,6 +24,7 @@ import AdminTestimonials from "./pages/AdminTestimonials";
 import AdminHeroSlider from "./pages/AdminHeroSlider";
 import AdminStores from "./pages/AdminStores";
 import AdminCategories from "./pages/AdminCategories";
+import AdminTaxCategories from "./pages/AdminTaxCategories";
 import AdminOrderDetails from "./pages/AdminOrderDetails";
 import AdminInventory from "./pages/AdminInventory";
 import AdminReturns from "./pages/AdminReturns";
@@ -90,6 +91,7 @@ function App() {
           <Route path="products" element={<AdminSection section="products" />} />
           <Route path="inventory" element={<AdminInventory />} />
           <Route path="categories" element={<AdminCategories />} />
+          <Route path="tax-categories" element={<AdminTaxCategories />} />
           <Route path="users" element={<AdminSection section="users" />} />
           <Route path="customers" element={<AdminSection section="customers" />} />
           <Route path="orders" element={<AdminSection section="orders" />} />

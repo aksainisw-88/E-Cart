@@ -20,6 +20,7 @@ const purchaseSchema = new mongoose.Schema(
     remainingQuantity: { type: Number, min: 0 },
     unitCost: { type: Number, required: true, min: 0 },
     discount: { type: Number, min: 0, default: 0 },
+    taxCode: { type: String, trim: true, default: "" },
     taxRate: { type: Number, min: 0, max: 100, default: 0 },
     taxAmount: { type: Number, min: 0, default: 0 },
     amount: { type: Number, min: 0, default: 0 },

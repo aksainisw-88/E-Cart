@@ -8,6 +8,7 @@ const { z } = require("zod");
 
 const Product = require("../models/Product");
 const ProductCategory = require("../models/ProductCategory");
+const TaxCategory = require("../models/TaxCategory");
 const builtInCategories = ["Medicines", "Health Care", "Personal Care", "Baby Care", "Medical Devices", "Wellness", "Vitamins & Supplements", "First Aid"];
 
 const uploadDirectory = path.join(__dirname, "../../uploads/products");
@@ -32,6 +33,8 @@ const productSchema = z.object({
   brand: z.string().trim().max(100).optional().default(""),
   unit: z.string().trim().min(1).max(40).optional().default("unit"),
   category: z.string().trim().min(2),
+  purchaseTaxCategory: z.string().regex(/^[a-f\d]{24}$/i).optional().or(z.literal("")),
+  salesTaxCategory: z.string().regex(/^[a-f\d]{24}$/i).optional().or(z.literal("")),
   price: z.coerce.number().min(0),
   costPrice: z.coerce.number().min(0).optional().default(0),
   originalPrice: z.coerce.number().min(0).optional(),
@@ -47,6 +50,23 @@ const productSchema = z.object({
 });
 const categorySchema = z.object({ name: z.string().trim().min(2).max(80), parentCategoryId: z.string().optional().nullable() });
 const categoryEditSchema = z.object({ name: z.string().trim().min(2).max(80) });
+
+const validateProductTaxCategories = async (data, existingProduct = null) => {
+  for (const [field, appliedOn, label] of [
+    ["purchaseTaxCategory", "Purchase", "purchase"],
+    ["salesTaxCategory", "Sales", "sales"],
+  ]) {
+    if (data[field] === undefined) continue;
+    if (!data[field]) {
+      data[field] = null;
+      continue;
+    }
+    const category = await TaxCategory.findById(data[field]).select("appliedOn taxCode active").lean();
+    const unchangedInactiveCategory = category && !category.active && String(existingProduct?.[field] || "") === String(category._id);
+    if (!category || (!category.active && !unchangedInactiveCategory) || ![appliedOn, "Both"].includes(category.appliedOn)) return `Select an active tax code that applies to ${label}.`;
+  }
+  return "";
+};
 
 const router = express.Router();
 const uploadImage = (request, response, next) => {
@@ -154,14 +174,14 @@ router.delete("/categories/:id", async (request, response, next) => {
 
 router.get("/", async (request, response, next) => {
   try {
-    const products = await Product.find().sort({ createdAt: -1 });
+    const products = await Product.find().populate("purchaseTaxCategory", "taxCode taxRate taxType active").populate("salesTaxCategory", "taxCode taxRate taxType active").sort({ createdAt: -1 });
     response.json({ success: true, data: products });
   } catch (error) { next(error); }
 });
 
 router.get("/:id", async (request, response, next) => {
   try {
-    const product = await Product.findById(request.params.id);
+    const product = await Product.findById(request.params.id).populate("purchaseTaxCategory", "taxCode taxRate taxType active").populate("salesTaxCategory", "taxCode taxRate taxType active");
     if (!product) return response.status(404).json({ success: false, message: "Product not found" });
     response.json({ success: true, data: product });
   } catch (error) { next(error); }
@@ -170,6 +190,8 @@ router.get("/:id", async (request, response, next) => {
 router.post("/", uploadImage, async (request, response, next) => {
   try {
     const data = productSchema.parse(request.body);
+    const taxCategoryError = await validateProductTaxCategories(data);
+    if (taxCategoryError) return response.status(400).json({ success: false, message: taxCategoryError });
     const images = (request.files || []).map((file) => `/uploads/products/${file.filename}`);
     const product = await Product.create({ ...data, image: images[0] || "", images });
     response.status(201).json({ success: true, data: product });
@@ -179,6 +201,10 @@ router.post("/", uploadImage, async (request, response, next) => {
 router.put("/:id", uploadImage, async (request, response, next) => {
   try {
     const data = productSchema.partial().parse(request.body);
+    const existingProduct = await Product.findById(request.params.id).select("purchaseTaxCategory salesTaxCategory");
+    if (!existingProduct) return response.status(404).json({ success: false, message: "Product not found" });
+    const taxCategoryError = await validateProductTaxCategories(data, existingProduct);
+    if (taxCategoryError) return response.status(400).json({ success: false, message: taxCategoryError });
     const images = (request.files || []).map((file) => `/uploads/products/${file.filename}`);
     if (images.length) { data.image = images[0]; data.images = images; }
     const product = await Product.findByIdAndUpdate(request.params.id, data, { new: true, runValidators: true });
@@ -199,7 +225,13 @@ router.post("/import", csvUpload.single("file"), async (request, response, next)
   try {
     if (!request.file) return response.status(400).json({ success: false, message: "CSV file is required" });
     const rows = parse(request.file.buffer, { columns: true, skip_empty_lines: true, trim: true });
-    const products = rows.map((row) => productSchema.parse(row));
+    const products = [];
+    for (const row of rows) {
+      const product = productSchema.parse(row);
+      const taxCategoryError = await validateProductTaxCategories(product);
+      if (taxCategoryError) throw Object.assign(new Error(taxCategoryError), { statusCode: 400 });
+      products.push(product);
+    }
     const inserted = await Product.insertMany(products);
     response.status(201).json({ success: true, imported: inserted.length, data: inserted });
   } catch (error) { next(error); }

@@ -18,6 +18,8 @@ const productSchema = new mongoose.Schema(
     brand: { type: String, trim: true, default: "" },
     unit: { type: String, trim: true, maxlength: 40, default: "unit" },
     category: { type: String, required: true, trim: true },
+    purchaseTaxCategory: { type: mongoose.Schema.Types.ObjectId, ref: "TaxCategory" },
+    salesTaxCategory: { type: mongoose.Schema.Types.ObjectId, ref: "TaxCategory" },
     price: { type: Number, required: true, min: 0 },
     costPrice: { type: Number, min: 0, default: 0 },
     originalPrice: { type: Number, min: 0 },

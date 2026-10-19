@@ -28,6 +28,8 @@ const emptyProduct = {
   description: "",
   returnEligible: true,
   replaceEligible: false,
+  purchaseTaxCategory: "",
+  salesTaxCategory: "",
 };
 const apiUrl = import.meta.env.VITE_API_URL || "";
 
@@ -38,6 +40,7 @@ const AdminProducts = () => {
   const [statusFilter, setStatusFilter] = useState("All");
   const [stockFilter, setStockFilter] = useState("All");
   const [categories, setCategories] = useState(productCategories.filter((category) => category !== "All Products").map((name) => ({ name, parentCategory: null })));
+  const [taxCategories, setTaxCategories] = useState([]);
   const [form, setForm] = useState(emptyProduct);
   const [images, setImages] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
@@ -81,6 +84,17 @@ const AdminProducts = () => {
   }, []);
 
   useEffect(() => {
+    fetch(`${apiUrl}/api/tax-categories`, { credentials: "include" })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "Unable to load tax codes.");
+        return result.data || [];
+      })
+      .then(setTaxCategories)
+      .catch((requestError) => setError(requestError.message));
+  }, []);
+
+  useEffect(() => {
     fetch(`${apiUrl}/api/products/categories`, { credentials: "include" })
       .then(async (response) => {
         const result = await response.json();
@@ -117,6 +131,8 @@ const AdminProducts = () => {
       description: product.description || "",
       returnEligible: Boolean(product.returnEligible),
       replaceEligible: Boolean(product.replaceEligible),
+      purchaseTaxCategory: product.purchaseTaxCategory?._id || product.purchaseTaxCategory || "",
+      salesTaxCategory: product.salesTaxCategory?._id || product.salesTaxCategory || "",
     });
     setImages([]);
     setImagePreviews((product.images?.length ? product.images : product.image ? [product.image] : []).map((image) => `${apiUrl}${image}`));
@@ -313,6 +329,7 @@ const AdminProducts = () => {
                 {[
                   "Product",
                   "Category",
+                  "Tax codes",
                   "Price",
                   "Stock",
                   "Vendor",
@@ -353,6 +370,7 @@ const AdminProducts = () => {
                   <td className="px-5 py-4 text-slate-500">
                     {product.category}
                   </td>
+                  <td className="px-5 py-4 text-slate-500"><span className="block">Purchase: {product.purchaseTaxCategory?.taxCode || "—"}</span><span className="mt-1 block text-xs">Sales: {product.salesTaxCategory?.taxCode || "—"}</span></td>
                   <td className="px-5 py-4 font-medium text-slate-700">
                     ₹{product.price}
                   </td>
@@ -421,7 +439,7 @@ const AdminProducts = () => {
                 </h2>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <Link to="/admin/categories" className="hidden rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-primary hover:text-primary sm:inline-flex">Manage categories</Link>
+                <div className="hidden items-center gap-2 sm:flex"><Link to="/admin/categories" className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-primary hover:text-primary">Manage categories</Link><Link to="/admin/tax-categories" className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-primary hover:text-primary">Manage tax codes</Link></div>
                 <button type="button" onClick={() => setFormOpen(false)} aria-label="Close product form" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-5 w-5" /></button>
               </div>
             </div>
@@ -447,6 +465,9 @@ const AdminProducts = () => {
                     <label className="text-sm font-medium text-slate-700">Original price<input type="number" min="0" value={form.originalPrice} onChange={updateField("originalPrice")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
                     <label className="text-sm font-medium text-slate-700">Cost price<input type="number" min="0" value={form.costPrice} onChange={updateField("costPrice")} placeholder="Used for profit reports" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
                     <label className="text-sm font-medium text-slate-700">Discount %<input type="number" min="0" max="100" value={form.discount} onChange={updateField("discount")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+                    <label className="text-sm font-medium text-slate-700">Purchase tax code<select value={form.purchaseTaxCategory} onChange={updateField("purchaseTaxCategory")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-primary"><option value="">No purchase tax</option>{taxCategories.filter((tax) => ["Purchase", "Both"].includes(tax.appliedOn) && (tax.active || tax._id === form.purchaseTaxCategory)).map((tax) => <option key={tax._id} value={tax._id}>{tax.taxCode} · {tax.taxRate}%{tax.active ? "" : " · Inactive"}{tax.description ? ` · ${tax.description}` : ""}</option>)}</select></label>
+                    <label className="text-sm font-medium text-slate-700">Sales tax code<select value={form.salesTaxCategory} onChange={updateField("salesTaxCategory")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-primary"><option value="">No sales tax</option>{taxCategories.filter((tax) => ["Sales", "Both"].includes(tax.appliedOn) && (tax.active || tax._id === form.salesTaxCategory)).map((tax) => <option key={tax._id} value={tax._id}>{tax.taxCode} · {tax.taxRate}%{tax.active ? "" : " · Inactive"}{tax.description ? ` · ${tax.description}` : ""}</option>)}</select></label>
+                    <p className="text-xs leading-5 text-slate-500 sm:col-span-2">Assigned codes automatically set the tax rate in purchase entry and POS sales. Create tax codes in <Link to="/admin/tax-categories" className="font-semibold text-primary hover:underline">Tax categories</Link>.</p>
                     <div className="grid grid-cols-2 gap-3">
                       <label className="text-sm font-medium text-slate-700">Rating<input required type="number" min="0" max="5" step="0.1" value={form.rating} onChange={updateField("rating")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
                       <label className="text-sm font-medium text-slate-700">Reviews<input required type="number" min="0" value={form.reviews} onChange={updateField("reviews")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>

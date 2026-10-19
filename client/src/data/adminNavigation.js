@@ -17,6 +17,7 @@ import {
   ImagePlus,
   Boxes,
   ClipboardList,
+  Percent,
 } from "lucide-react";
 
 export const adminNavigation = [
@@ -26,6 +27,7 @@ export const adminNavigation = [
   { label: "Products", to: "/admin/products", icon: Package, roles: ["admin", "manager", "user"] },
   { label: "Inventory", to: "/admin/inventory", icon: Boxes, roles: ["admin", "manager", "user"] },
   { label: "Categories", to: "/admin/categories", icon: Layers3, roles: ["admin", "manager", "user"] },
+  { label: "Tax categories", to: "/admin/tax-categories", icon: Percent, roles: ["admin"] },
   { label: "Users", to: "/admin/users", icon: UserRound, roles: ["admin"] },
   { label: "Customers", to: "/admin/customers", icon: Users, roles: ["admin", "manager", "user"] },
   { label: "Orders", to: "/admin/orders", icon: ShoppingCart, roles: ["admin", "manager", "user"] },

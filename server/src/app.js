@@ -28,6 +28,7 @@ const addressRoutes = require("./routes/address.routes");
 const storeLocationRoutes = require("./routes/storeLocation.routes");
 const inventoryRoutes = require("./routes/inventory.routes");
 const posRoutes = require("./routes/pos.routes");
+const taxCategoryRoutes = require("./routes/taxCategory.routes");
 const path = require("path");
 
 const app = express();
@@ -66,6 +67,10 @@ app.use("/api/addresses", requireAuth, addressRoutes);
 app.use("/api/stores", storeLocationRoutes);
 app.use("/api/inventory", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission("/admin/inventory"), inventoryRoutes);
 app.use("/api/pos", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission("/admin/pos"), posRoutes);
+app.use("/api/tax-categories", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission((request) => {
+  if (request.method !== "GET") return ["/admin/tax-categories"];
+  return ["/admin/tax-categories", "/admin/products", "/admin/purchase-entry", "/admin/pos"];
+}), taxCategoryRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/admin/support", requireAuth, requireRole("admin"), requireAnyMenuPermission("/admin/support"), supportRoutes);
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));

@@ -26,6 +26,7 @@ const purchaseSchema = z.object({
   freeQuantity: z.coerce.number().int().min(0).default(0),
   unitCost: z.coerce.number().min(0),
   discount: z.coerce.number().min(0).default(0),
+  taxCode: z.string().trim().max(30).optional().default(""),
   taxRate: z.coerce.number().min(0).max(100).default(0),
   purchaseDate: z.coerce.date(),
 });
@@ -127,13 +128,15 @@ const createPurchase = async (input, invoiceGroupId) => {
   const data = purchaseSchema.parse(input);
   const [vendor, product] = await Promise.all([resolveVendor(data.vendor), resolveProduct(data.product)]);
   if (!product) throw new Error("Product not found. Use the product ID or exact product name.");
+  await product.populate("purchaseTaxCategory", "taxCode taxRate");
+  const purchaseData = { ...data, taxCode: product.purchaseTaxCategory?.taxCode || data.taxCode, taxRate: product.purchaseTaxCategory ? Number(product.purchaseTaxCategory.taxRate) || 0 : data.taxRate };
   const productVariant = data.variant ? findVariant(product, data.variant) : null;
   if (data.variant && !productVariant) throw Object.assign(new Error("Select a variant that belongs to the chosen product."), { statusCode: 400 });
   const location = await resolveActiveLocation(data.location);
   if (data.location && !location) throw Object.assign(new Error("Select an active stock location."), { statusCode: 400 });
   if (productVariant && !location) throw Object.assign(new Error("A stock location is required for variant purchases."), { statusCode: 400 });
-  const amounts = getAmounts(data);
-  const purchase = await Purchase.create({ ...data, invoiceGroupId: groupId, variant: productVariant?.name || "", ...amounts, remainingQuantity: data.quantity + data.freeQuantity, invoiceNumber: createInvoiceNumber(), vendor: vendor._id, product: product._id, location: location?._id, productName: product.name });
+  const amounts = getAmounts(purchaseData);
+  const purchase = await Purchase.create({ ...purchaseData, invoiceGroupId: groupId, variant: productVariant?.name || "", ...amounts, remainingQuantity: data.quantity + data.freeQuantity, invoiceNumber: createInvoiceNumber(), vendor: vendor._id, product: product._id, location: location?._id, productName: product.name });
   const purchaseQuantity = data.quantity + data.freeQuantity;
   changeProductStock(product, location?._id, purchaseQuantity);
   if (productVariant) updateVariantStock(product, productVariant.name, location?._id, purchaseQuantity);
@@ -238,6 +241,7 @@ router.post("/import", csvUpload.single("file"), async (request, response, next)
         freeQuantity: normalizeNumber(row.freeQuantity ?? row.freeQty, 0),
         unitCost: normalizeNumber(row.unitCost ?? row.cost ?? row.purchaseCost, 0),
         discount: normalizeNumber(row.discount ?? row.discountAmount, 0),
+        taxCode: row.taxCode || "",
         taxRate: normalizeNumber(row.taxRate ?? row.gstRate ?? row.tax, 0),
         purchaseDate: row.purchaseDate || row.entryDate || row["entry date"] || row.date || new Date().toISOString(),
       };
@@ -246,7 +250,7 @@ router.post("/import", csvUpload.single("file"), async (request, response, next)
         row.referenceNumber, row.ref, row.reference, row.location, row.locationName, row.storeLocation, row.branch,
         row.batchNumber, row.batch, row.expiryDate, row.expiry, row.mrp, row.mrpPrice, row.price,
         row.rate, row.unitCost, row.cost, row.purchaseRate, row.quantity, row.freeQuantity, row.freeQty,
-        row.taxRate, row.gstRate, row.tax, row.discount, row.discountAmount, row.purchaseDate, row.entryDate, row["entry date"], row.date,
+        row.taxCode, row.taxRate, row.gstRate, row.tax, row.discount, row.discountAmount, row.purchaseDate, row.entryDate, row["entry date"], row.date,
       ].some((value) => normalizeText(value) !== "");
       if (!hasTransactionFields && payload.vendor && payload.product) {
         skippedRows.push(index + 2);
@@ -287,6 +291,7 @@ router.put("/:id", async (request, response, next) => {
     const data = purchaseSchema.parse(request.body);
     const [vendor, product] = await Promise.all([resolveVendor(data.vendor), resolveProduct(data.product)]);
     if (!product) return response.status(404).json({ success: false, message: "Product not found" });
+    await product.populate("purchaseTaxCategory", "taxCode taxRate");
     const productVariant = data.variant ? findVariant(product, data.variant) : null;
     if (data.variant && !productVariant) return response.status(400).json({ success: false, message: "Select a variant that belongs to the chosen product." });
     const location = await resolveActiveLocation(data.location);
@@ -317,8 +322,9 @@ router.put("/:id", async (request, response, next) => {
     if (oldVendor) oldVendor.pendingAmount = Math.max(0, oldVendor.pendingAmount - oldPurchase.total);
     if (oldProduct && !sameProduct) await oldProduct.save();
     if (oldVendor && !sameVendor) await oldVendor.save();
-    const amounts = getAmounts(data);
-    const purchase = await Purchase.findByIdAndUpdate(request.params.id, { ...data, variant: productVariant?.name || "", ...amounts, remainingQuantity, invoiceNumber: oldPurchase.invoiceNumber, vendor: vendor._id, product: product._id, location: location?._id, productName: product.name }, { new: true, runValidators: true }).populate("vendor", "name").populate("product", "name stock").populate("location", "name city");
+    const purchaseData = { ...data, taxCode: product.purchaseTaxCategory?.taxCode || data.taxCode, taxRate: product.purchaseTaxCategory ? Number(product.purchaseTaxCategory.taxRate) || 0 : data.taxRate };
+    const amounts = getAmounts(purchaseData);
+    const purchase = await Purchase.findByIdAndUpdate(request.params.id, { ...purchaseData, variant: productVariant?.name || "", ...amounts, remainingQuantity, invoiceNumber: oldPurchase.invoiceNumber, vendor: vendor._id, product: product._id, location: location?._id, productName: product.name }, { new: true, runValidators: true }).populate("vendor", "name").populate("product", "name stock").populate("location", "name city");
     if (!sameProductLocation) changeProductStock(stockProduct, location?._id, remainingQuantity);
     if (productVariant) updateVariantStock(stockProduct, productVariant.name, location?._id, remainingQuantity);
     stockProduct.costPrice = data.unitCost;

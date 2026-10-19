@@ -33,11 +33,29 @@ router.get("/", async (request, response, next) => {
 
 router.post("/reconcile-product-stock", async (request, response, next) => {
   try {
-    const result = await Product.updateMany(
-      { "locationStock.0": { $exists: true } },
-      [{ $set: { stock: { $sum: "$locationStock.quantity" } } }],
-    );
-    response.json({ success: true, updated: result.modifiedCount || 0 });
+    const products = await Product.find({ "locationStock.0": { $exists: true } })
+      .select("_id stock locationStock.quantity")
+      .lean();
+    const updates = products.flatMap((product) => {
+      const stock = product.locationStock.reduce((total, entry) => {
+        const quantity = Number(entry.quantity);
+        return total + (Number.isFinite(quantity) ? Math.max(quantity, 0) : 0);
+      }, 0);
+      if (product.stock !== null && product.stock !== undefined && Number(product.stock) === stock) return [];
+      const filter = { _id: product._id };
+      if (product.stock === undefined) filter.stock = { $exists: false };
+      else if (product.stock === null) filter.stock = { $eq: null, $exists: true };
+      else filter.stock = product.stock;
+      return [{
+        updateOne: {
+          filter,
+          update: { $set: { stock } },
+        },
+      }];
+    });
+    if (!updates.length) return response.json({ success: true, updated: 0 });
+    const result = await Product.bulkWrite(updates, { ordered: false });
+    response.json({ success: true, updated: result.modifiedCount ?? result.nModified ?? 0 });
   } catch (error) { next(error); }
 });
 

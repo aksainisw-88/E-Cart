@@ -252,7 +252,7 @@ router.post("/sales", async (request, response, next) => {
     if (!location) return response.status(400).json({ success: false, message: "Select an active store location." });
 
     const productIds = [...new Set(data.items.map((item) => item.productId))];
-    const products = await Product.find({ _id: { $in: productIds }, status: "Published" }).select("_id name unit price stock locationStock");
+    const products = await Product.find({ _id: { $in: productIds }, status: "Published" }).select("_id name unit price stock locationStock salesTaxCategory").populate("salesTaxCategory", "taxCode taxRate taxType");
     const productMap = new Map(products.map((product) => [product._id.toString(), product]));
     if (productMap.size !== productIds.length) return response.status(400).json({ success: false, message: "One or more products are unavailable for sale." });
     const purchaseLocationFilter = location.isDefault
@@ -296,14 +296,27 @@ router.post("/sales", async (request, response, next) => {
 
     let subtotal = 0;
     let itemDiscount = 0;
-    const items = data.items.map((item) => {
+    const lineBases = data.items.map((item) => {
       const product = productMap.get(item.productId);
       const rate = item.rate ?? Number(product.price);
       const gross = rate * item.quantity;
       if (item.discount > gross) throw Object.assign(new Error(`Discount exceeds the value of ${product.name}.`), { statusCode: 400 });
       subtotal += gross;
       itemDiscount += item.discount;
+      return { item, product, rate, gross, base: Math.max(gross - item.discount, 0) };
+    });
+    if (itemDiscount + data.promotionDiscount > subtotal) {
+      return response.status(400).json({ success: false, message: "Discount cannot exceed the invoice subtotal." });
+    }
+    const prePromotionBase = Math.max(subtotal - itemDiscount, 0);
+    let tax = 0;
+    const items = lineBases.map(({ item, product, rate, gross, base }) => {
       const purchase = item.purchaseId ? purchaseMap.get(item.purchaseId) : null;
+      const promotionShare = prePromotionBase > 0 ? data.promotionDiscount * (base / prePromotionBase) : 0;
+      const taxableAmount = Math.max(base - promotionShare, 0);
+      const taxRate = Number(product.salesTaxCategory?.taxRate) || 0;
+      const taxAmount = Number((taxableAmount * taxRate / 100).toFixed(2));
+      tax += taxAmount;
       return {
         product: product._id,
         purchase: purchase?._id,
@@ -314,15 +327,15 @@ router.post("/sales", async (request, response, next) => {
         mrp: Number(purchase?.mrp) || 0,
         unit: product.unit || "unit",
         unitPrice: rate,
+        taxCode: product.salesTaxCategory?.taxCode || "",
+        taxRate,
+        taxAmount,
         quantity: item.quantity,
         freeQuantity: item.freeQuantity,
         discount: item.discount,
         amount: Math.max(gross - item.discount, 0),
       };
     });
-    if (itemDiscount + data.promotionDiscount > subtotal) {
-      return response.status(400).json({ success: false, message: "Discount cannot exceed the invoice subtotal." });
-    }
 
     for (const item of data.items) {
       const product = productMap.get(item.productId);
@@ -334,9 +347,8 @@ router.post("/sales", async (request, response, next) => {
     }
 
     const discount = itemDiscount + data.promotionDiscount;
-    const taxRate = 5;
     const taxableAmount = Math.max(subtotal - discount, 0);
-    const tax = Number((taxableAmount * taxRate / 100).toFixed(2));
+    const taxRate = taxableAmount > 0 ? Number((tax / taxableAmount * 100).toFixed(4)) : 0;
     const total = Number((taxableAmount + tax).toFixed(2));
     const invoiceNumber = `POS-${new Date().getFullYear()}-${crypto.randomInt(100000, 1000000)}`;
     const sale = await PosSale.create({
