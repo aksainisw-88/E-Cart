@@ -15,6 +15,7 @@ const createSchema = z.object({
   type: z.enum(entryTypes),
   sourceEntryId: z.string().trim().min(1).max(120),
   invoiceDate: z.coerce.date(),
+  reason: z.string().trim().max(500).optional().default(""),
   items: z.array(z.object({
     sourceItemIndex: z.coerce.number().int().min(0).optional(),
     purchaseId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
@@ -164,7 +165,8 @@ router.get("/sources", async (request, response, next) => {
           location: purchase.location,
         });
       });
-      return response.json({ success: true, data: [...groups.values()] });
+      const availableGroups = [...groups.values()].filter((group) => group.items.some((item) => item.availableQuantity > 0));
+      return response.json({ success: true, data: availableGroups });
     }
 
     const sales = await PosSale.find(assignedLocation ? { location: assignedLocation._id } : {})
@@ -181,31 +183,32 @@ router.get("/sources", async (request, response, next) => {
       const key = `${entry.sourceSale}:${item.sourceItemIndex}`;
       returnedByLine.set(key, (returnedByLine.get(key) || 0) + Number(item.quantity || 0));
     }));
+    const availableSales = sales.map((sale) => ({
+      id: sale._id,
+      entryNumber: sale.invoiceNumber,
+      invoiceDate: sale.createdAt,
+      partyId: sale.customer?._id?.toString() || "",
+      partyName: sale.customer?.name || sale.customerName || "Walk-in Customer",
+      location: sale.location,
+      total: Number(sale.total) || 0,
+      items: (sale.items || []).map((item, sourceItemIndex) => ({
+        sourceItemIndex,
+        productId: item.product?._id || item.product,
+        productName: item.productName || item.product?.name || "Product",
+        variant: item.variant || "",
+        batchNumber: item.batchNumber || "",
+        expiryDate: item.expiryDate,
+        purchaseId: item.purchase,
+        mrp: Number(item.mrp) || 0,
+        rate: Number(item.unitPrice) || 0,
+        quantity: Number(item.quantity || 0) + Number(item.freeQuantity || 0),
+        availableQuantity: Math.max(0, Number(item.quantity || 0) + Number(item.freeQuantity || 0) - (returnedByLine.get(`${sale._id}:${sourceItemIndex}`) || 0)),
+        amount: Number(item.amount) || 0,
+      })),
+    })).filter((entry) => entry.items.some((item) => item.availableQuantity > 0));
     response.json({
       success: true,
-      data: sales.map((sale) => ({
-        id: sale._id,
-        entryNumber: sale.invoiceNumber,
-        invoiceDate: sale.createdAt,
-        partyId: sale.customer?._id?.toString() || "",
-        partyName: sale.customer?.name || sale.customerName || "Walk-in Customer",
-        location: sale.location,
-        total: Number(sale.total) || 0,
-        items: (sale.items || []).map((item, sourceItemIndex) => ({
-          sourceItemIndex,
-          productId: item.product?._id || item.product,
-          productName: item.productName || item.product?.name || "Product",
-          variant: item.variant || "",
-          batchNumber: item.batchNumber || "",
-          expiryDate: item.expiryDate,
-          purchaseId: item.purchase,
-          mrp: Number(item.mrp) || 0,
-          rate: Number(item.unitPrice) || 0,
-          quantity: Number(item.quantity || 0) + Number(item.freeQuantity || 0),
-          availableQuantity: Math.max(0, Number(item.quantity || 0) + Number(item.freeQuantity || 0) - (returnedByLine.get(`${sale._id}:${sourceItemIndex}`) || 0)),
-          amount: Number(item.amount) || 0,
-        })),
-      })),
+      data: availableSales,
     });
   } catch (error) { next(error); }
 });
@@ -228,7 +231,7 @@ router.post("/", async (request, response, next) => {
   try {
     const assignedLocation = await assignedLocationFor(request);
     const parsed = createSchema.safeParse(request.body);
-    if (!parsed.success) return response.status(400).json({ success: false, message: "Enter an invoice date and at least one valid return quantity." });
+    if (!parsed.success) return response.status(400).json({ success: false, message: "Enter an invoice date, a reason of up to 500 characters, and at least one valid return quantity." });
     const data = parsed.data;
     if (new Set(data.items.map((item) => item.sourceItemIndex ?? item.purchaseId)).size !== data.items.length) {
       return response.status(400).json({ success: false, message: "A source invoice line can only be entered once per return." });
@@ -292,6 +295,7 @@ router.post("/", async (request, response, next) => {
         returnData = {
           type: data.type,
           invoiceDate: data.invoiceDate,
+          reason: data.reason,
           sourceEntryId: data.sourceEntryId,
           sourceEntryNo: purchases[0].vendorInvoiceNumber || purchases[0].invoiceNumber,
           sourcePurchases: sourcePurchaseIds,
@@ -350,6 +354,7 @@ router.post("/", async (request, response, next) => {
         returnData = {
           type: data.type,
           invoiceDate: data.invoiceDate,
+          reason: data.reason,
           sourceEntryId: sale._id.toString(),
           sourceEntryNo: sale.invoiceNumber,
           sourceSale: sale._id,

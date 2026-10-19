@@ -23,6 +23,7 @@ const transactionReturnSchema = new mongoose.Schema({
   sourcePurchases: [{ type: mongoose.Schema.Types.ObjectId, ref: "Purchase" }],
   originalInvoiceDate: { type: Date },
   partyName: { type: String, trim: true, default: "" },
+  reason: { type: String, trim: true, maxlength: 500, default: "" },
   location: { type: mongoose.Schema.Types.ObjectId, ref: "StoreLocation" },
   items: { type: [returnItemSchema], required: true },
   total: { type: Number, required: true, min: 0, default: 0 },

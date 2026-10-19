@@ -18,6 +18,7 @@ const AdminTransactionReturns = ({ type }) => {
   const [partyId, setPartyId] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(dateInputValue());
+  const [reason, setReason] = useState("");
   const [quantities, setQuantities] = useState({});
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -92,12 +93,13 @@ const AdminTransactionReturns = ({ type }) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ type, sourceEntryId: source.id, invoiceDate, items }),
+        body: JSON.stringify({ type, sourceEntryId: source.id, invoiceDate, reason, items }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || `Unable to save ${type.toLowerCase()}.`);
       setMessage(`${result.data.returnNumber} saved for original entry ${result.data.sourceEntryNo}.`);
       setQuantities({});
+      setReason("");
       await loadData();
     } catch (requestError) {
       setError(requestError.message);
@@ -106,7 +108,7 @@ const AdminTransactionReturns = ({ type }) => {
     }
   };
 
-  const visibleEntries = entries.filter((entry) => `${entry.returnNumber} ${entry.sourceEntryNo} ${entry.partyName}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const visibleEntries = entries.filter((entry) => `${entry.returnNumber} ${entry.sourceEntryNo} ${entry.partyName} ${entry.reason || ""}`.toLowerCase().includes(query.trim().toLowerCase()));
   const title = isPurchaseReturn ? "Purchase return" : type;
   const sourceLabel = isPurchaseReturn ? "Purchase invoice" : "Sales invoice";
   const originalRateLabel = isPurchaseReturn ? "Purchase rate" : "Sale rate";
@@ -156,6 +158,9 @@ const AdminTransactionReturns = ({ type }) => {
               <div><p className="text-xs font-semibold text-slate-500">Original invoice date</p><p className="mt-1 flex h-11 items-center rounded-lg bg-slate-50 px-3 text-sm font-medium text-slate-800">{formatDate(source?.invoiceDate)}</p></div>
             </div>
           </div>
+          <label className="block text-xs font-semibold text-slate-500">Reason for {isReplacement ? "replacement" : "return"} <span className="font-normal text-slate-400">(optional)</span>
+            <textarea value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} rows={2} placeholder={isReplacement ? "Why is this item being replaced?" : "For example: damaged, expired, incorrect item..."} className="mt-1 block w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-800 outline-none placeholder:text-slate-400 focus:border-primary" />
+          </label>
           {source && <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg bg-emerald-50/70 px-3 py-2 text-xs text-slate-600">
             <span><strong className="text-slate-800">Original entry:</strong> {source.entryNumber}</span>
             <span><strong className="text-slate-800">Location:</strong> {source.location?.name || "—"}</span>
@@ -213,20 +218,21 @@ const AdminTransactionReturns = ({ type }) => {
           <label className="relative block sm:w-72"><span className="sr-only">Search return register</span><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Return no., entry no., name" className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-primary" /></label>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"><tr>{["Return invoice", "Invoice date", "Original entry", "Customer / vendor", "Lines", "Location", "Net amount"].map((heading) => <th key={heading} className="px-3 py-3 font-semibold">{heading}</th>)}</tr></thead>
+          <table className="w-full min-w-[960px] text-left text-sm">
+            <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"><tr>{["Return invoice", "Invoice date", "Original entry", "Customer / vendor", "Reason", "Lines", "Location", "Net amount"].map((heading) => <th key={heading} className="px-3 py-3 font-semibold">{heading}</th>)}</tr></thead>
             <tbody className="divide-y divide-slate-100">
               {visibleEntries.map((entry) => <tr key={entry._id} className="hover:bg-slate-50">
                 <td className="whitespace-nowrap px-3 py-3 font-semibold text-primary">{entry.returnNumber}</td>
                 <td className="whitespace-nowrap px-3 py-3 text-slate-600">{formatDate(entry.invoiceDate)}</td>
                 <td className="whitespace-nowrap px-3 py-3 font-medium text-slate-800">{entry.sourceEntryNo}</td>
                 <td className="px-3 py-3 text-slate-600">{entry.partyName || "—"}</td>
+                <td className="max-w-64 truncate px-3 py-3 text-slate-600" title={entry.reason || "No reason provided"}>{entry.reason || "—"}</td>
                 <td className="px-3 py-3 text-slate-600">{entry.items?.length || 0}</td>
                 <td className="px-3 py-3 text-slate-600">{entry.location?.name || "—"}</td>
                 <td className="whitespace-nowrap px-3 py-3 font-semibold text-slate-800">{money(entry.total)}</td>
               </tr>)}
-              {!loading && !visibleEntries.length && <tr><td colSpan="7" className="px-5 py-12 text-center text-sm text-slate-500"><RotateCcw className="mx-auto mb-2 h-5 w-5 text-slate-300" />No {type.toLowerCase()} entries found.</td></tr>}
-              {loading && <tr><td colSpan="7" className="px-5 py-12 text-center text-sm text-slate-500">Loading transaction register...</td></tr>}
+              {!loading && !visibleEntries.length && <tr><td colSpan="8" className="px-5 py-12 text-center text-sm text-slate-500"><RotateCcw className="mx-auto mb-2 h-5 w-5 text-slate-300" />No {type.toLowerCase()} entries found.</td></tr>}
+              {loading && <tr><td colSpan="8" className="px-5 py-12 text-center text-sm text-slate-500">Loading transaction register...</td></tr>}
             </tbody>
           </table>
         </div>
