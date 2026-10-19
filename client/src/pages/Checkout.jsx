@@ -137,7 +137,7 @@ const Checkout = () => {
               continuing to checkout.
             </p>
             <Link
-              to="/login"
+              to="/customer/login"
               className="mt-6 inline-flex rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white"
             >
               Sign in to continue

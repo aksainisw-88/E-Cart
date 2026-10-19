@@ -28,6 +28,7 @@ import AdminOrderDetails from "./pages/AdminOrderDetails";
 import AdminInventory from "./pages/AdminInventory";
 import AdminReturns from "./pages/AdminReturns";
 import ResetPassword from "./pages/ResetPassword";
+import AdminLogin from "./pages/AdminLogin";
 
 const RequireCustomerAuth = ({ children }) => {
   const location = useLocation();
@@ -50,14 +51,14 @@ const RequireCustomerAuth = ({ children }) => {
       </div>
     </div>
   );
-  if (state !== "authorized") return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />;
+  if (state !== "authorized") return <Navigate to="/customer/login" replace state={{ from: `${location.pathname}${location.search}` }} />;
   return children;
 };
 
 function App() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith("/admin");
-  const isAuthRoute = ["/account", "/login", "/register", "/reset-password"].includes(location.pathname);
+  const isAuthRoute = ["/account", "/login", "/register", "/customer/login", "/customer/register", "/reset-password"].includes(location.pathname);
 
   return (
     <>
@@ -69,8 +70,10 @@ function App() {
         <Route path="/products" element={<Products />} />
         <Route path="/products/:productId" element={<ProductDetails />} />
         <Route path="/account" element={<Account initialMode="login" />} />
-        <Route path="/login" element={<Account initialMode="login" />} />
-        <Route path="/register" element={<Account initialMode="signup" />} />
+        <Route path="/login" element={<Navigate to="/customer/login" replace />} />
+        <Route path="/register" element={<Navigate to="/customer/register" replace />} />
+        <Route path="/customer/login" element={<Account initialMode="login" />} />
+        <Route path="/customer/register" element={<Account initialMode="signup" />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/account/orders" element={<RequireCustomerAuth><CustomerOrders /></RequireCustomerAuth>} />
         <Route path="/wishlist" element={<RequireCustomerAuth><Wishlist /></RequireCustomerAuth>} />
@@ -79,6 +82,7 @@ function App() {
         <Route path="/payment" element={<RequireCustomerAuth><Payment /></RequireCustomerAuth>} />
         <Route path="/contact" element={<ContactUs />} />
         <Route path="/offers" element={<Offers />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboardOverview />} />
           <Route path="reports" element={<AdminReports />} />

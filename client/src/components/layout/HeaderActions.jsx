@@ -10,7 +10,7 @@ const HeaderActions = () => {
   return (
     <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
       <NavLink
-        to="/login"
+        to="/customer/login"
         className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-slate-600 transition hover:bg-emerald-50 hover:text-primary"
       >
         <UserRound size={20} />

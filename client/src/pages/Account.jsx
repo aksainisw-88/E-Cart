@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ArrowRight, Building2, Check, ChevronRight, Heart, LogOut, Mail, MapPin, Package, Plus, ShieldCheck, ShoppingBag, Star, Store, Trash2 } from "lucide-react";
 import CustomerAccountNav from "../components/customer/CustomerAccountNav";
 import Footer from "../components/home/Footer";
@@ -44,6 +44,7 @@ const Account = ({ initialMode = "login" }) => {
   const [addressError, setAddressError] = useState("");
   const [addressForm, setAddressForm] = useState({ label: "Home", name: "", phone: "", address: "", city: "", pincode: "", isDefault: false });
   const navigate = useNavigate();
+  const location = useLocation();
   const store = useStore();
 
   useEffect(() => {
@@ -212,7 +213,7 @@ const Account = ({ initialMode = "login" }) => {
     setLoading(true);
 
     try {
-      const endpoint = mode === "login" ? "login" : "register";
+      const endpoint = mode === "login" ? "login/customer" : "register";
       const response = await fetch(`${API_URL}/api/auth/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -223,12 +224,13 @@ const Account = ({ initialMode = "login" }) => {
       if (!response.ok) throw new Error(result.message || "Unable to authenticate.");
       setSubmitted(true);
       if (["admin", "manager", "user"].includes(result.user.role)) {
-        navigate("/admin");
+        navigate("/admin/login", { replace: true });
       } else if (result.user.customerType === "B2B") {
         setStorePickerOpen(true);
         await loadStoreLocations();
       } else {
-        navigate("/");
+        const requestedPath = location.state?.from;
+        navigate(typeof requestedPath === "string" && requestedPath.startsWith("/") && !requestedPath.startsWith("//") ? requestedPath : "/");
       }
     } catch (requestError) {
       setError(requestError instanceof TypeError ? "Unable to reach the server. Start the backend with npm run dev from the server folder." : requestError.message);
@@ -257,6 +259,16 @@ const Account = ({ initialMode = "login" }) => {
     setFormData((current) => ({ ...current, [field]: event.target.value }));
     setError("");
   };
+
+  if (!checkingSession && !currentUser && location.pathname === "/account") {
+    return <Navigate to="/customer/login" replace />;
+  }
+  if (!checkingSession && currentUser && currentUser.role !== "customer") {
+    return <Navigate to="/admin" replace />;
+  }
+  if (!checkingSession && currentUser && location.pathname.startsWith("/customer/")) {
+    return <Navigate to="/account" replace />;
+  }
 
   if (currentUser && !checkingSession) {
     const openTickets = supportTickets.filter((ticket) => normalizeStatus(ticket.status) !== "resolved").length;
@@ -620,7 +632,8 @@ const Account = ({ initialMode = "login" }) => {
                   {mode === "login" && <div className="flex justify-end"><button type="button" onClick={() => { setForgotEmail(formData.email); setForgotOpen((open) => !open); setForgotMessage(""); setForgotError(""); }} className="text-sm font-medium text-primary hover:text-primary-dark">Forgot password?</button></div>}
                   {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
                   <button disabled={loading} className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary font-semibold text-white transition hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60" type="submit">{loading ? "Please wait..." : mode === "login" ? "Sign in" : otpSent ? "Verify code & create account" : "Send verification code"}<ArrowRight className="h-4 w-4" /></button>
-                  <p className="text-center text-sm text-gray-500">{mode === "login" ? "Don&apos;t have an account?" : "Already have an account?"}{" "}<Link to={mode === "login" ? "/register" : "/login"} className="font-semibold text-primary hover:text-primary-dark">{mode === "login" ? "Create account" : "Sign in"}</Link></p>
+                  <p className="text-center text-sm text-gray-500">{mode === "login" ? "Don&apos;t have an account?" : "Already have an account?"}{" "}<Link to={mode === "login" ? "/customer/register" : "/customer/login"} className="font-semibold text-primary hover:text-primary-dark">{mode === "login" ? "Create account" : "Sign in"}</Link></p>
+                  {mode === "login" && <p className="text-center text-sm text-gray-500">Store staff? <Link to="/admin/login" className="font-semibold text-primary hover:text-primary-dark">Admin sign in</Link></p>}
                 </form>
               )}
               {mode === "login" && forgotOpen && !checkingSession && !currentUser && <form onSubmit={requestPasswordReset} className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">

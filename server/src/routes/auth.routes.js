@@ -70,6 +70,32 @@ const parseBody = (schema, request, response) => {
   return result.data;
 };
 
+const createLoginHandler = (allowedRoles) => async (request, response, next) => {
+  try {
+    const data = parseBody(credentialsSchema, request, response);
+    if (!data) return;
+
+    const user = await User.findOne({ email: data.email.toLowerCase() }).select("+password");
+    const validPassword = user && await bcrypt.compare(data.password, user.password);
+    if (!validPassword) {
+      return response.status(401).json({ success: false, message: "Invalid email or password." });
+    }
+
+    if (user.status === "Blocked") {
+      return response.status(403).json({ success: false, message: "This account is blocked. Contact an administrator." });
+    }
+
+    if (allowedRoles && !allowedRoles.includes(user.role)) {
+      return response.status(403).json({ success: false, message: "These credentials cannot be used on this sign-in page." });
+    }
+
+    setAuthCookie(response, user, request.app.locals.env);
+    return response.json({ success: true, user: publicUser(user) });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 router.post("/register", async (request, response, next) => {
   try {
     const data = parseBody(registrationSchema, request, response);
@@ -197,27 +223,9 @@ router.post("/reset-password", async (request, response, next) => {
   }
 });
 
-router.post("/login", async (request, response, next) => {
-  try {
-    const data = parseBody(credentialsSchema, request, response);
-    if (!data) return;
-
-    const user = await User.findOne({ email: data.email.toLowerCase() }).select("+password");
-    const validPassword = user && await bcrypt.compare(data.password, user.password);
-    if (!validPassword) {
-      return response.status(401).json({ success: false, message: "Invalid email or password." });
-    }
-
-    if (user.status === "Blocked") {
-      return response.status(403).json({ success: false, message: "This account is blocked. Contact an administrator." });
-    }
-
-    setAuthCookie(response, user, request.app.locals.env);
-    return response.json({ success: true, user: publicUser(user) });
-  } catch (error) {
-    return next(error);
-  }
-});
+router.post("/login", createLoginHandler(["customer"]));
+router.post("/login/customer", createLoginHandler(["customer"]));
+router.post("/login/admin", createLoginHandler(["admin", "manager", "user"]));
 
 router.get("/me", requireAuth, async (request, response, next) => {
   try {

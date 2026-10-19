@@ -159,7 +159,7 @@ const Payment = () => {
               className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-700"
             >
               {error}{" "}
-              <Link to="/login" className="font-semibold underline">
+              <Link to="/customer/login" className="font-semibold underline">
                 Sign in
               </Link>
             </p>

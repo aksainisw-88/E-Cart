@@ -27,7 +27,7 @@ const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const store = useStore();
-  const logout = async () => { await fetch("/api/auth/logout", { method: "POST", credentials: "include" }); navigate("/account", { replace: true }); };
+  const logout = async () => { await fetch("/api/auth/logout", { method: "POST", credentials: "include" }); navigate("/admin/login", { replace: true }); };
   const toggleDarkMode = () => setDarkMode((current) => { const next = !current; localStorage.setItem("e-mart-admin-dark", String(next)); return next; });
 
   useEffect(() => {
@@ -45,6 +45,7 @@ const AdminLayout = () => {
 
   useEffect(() => {
     let active = true;
+    const requestedAdminPath = `${window.location.pathname}${window.location.search}`;
 
     fetch("/api/auth/me", { credentials: "include" })
       .then(async (response) => {
@@ -55,14 +56,14 @@ const AdminLayout = () => {
       .then(({ user }) => {
         if (!active) return;
         if (!["admin", "manager", "user"].includes(user.role)) {
-          navigate("/", { replace: true });
+          navigate("/admin/login", { replace: true, state: { from: requestedAdminPath } });
           return;
         }
         setAdminUser(user);
         setAuthState("authorized");
       })
       .catch(() => {
-        if (active) navigate("/account", { replace: true });
+        if (active) navigate("/admin/login", { replace: true, state: { from: requestedAdminPath } });
       });
 
     return () => { active = false; };
