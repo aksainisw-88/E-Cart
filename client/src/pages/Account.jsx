@@ -285,19 +285,19 @@ const Account = ({ initialMode = "login" }) => {
 
     return (
       <>
-        <main className="min-h-[70vh] bg-slate-50 py-8 sm:py-10">
+        <main className="min-h-[70vh] bg-[#f4f7f5] py-8 sm:py-10">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <div className="mb-7 flex flex-col justify-between gap-5 rounded-3xl bg-gradient-to-br from-[#063d34] via-[#075747] to-[#0b7660] px-5 py-6 text-white shadow-lg shadow-emerald-950/10 sm:flex-row sm:items-center sm:px-8 sm:py-8">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-primary">Customer account</p>
-                <h1 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">Welcome back, {currentUser.name.split(" ")[0]}</h1>
-                <p className="mt-1 text-sm text-slate-500">Your orders, addresses, and support in one place.</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-200">Customer account</p>
+                <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Welcome back, {currentUser.name.split(" ")[0]}</h1>
+                <p className="mt-2 text-sm text-emerald-50/80">A little space for everything you need from {store.name}.</p>
               </div>
               <div className="flex items-center gap-3">
-                <Link to="/products" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-primary hover:text-primary">
+                <Link to="/products" className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50">
                   <ShoppingBag className="h-4 w-4" />Continue shopping
                 </Link>
-                <button type="button" onClick={handleLogout} disabled={loading} aria-label="Sign out" title="Sign out" className="rounded-lg border border-slate-200 bg-white p-2.5 text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-60">
+                <button type="button" onClick={handleLogout} disabled={loading} aria-label="Sign out" title="Sign out" className="rounded-xl border border-white/20 bg-white/10 p-3 text-white transition hover:bg-white/20 disabled:opacity-60">
                   <LogOut className="h-4 w-4" />
                 </button>
               </div>
@@ -306,9 +306,9 @@ const Account = ({ initialMode = "login" }) => {
             <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
               <CustomerAccountNav />
               <div className="min-w-0 space-y-6">
-                <section className="flex flex-col justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:p-6">
+                <section className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:p-6">
                   <div className="flex items-center gap-4">
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xl font-bold text-primary">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-50 text-xl font-bold text-primary ring-1 ring-emerald-100">
                       {currentUser.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0">
@@ -316,7 +316,7 @@ const Account = ({ initialMode = "login" }) => {
                       <p className="mt-1 flex items-center gap-1.5 truncate text-sm text-slate-500"><Mail className="h-3.5 w-3.5 shrink-0" />{currentUser.email}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs font-medium text-emerald-700">
+                  <div className="flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
                     <ShieldCheck className="h-4 w-4" />Account protected
                   </div>
                 </section>
@@ -361,17 +361,17 @@ const Account = ({ initialMode = "login" }) => {
                     { label: "Saved addresses", value: addresses.length, icon: MapPin, link: "#customer-addresses" },
                     { label: "Open support requests", value: openTickets, icon: ShieldCheck, link: "/contact" },
                   ].map(({ label, value, icon: Icon, link }) => (
-                    <Link key={label} to={link} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 transition hover:border-emerald-300">
+                    <Link key={label} to={link} className="group flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md">
                       <div>
                         <p className="text-sm text-slate-500">{label}</p>
                         <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
                       </div>
-                      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-primary"><Icon className="h-5 w-5" /></span>
+                      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-primary transition group-hover:bg-primary group-hover:text-white"><Icon className="h-5 w-5" /></span>
                     </Link>
                   ))}
                 </section>
 
-                <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
                   <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
                     <div>
                       <h2 className="font-semibold text-slate-900">Recent orders</h2>
@@ -405,7 +405,7 @@ const Account = ({ initialMode = "login" }) => {
                 </section>
 
                 <div className="grid gap-6 xl:grid-cols-2">
-                  <section id="customer-addresses" className="scroll-mt-32 rounded-xl border border-slate-200 bg-white p-5">
+                  <section id="customer-addresses" className="scroll-mt-32 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h2 className="font-semibold text-slate-900">Saved addresses</h2>
@@ -442,7 +442,7 @@ const Account = ({ initialMode = "login" }) => {
                     </div>
                   </section>
 
-                  <section className="rounded-xl border border-slate-200 bg-white p-5">
+                  <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h2 className="font-semibold text-slate-900">Support requests</h2>
@@ -476,40 +476,50 @@ const Account = ({ initialMode = "login" }) => {
 
   return (
     <>
-      <main className="relative flex min-h-[calc(100vh-186px)] items-center justify-center overflow-hidden bg-[#e9f4f8] px-3 py-8 sm:px-6 sm:py-12 md:min-h-[calc(100vh-146px)]">
-        <div className="pointer-events-none absolute inset-0 scale-105 bg-cover bg-center opacity-25 blur-xl" style={{ backgroundImage: `url('${authImage}')` }} />
-        <div className="relative mx-auto grid w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl shadow-slate-900/10 lg:min-h-[620px] lg:grid-cols-[1.05fr_0.95fr]">
-          <section className="relative order-2 hidden min-h-[620px] overflow-hidden bg-slate-100 lg:block">
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f2f6f3] px-3 py-6 sm:px-6 sm:py-10">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_18%,rgba(16,185,129,0.13),transparent_28%),radial-gradient(circle_at_90%_82%,rgba(14,116,144,0.10),transparent_30%)]" />
+        <div className="relative mx-auto grid w-full max-w-6xl overflow-hidden rounded-[28px] border border-white/80 bg-white shadow-[0_28px_90px_-35px_rgba(15,55,43,0.35)] lg:min-h-[680px] lg:grid-cols-[0.95fr_1.05fr]">
+          <section className="relative order-1 flex min-h-[250px] overflow-hidden bg-slate-100 lg:min-h-[680px]">
             <img src={authImage} alt="Healthcare professional holding essential medicines" className="absolute inset-0 h-full w-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-slate-900/5 to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 p-9 text-white">
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/80">Care that comes through</p>
-              <h2 className="mt-2 max-w-sm text-3xl font-bold leading-tight">Your health essentials, all in one place.</h2>
-              <p className="mt-3 max-w-sm text-sm leading-6 text-white/85">Trusted products, simple ordering, and delivery updates whenever you need them.</p>
+            <div className="absolute inset-0 bg-gradient-to-b from-[#063d34]/75 via-[#063d34]/35 to-[#062d2c]/90" />
+            <div className="relative flex w-full flex-col justify-between p-6 text-white sm:p-9 lg:p-11">
+              <Link to="/" aria-label="Go to home" className="flex w-fit items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-3 py-2.5 backdrop-blur-sm">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white text-xl font-bold text-primary shadow-sm">
+                  {store.logoUrl ? <img src={store.logoUrl} alt="" className="h-full w-full object-contain" /> : "+"}
+                </span>
+                <span><span className="block text-sm font-bold">{store.name}</span><span className="block text-[11px] text-white/70">Your care, made simpler</span></span>
+              </Link>
+              <div className="max-w-lg py-5 lg:pb-8">
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-emerald-50 backdrop-blur-sm"><ShieldCheck className="h-3.5 w-3.5" />Trusted essentials, delivered</span>
+                <h2 className="mt-4 text-3xl font-bold leading-tight sm:text-4xl lg:text-[2.8rem]">Good health starts with a simpler shop.</h2>
+                <p className="mt-4 max-w-md text-sm leading-6 text-white/80 sm:text-base">Shop trusted wellness essentials, keep track of every order, and get back to what matters.</p>
+                <div className="mt-6 flex flex-wrap gap-2 text-xs font-medium text-white/90">
+                  <span className="rounded-full border border-white/20 bg-white/10 px-3 py-2">Easy reordering</span>
+                  <span className="rounded-full border border-white/20 bg-white/10 px-3 py-2">Order updates</span>
+                  <span className="rounded-full border border-white/20 bg-white/10 px-3 py-2">Secure account</span>
+                </div>
+              </div>
+              <p className="hidden text-xs text-white/60 lg:block">A convenient way to care for yourself and your family.</p>
             </div>
           </section>
 
-          <section className="order-1 min-w-0 bg-white px-6 py-7 sm:px-10 sm:py-10 lg:px-12 lg:py-9">
+          <section className="order-2 min-w-0 bg-white px-6 py-7 sm:px-10 sm:py-10 lg:px-12 lg:py-11">
             <div className="mb-8 flex items-center justify-between gap-3">
-              <Link to="/" aria-label="Go to home" className="flex min-w-0 items-center gap-2.5">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-sky-600 text-xl font-bold text-white">
-                  {store.logoUrl ? <img src={store.logoUrl} alt="" className="h-full w-full object-contain" /> : "+"}
-                </span>
-                <span className="truncate text-lg font-bold text-sky-700">{store.name}</span>
-              </Link>
-              <Link to="/" className="shrink-0 text-xs font-semibold text-slate-400 hover:text-primary">Back home</Link>
+              <p className="text-xs font-semibold text-slate-400">Customer portal</p>
+              <Link to="/" className="shrink-0 rounded-full px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 hover:text-primary">Back to store <ArrowRight className="ml-1 inline h-3.5 w-3.5" /></Link>
             </div>
-            {!checkingSession && !currentUser && <div className="flex justify-center border-b border-slate-200">
-              <div className="flex">{[["login", "Sign in"], ["signup", "Create account"]].map(([value, label]) => (
-                <button key={value} type="button" onClick={() => { setMode(value); setSubmitted(false); setForgotOpen(false); }} className={`border-b-2 px-4 pb-3 text-sm font-semibold transition ${mode === value ? "border-primary text-primary" : "border-transparent text-gray-400 hover:text-gray-700"}`}>
+            {!checkingSession && !currentUser && <div className="flex rounded-xl bg-slate-100 p-1">
+              <div className="grid w-full grid-cols-2">{[["login", "Sign in"], ["signup", "Create account"]].map(([value, label]) => (
+                <button key={value} type="button" onClick={() => { setMode(value); setSubmitted(false); setForgotOpen(false); }} className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${mode === value ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
                   {label}
                 </button>
               ))}</div>
             </div>}
-            <div className="mx-auto max-w-sm pt-7">
-              <h2 className="text-center text-2xl font-semibold text-slate-800">{currentUser ? "Your account" : mode === "login" ? "Welcome back" : "Create your account"}</h2>
-              <p className="mt-2 text-center text-sm text-slate-500">{currentUser ? "Manage your orders and saved products." : mode === "login" ? "Sign in to access orders and wellness essentials." : "A few details to make shopping easier."}</p>
-              {checkingSession ? <div className="mt-8 rounded-lg bg-gray-50 p-4 text-sm text-gray-500">Checking your account...</div> : currentUser ? (
+            <div className="mx-auto max-w-md pt-7">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">{mode === "login" ? "Welcome back" : "Join the community"}</p>
+              <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">{currentUser ? "Your account" : mode === "login" ? "Sign in to your account" : "Create your account"}</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-500">{currentUser ? "Manage your orders and saved products." : mode === "login" ? "Pick up where you left off and keep your orders close." : "A few details to make shopping easier."}</p>
+              {checkingSession ? <div className="mt-8 flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-5 text-sm text-slate-500"><span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-primary" />Checking your account...</div> : currentUser ? (
                 <div className="mt-8">
                   <div className="flex items-center gap-4 rounded-xl bg-teal-50 p-5">
                     <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-lg font-bold text-white">
@@ -607,11 +617,11 @@ const Account = ({ initialMode = "login" }) => {
                   <button type="button" onClick={handleLogout} disabled={loading} className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-red-200 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-60"><LogOut className="h-4 w-4" />{loading ? "Signing out..." : "Sign out"}</button>
                 </div>
               ) : submitted ? <div className="mt-8 rounded-lg bg-teal-50 p-4 text-sm text-teal-800">You are signed in successfully. Your account is ready to use.</div> : (
-                <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+                <form onSubmit={handleSubmit} className="mt-7 space-y-5">
                   {mode === "signup" && <>
-                    <label className="block text-sm font-medium text-gray-700">Full name<input required value={formData.name} onChange={updateField("name")} className="mt-2 h-11 w-full rounded-lg border border-gray-200 px-3 outline-none focus:border-primary" placeholder="Your name" /></label>
+                    <label className="block text-sm font-semibold text-slate-700">Full name<input required autoComplete="name" value={formData.name} onChange={updateField("name")} className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-primary focus:bg-white focus:ring-4 focus:ring-emerald-50" placeholder="Your name" /></label>
                     <fieldset>
-                      <legend className="text-sm font-medium text-gray-700">Account type</legend>
+                      <legend className="text-sm font-semibold text-slate-700">Account type</legend>
                       <div className="mt-2 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
                         {["B2C", "B2B"].map((type) => (
                           <button key={type} type="button" aria-pressed={formData.customerType === type} onClick={() => setFormData((current) => ({ ...current, customerType: type }))} className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${formData.customerType === type ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
@@ -621,12 +631,12 @@ const Account = ({ initialMode = "login" }) => {
                       </div>
                     </fieldset>
                     {formData.customerType === "B2B" && <>
-                      <label className="block text-sm font-medium text-gray-700">Business name<input required minLength={2} maxLength={120} value={formData.businessName} onChange={updateField("businessName")} className="mt-2 h-11 w-full rounded-lg border border-gray-200 px-3 outline-none focus:border-primary" placeholder="Registered business name" /></label>
-                      <label className="block text-sm font-medium text-gray-700">GSTIN <span className="font-normal text-gray-400">(optional)</span><input maxLength={15} value={formData.gstin} onChange={updateField("gstin")} className="mt-2 h-11 w-full rounded-lg border border-gray-200 px-3 uppercase outline-none focus:border-primary" placeholder="15-character GSTIN" /></label>
+                      <label className="block text-sm font-semibold text-slate-700">Business name<input required minLength={2} maxLength={120} value={formData.businessName} onChange={updateField("businessName")} className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-primary focus:bg-white focus:ring-4 focus:ring-emerald-50" placeholder="Registered business name" /></label>
+                      <label className="block text-sm font-semibold text-slate-700">GSTIN <span className="font-normal text-slate-400">(optional)</span><input maxLength={15} value={formData.gstin} onChange={updateField("gstin")} className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 text-sm uppercase outline-none transition placeholder:text-slate-400 focus:border-primary focus:bg-white focus:ring-4 focus:ring-emerald-50" placeholder="15-character GSTIN" /></label>
                     </>}
                   </>}
-                  <label className="block text-sm font-medium text-gray-700">Email address<input required value={formData.email} onChange={(event) => { updateField("email")(event); if (mode === "signup") { setOtpSent(false); setOtpCode(""); setDevelopmentOtp(""); } }} type="email" className="mt-2 h-11 w-full rounded-lg border border-gray-200 px-3 outline-none focus:border-primary" placeholder="you@example.com" /></label>
-                  <label className="block text-sm font-medium text-gray-700">Password<input required value={formData.password} onChange={updateField("password")} minLength={8} type="password" className="mt-2 h-11 w-full rounded-lg border border-gray-200 px-3 outline-none focus:border-primary" placeholder="At least 8 characters" /></label>
+                  <label className="block text-sm font-semibold text-slate-700">Email address<input required autoComplete="email" value={formData.email} onChange={(event) => { updateField("email")(event); if (mode === "signup") { setOtpSent(false); setOtpCode(""); setDevelopmentOtp(""); } }} type="email" className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-primary focus:bg-white focus:ring-4 focus:ring-emerald-50" placeholder="you@example.com" /></label>
+                  <label className="block text-sm font-semibold text-slate-700">Password<input required autoComplete={mode === "login" ? "current-password" : "new-password"} value={formData.password} onChange={updateField("password")} minLength={8} type="password" className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-primary focus:bg-white focus:ring-4 focus:ring-emerald-50" placeholder="At least 8 characters" /></label>
                   {mode === "signup" && otpSent && <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
                     <label htmlFor="signup-otp" className="block text-sm font-semibold text-slate-800">Email verification code</label>
                     <p className="mt-1 text-xs text-slate-600">Enter the six-digit code sent to {formData.email}. It expires in 10 minutes.</p>
@@ -635,10 +645,10 @@ const Account = ({ initialMode = "login" }) => {
                     <div className="mt-3 flex justify-end"><button type="button" disabled={loading} onClick={requestSignupOtp} className="text-xs font-semibold text-primary hover:underline disabled:opacity-50">{loading ? "Sending..." : "Resend code"}</button></div>
                   </div>}
                   {mode === "login" && <div className="flex justify-end"><button type="button" onClick={() => { setForgotEmail(formData.email); setForgotOpen((open) => !open); setForgotMessage(""); setForgotError(""); }} className="text-sm font-medium text-primary hover:text-primary-dark">Forgot password?</button></div>}
-                  {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-                  <button disabled={loading} className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary font-semibold text-white transition hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60" type="submit">{loading ? "Please wait..." : mode === "login" ? "Sign in" : otpSent ? "Verify code & create account" : "Send verification code"}<ArrowRight className="h-4 w-4" /></button>
-                  <p className="text-center text-sm text-gray-500">{mode === "login" ? "Don&apos;t have an account?" : "Already have an account?"}{" "}<Link to={mode === "login" ? "/customer/register" : "/customer/login"} className="font-semibold text-primary hover:text-primary-dark">{mode === "login" ? "Create account" : "Sign in"}</Link></p>
-                  {mode === "login" && <p className="text-center text-sm text-gray-500">Store staff? <Link to="/admin/login" className="font-semibold text-primary hover:text-primary-dark">Admin sign in</Link></p>}
+                  {error && <p role="alert" className="rounded-xl border border-red-100 bg-red-50 p-3.5 text-sm text-red-700">{error}</p>}
+                  <button disabled={loading} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary font-bold text-white shadow-lg shadow-emerald-900/15 transition hover:-translate-y-0.5 hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60" type="submit">{loading ? "Please wait..." : mode === "login" ? "Sign in" : otpSent ? "Verify code & create account" : "Send verification code"}<ArrowRight className="h-4 w-4" /></button>
+                  <p className="text-center text-sm text-slate-500">{mode === "login" ? "Don&apos;t have an account?" : "Already have an account?"}{" "}<Link to={mode === "login" ? "/customer/register" : "/customer/login"} className="font-bold text-primary hover:text-primary-dark">{mode === "login" ? "Create account" : "Sign in"}</Link></p>
+                  {mode === "login" && <p className="border-t border-slate-100 pt-4 text-center text-sm text-slate-500">Store staff? <Link to="/admin/login" className="font-bold text-primary hover:text-primary-dark">Admin sign in</Link></p>}
                 </form>
               )}
               {mode === "login" && forgotOpen && !checkingSession && !currentUser && <form onSubmit={requestPasswordReset} className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">

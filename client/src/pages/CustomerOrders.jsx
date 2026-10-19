@@ -261,17 +261,24 @@ const CustomerOrders = () => {
 
   return (
     <>
-      <main className="min-h-[55vh] bg-[#f4f7f4] py-12 sm:py-16">
+      <main className="min-h-[55vh] bg-[#f4f7f5] py-8 sm:py-12">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
             <CustomerAccountNav />
             <section className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-wider text-primary">Customer account</p>
-              <h1 className="mt-1 text-2xl font-bold text-gray-900 sm:text-3xl">Your orders</h1>
-              <p className="mt-2 text-sm text-gray-500">Track deliveries, review purchases, and manage eligible orders.</p>
+              <div className="rounded-3xl bg-gradient-to-br from-[#063d34] via-[#075747] to-[#0b7660] px-5 py-6 text-white shadow-lg shadow-emerald-950/10 sm:px-7 sm:py-8">
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-200">Customer account</p>
+                <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <h1 className="text-2xl font-bold sm:text-3xl">Your orders</h1>
+                    <p className="mt-2 max-w-lg text-sm leading-6 text-emerald-50/80">Track deliveries, review purchases, and manage eligible orders.</p>
+                  </div>
+                  {!loading && !error && <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white">{orders.length} {orders.length === 1 ? "order" : "orders"}</span>}
+                </div>
+              </div>
 
           {loading ? (
-            <div className="mt-6 rounded-xl border border-slate-200 bg-white p-12 text-center text-sm text-gray-500">
+            <div className="mt-6 rounded-2xl border border-slate-200/80 bg-white p-12 text-center text-sm text-gray-500 shadow-sm">
               Loading your orders...
             </div>
           ) : error ? (
@@ -279,9 +286,9 @@ const CustomerOrders = () => {
           ) : orders.length ? (
             <div className="mt-6 space-y-4">
               {orders.map((order) => (
-                <article
+              <article
                   key={order._id}
-                  className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6"
+                  className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:border-emerald-200 sm:p-6"
                 >
                   <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                     <div>
@@ -387,7 +394,7 @@ const CustomerOrders = () => {
               ))}
             </div>
           ) : (
-            <div className="mt-6 rounded-xl border border-dashed border-gray-300 bg-white p-16 text-center">
+            <div className="mt-6 rounded-2xl border border-dashed border-gray-300 bg-white p-16 text-center shadow-sm">
               <Package className="mx-auto h-10 w-10 text-gray-300" />
               <h2 className="mt-4 font-semibold text-gray-900">No orders yet</h2>
             </div>
