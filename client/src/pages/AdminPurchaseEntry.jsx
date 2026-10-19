@@ -11,6 +11,12 @@ const getPurchaseItemTotal = (item) => {
   const tax = subtotal * ((Number(item.taxRate) || 0) / 100);
   return Math.max(Number((subtotal + tax - (Number(item.discount) || 0)).toFixed(2)), 0);
 };
+const getInvoiceGroupKey = (entry) => {
+  if (entry.invoiceGroupId) return `group:${entry.invoiceGroupId}`;
+  const invoiceNumber = String(entry.vendorInvoiceNumber || "").trim().toLocaleLowerCase();
+  if (!invoiceNumber) return `entry:${entry._id}`;
+  return `legacy:${entry.vendor?._id || entry.vendor || ""}:${invoiceNumber}:${String(entry.purchaseDate || "").slice(0, 10)}:${entry.location?._id || entry.location || ""}`;
+};
 
 const AdminPurchaseEntry = () => {
   const [entries, setEntries] = useState([]);
@@ -85,11 +91,32 @@ const AdminPurchaseEntry = () => {
   }, []);
 
   const totalPurchase = useMemo(() => entries.reduce((sum, entry) => sum + Number(entry.total || 0), 0), [entries]);
-  const filteredEntries = useMemo(() => entries.filter((entry) => {
-    const searchableText = `${entry.invoiceNumber || ""} ${entry.vendorInvoiceNumber || ""} ${entry.referenceNumber || ""} ${entry.vendor?.name || ""} ${entry.productName || ""} ${entry.batchNumber || ""} ${entry.location?.name || ""}`.toLowerCase();
-    const entryDate = String(entry.purchaseDate || "").slice(0, 10);
+  const invoiceGroups = useMemo(() => {
+    const groups = new Map();
+    entries.forEach((entry) => {
+      const key = getInvoiceGroupKey(entry);
+      if (!groups.has(key)) groups.set(key, { key, items: [] });
+      groups.get(key).items.push(entry);
+    });
+    return Array.from(groups.values()).map((group) => {
+      const first = group.items[0];
+      return {
+        ...group,
+        first,
+        total: group.items.reduce((sum, item) => sum + Number(item.total || 0), 0),
+        amount: group.items.reduce((sum, item) => sum + Number(item.amount ?? item.total ?? 0), 0),
+        taxAmount: group.items.reduce((sum, item) => sum + Number(item.taxAmount || 0), 0),
+        paidAmount: group.items.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0),
+      };
+    });
+  }, [entries]);
+  const filteredInvoices = useMemo(() => invoiceGroups.filter((group) => {
+    const { first, items } = group;
+    const lineSearch = items.map((item) => `${item.invoiceNumber || ""} ${item.productName || item.product?.name || ""} ${item.variant || ""} ${item.batchNumber || ""}`).join(" ");
+    const searchableText = `${first.invoiceNumber || ""} ${first.vendorInvoiceNumber || ""} ${first.referenceNumber || ""} ${first.vendor?.name || ""} ${first.location?.name || ""} ${lineSearch}`.toLowerCase();
+    const entryDate = String(first.purchaseDate || "").slice(0, 10);
     return searchableText.includes(historyQuery.trim().toLowerCase()) && (!dateFrom || entryDate >= dateFrom) && (!dateTo || entryDate <= dateTo);
-  }), [entries, historyQuery, dateFrom, dateTo]);
+  }), [invoiceGroups, historyQuery, dateFrom, dateTo]);
   const selectedProduct = products.find((product) => product._id === form.product);
   const productVariants = selectedProduct?.variants || [];
   const calculatedAmount = useMemo(() => {
@@ -222,7 +249,8 @@ const AdminPurchaseEntry = () => {
     const response = await fetch(`${apiUrl}/api/purchases/import`, { method: "POST", credentials: "include", body });
     const result = await response.json();
     if (!response.ok) { setError(result.message || "Unable to import purchase CSV."); return; }
-    setMessage(`${result.imported} purchase entries imported and stock updated.`);
+    const skippedRowsMessage = result.skippedRows?.length ? ` Skipped incomplete template row${result.skippedRows.length === 1 ? "" : "s"}: ${result.skippedRows.join(", ")}.` : "";
+    setMessage(`${result.importedInvoices ?? result.imported} purchase invoices imported with ${result.importedLines ?? result.imported} product lines. Stock updated.${skippedRowsMessage}`);
     await refresh();
   };
 
@@ -334,47 +362,55 @@ const AdminPurchaseEntry = () => {
         </div></section>}
 
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"><div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Purchase register</p><h2 className="mt-1 text-lg font-bold text-slate-900">All purchase invoices <span className="ml-1 text-sm font-medium text-slate-400">{filteredEntries.length}</span></h2></div><label className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 sm:w-80"><Search className="h-4 w-4 shrink-0 text-slate-400" /><input value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} placeholder="Search invoice, vendor, product..." className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" /></label></div>
+          <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"><div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Purchase register</p><h2 className="mt-1 text-lg font-bold text-slate-900">All purchase invoices <span className="ml-1 text-sm font-medium text-slate-400">{filteredInvoices.length}</span></h2></div><label className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 sm:w-80"><Search className="h-4 w-4 shrink-0 text-slate-400" /><input value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} placeholder="Search invoice, vendor, product..." className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" /></label></div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1320px] border-collapse text-left text-xs">
               <thead className="bg-primary text-[11px] font-semibold uppercase tracking-wide text-white"><tr>
                 <th scope="col" className="border-b border-r border-white/15 px-3 py-3">Invoice no.</th>
                 <th scope="col" className="border-b border-r border-white/15 px-3 py-3">Entry date</th>
-                <th scope="col" className="border-b border-r border-white/15 px-3 py-3">Vendor bill</th>
                 <th scope="col" className="border-b border-r border-white/15 px-3 py-3">Reference</th>
                 <th scope="col" className="border-b border-r border-white/15 px-3 py-3">Vendor</th>
                 <th scope="col" className="border-b border-r border-white/15 px-3 py-3">Station</th>
-                <th scope="col" className="border-b border-r border-white/15 px-3 py-3">Product</th>
+                <th scope="col" className="border-b border-r border-white/15 px-3 py-3">Products</th>
                 <th scope="col" className="border-b border-r border-white/15 px-3 py-3 text-right">Bill amount</th>
                 <th scope="col" className="border-b border-r border-white/15 px-3 py-3 text-right">Tax amount</th>
                 <th scope="col" className="border-b border-r border-white/15 px-3 py-3 text-right">Total amount</th>
                 <th scope="col" className="border-b border-r border-white/15 px-3 py-3 text-right">Paid</th>
                 <th scope="col" className="border-b border-r border-white/15 px-3 py-3 text-right">Due</th>
                 <th scope="col" className="border-b border-r border-white/15 px-3 py-3">Status</th>
-                <th scope="col" className="border-b border-white/15 px-3 py-3 text-right"><span className="sr-only">Actions</span></th>
               </tr></thead>
-              <tbody className="divide-y divide-slate-200">{filteredEntries.map((entry) => {
-                const amountDue = Math.max(0, Number(entry.total || 0) - Number(entry.paidAmount || 0));
-                const paymentStatus = entry.paymentStatus || (amountDue > 0 ? "Pending" : "Paid");
-                return <tr key={entry._id} className="text-slate-700 odd:bg-white even:bg-slate-50/60 hover:bg-sky-50">
-                  <td className="whitespace-nowrap border-r border-slate-100 px-3 py-2 font-semibold text-primary">{entry.invoiceNumber || "—"}</td>
+              <tbody className="divide-y divide-slate-200">{filteredInvoices.map((group) => {
+                const entry = group.first;
+                const amountDue = Math.max(0, group.total - group.paidAmount);
+                const paymentStatus = amountDue <= 0 ? "Paid" : group.paidAmount > 0 ? "Partially paid" : "Pending";
+                const productSummary = group.items.slice(0, 2).map((item) => item.productName || item.product?.name || "Product").join(", ");
+                return <tr key={group.key} className="text-slate-700 odd:bg-white even:bg-slate-50/60 hover:bg-sky-50">
+                  <td className="whitespace-nowrap border-r border-slate-100 px-3 py-2 font-semibold text-primary">{entry.vendorInvoiceNumber || entry.invoiceNumber || "—"}</td>
                   <td className="whitespace-nowrap border-r border-slate-100 px-3 py-2">{entry.purchaseDate ? new Date(entry.purchaseDate).toLocaleDateString("en-GB") : "—"}</td>
-                  <td className="whitespace-nowrap border-r border-slate-100 px-3 py-2">{entry.vendorInvoiceNumber || "—"}</td>
                   <td className="whitespace-nowrap border-r border-slate-100 px-3 py-2">{entry.referenceNumber || "—"}</td>
                   <td className="border-r border-slate-100 px-3 py-2 font-medium">{entry.vendor?.name || "—"}</td>
                   <td className="border-r border-slate-100 px-3 py-2">{entry.location?.name || "—"}</td>
-                  <td className="border-r border-slate-100 px-3 py-2"><span className="font-medium">{entry.productName || entry.product?.name || "—"}</span>{entry.variant && <span className="ml-1 text-slate-500">· {entry.variant}</span>}</td>
-                  <td className="whitespace-nowrap border-r border-slate-100 px-3 py-2 text-right tabular-nums">{formatCurrency(entry.amount ?? entry.total)}</td>
-                  <td className="whitespace-nowrap border-r border-slate-100 px-3 py-2 text-right tabular-nums">{formatCurrency(entry.taxAmount)}</td>
-                  <td className="whitespace-nowrap border-r border-slate-100 px-3 py-2 text-right font-semibold tabular-nums">{formatCurrency(entry.total)}</td>
-                  <td className="whitespace-nowrap border-r border-slate-100 px-3 py-2 text-right tabular-nums">{formatCurrency(entry.paidAmount)}</td>
+                  <td className="border-r border-slate-100 px-3 py-2">
+                    <details className="min-w-64">
+                      <summary className="cursor-pointer font-medium text-slate-700">{group.items.length} {group.items.length === 1 ? "product" : "products"}<span className="ml-2 font-normal text-slate-500">{productSummary}{group.items.length > 2 ? ` +${group.items.length - 2} more` : ""}</span></summary>
+                      <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-white p-2">
+                        {group.items.map((item) => <div key={item._id} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2 last:border-0 last:pb-0">
+                          <div className="min-w-0"><p className="truncate font-medium">{item.productName || item.product?.name || "Product"}{item.variant ? ` · ${item.variant}` : ""}</p><p className="text-[11px] text-slate-500">{item.batchNumber ? `Batch ${item.batchNumber} · ` : ""}Qty {Number(item.quantity || 0) + Number(item.freeQuantity || 0)} · {formatCurrency(item.total)}</p></div>
+                          <div className="flex shrink-0 gap-1"><button type="button" onClick={() => editEntry(item)} title="Edit product line" aria-label={`Edit ${item.productName || "purchase line"}`} className="rounded-md p-1.5 text-slate-500 hover:bg-amber-100 hover:text-amber-700"><Pencil className="h-4 w-4" /></button><button type="button" onClick={() => deleteEntry(item)} title="Delete product line" aria-label={`Delete ${item.productName || "purchase line"}`} className="rounded-md p-1.5 text-slate-500 hover:bg-red-100 hover:text-red-600"><Trash2 className="h-4 w-4" /></button></div>
+                        </div>)}
+                      </div>
+                    </details>
+                  </td>
+                  <td className="whitespace-nowrap border-r border-slate-100 px-3 py-2 text-right tabular-nums">{formatCurrency(group.amount)}</td>
+                  <td className="whitespace-nowrap border-r border-slate-100 px-3 py-2 text-right tabular-nums">{formatCurrency(group.taxAmount)}</td>
+                  <td className="whitespace-nowrap border-r border-slate-100 px-3 py-2 text-right font-semibold tabular-nums">{formatCurrency(group.total)}</td>
+                  <td className="whitespace-nowrap border-r border-slate-100 px-3 py-2 text-right tabular-nums">{formatCurrency(group.paidAmount)}</td>
                   <td className="whitespace-nowrap border-r border-slate-100 px-3 py-2 text-right font-semibold tabular-nums">{formatCurrency(amountDue)}</td>
-                  <td className="whitespace-nowrap border-r border-slate-100 px-3 py-2"><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${paymentStatus === "Paid" ? "bg-emerald-100 text-emerald-700" : paymentStatus === "Partially paid" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"}`}>{paymentStatus}</span></td>
-                  <td className="whitespace-nowrap px-2 py-1"><div className="flex justify-end gap-1"><button type="button" onClick={() => editEntry(entry)} title="Edit purchase" aria-label={`Edit ${entry.invoiceNumber || "purchase"}`} className="rounded-md p-1.5 text-slate-500 hover:bg-amber-100 hover:text-amber-700"><Pencil className="h-4 w-4" /></button><button type="button" onClick={() => deleteEntry(entry)} title="Delete purchase" aria-label={`Delete ${entry.invoiceNumber || "purchase"}`} className="rounded-md p-1.5 text-slate-500 hover:bg-red-100 hover:text-red-600"><Trash2 className="h-4 w-4" /></button></div></td>
+                  <td className="whitespace-nowrap px-3 py-2"><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${paymentStatus === "Paid" ? "bg-emerald-100 text-emerald-700" : paymentStatus === "Partially paid" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"}`}>{paymentStatus}</span></td>
                 </tr>;
               })}</tbody>
             </table>
-            {!filteredEntries.length && <p className="px-4 py-12 text-center text-sm text-slate-500">{entries.length ? "No purchases match these filters." : "No purchase invoices yet. Create a new invoice to begin."}</p>}
+            {!filteredInvoices.length && <p className="px-4 py-12 text-center text-sm text-slate-500">{entries.length ? "No purchases match these filters." : "No purchase invoices yet. Create a new invoice to begin."}</p>}
           </div>
         </section>
       </div>

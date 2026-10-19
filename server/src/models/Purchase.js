@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const purchaseSchema = new mongoose.Schema(
   {
     invoiceNumber: { type: String, required: true, unique: true, trim: true },
+    invoiceGroupId: { type: String, trim: true, default: "", index: true },
     vendorInvoiceNumber: { type: String, trim: true, default: "" },
     referenceNumber: { type: String, trim: true, default: "" },
     vendor: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor", required: true },

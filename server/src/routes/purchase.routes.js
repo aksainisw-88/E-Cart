@@ -1,4 +1,5 @@
 const express = require("express");
+const { randomUUID } = require("crypto");
 const multer = require("multer");
 const { parse } = require("csv-parse/sync");
 const { z } = require("zod");
@@ -16,7 +17,7 @@ const purchaseSchema = z.object({
   variant: z.string().trim().max(120).optional().default(""),
   vendorInvoiceNumber: z.string().trim().max(120).optional().default(""),
   referenceNumber: z.string().trim().max(120).optional().default(""),
-  location: z.union([z.string().regex(/^[a-f\d]{24}$/i), z.literal("")]).optional().default(""),
+  location: z.string().trim().max(120).optional().default(""),
   batchNumber: z.string().trim().max(100).optional().default(""),
   expiryDate: z.coerce.date().optional(),
   mrp: z.coerce.number().min(0).default(0),
@@ -116,10 +117,11 @@ const updateVariantStock = (product, variantInput, locationId, quantityChange) =
   else if (quantityChange > 0) target.locationStock.push({ location: locationId, quantity: quantityChange });
 };
 
-const createPurchase = async (input) => {
+const createPurchase = async (input, invoiceGroupId) => {
+  const groupId = invoiceGroupId || `PINV-${randomUUID()}`;
   if (Array.isArray(input?.items) && input.items.length) {
     const created = [];
-    for (const item of input.items) created.push(await createPurchase(item));
+    for (const item of input.items) created.push(await createPurchase(item, groupId));
     return created;
   }
   const data = purchaseSchema.parse(input);
@@ -131,7 +133,7 @@ const createPurchase = async (input) => {
   if (data.location && !location) throw Object.assign(new Error("Select an active stock location."), { statusCode: 400 });
   if (productVariant && !location) throw Object.assign(new Error("A stock location is required for variant purchases."), { statusCode: 400 });
   const amounts = getAmounts(data);
-  const purchase = await Purchase.create({ ...data, variant: productVariant?.name || "", ...amounts, remainingQuantity: data.quantity + data.freeQuantity, invoiceNumber: createInvoiceNumber(), vendor: vendor._id, product: product._id, location: location?._id, productName: product.name });
+  const purchase = await Purchase.create({ ...data, invoiceGroupId: groupId, variant: productVariant?.name || "", ...amounts, remainingQuantity: data.quantity + data.freeQuantity, invoiceNumber: createInvoiceNumber(), vendor: vendor._id, product: product._id, location: location?._id, productName: product.name });
   const purchaseQuantity = data.quantity + data.freeQuantity;
   changeProductStock(product, location?._id, purchaseQuantity);
   if (productVariant) updateVariantStock(product, productVariant.name, location?._id, purchaseQuantity);
@@ -218,13 +220,14 @@ router.post("/import", csvUpload.single("file"), async (request, response, next)
   try {
     if (!request.file) return response.status(400).json({ success: false, message: "CSV file is required" });
     const rows = parse(request.file.buffer, { columns: true, skip_empty_lines: true, trim: true, bom: true });
-    const imported = [];
-    for (const row of rows) {
+    if (!rows.length) return response.status(400).json({ success: false, message: "The CSV does not contain any purchase rows." });
+    const skippedRows = [];
+    const payloads = rows.map((row, index) => {
       const payload = {
         vendor: row.vendor || row.vendorName || row.supplier || row.supplierName,
         product: row.product || row.productName || row.itemName || row.item,
         variant: row.variant || row.variantName || row.variantSku || "",
-        vendorInvoiceNumber: row.vendorInvoiceNumber || row.invoiceNumber || row.invoice || row.billNumber,
+        vendorInvoiceNumber: row.vendorInvoiceNumber || row.entryNo || row.entryNumber || row["entry no"] || row.invoiceNumber || row.invoiceNo || row.invoice || row.billNumber,
         referenceNumber: row.referenceNumber || row.ref || row.reference || "",
         location: row.location || row.locationName || row.storeLocation || row.branch || "",
         batchNumber: row.batchNumber || row.batch || "",
@@ -236,11 +239,44 @@ router.post("/import", csvUpload.single("file"), async (request, response, next)
         unitCost: normalizeNumber(row.unitCost ?? row.cost ?? row.purchaseCost, 0),
         discount: normalizeNumber(row.discount ?? row.discountAmount, 0),
         taxRate: normalizeNumber(row.taxRate ?? row.gstRate ?? row.tax, 0),
-        purchaseDate: row.purchaseDate || row.date || new Date().toISOString(),
+        purchaseDate: row.purchaseDate || row.entryDate || row["entry date"] || row.date || new Date().toISOString(),
       };
-      imported.push(await createPurchase(payload));
-    }
-    response.status(201).json({ success: true, imported: imported.length, data: imported });
+      const hasTransactionFields = [
+        row.vendorInvoiceNumber, row.entryNo, row.entryNumber, row["entry no"], row.invoiceNumber, row.invoiceNo, row.invoice, row.billNumber,
+        row.referenceNumber, row.ref, row.reference, row.location, row.locationName, row.storeLocation, row.branch,
+        row.batchNumber, row.batch, row.expiryDate, row.expiry, row.mrp, row.mrpPrice, row.price,
+        row.rate, row.unitCost, row.cost, row.purchaseRate, row.quantity, row.freeQuantity, row.freeQty,
+        row.taxRate, row.gstRate, row.tax, row.discount, row.discountAmount, row.purchaseDate, row.entryDate, row["entry date"], row.date,
+      ].some((value) => normalizeText(value) !== "");
+      if (!hasTransactionFields && payload.vendor && payload.product) {
+        skippedRows.push(index + 2);
+        return null;
+      }
+      const parsed = purchaseSchema.safeParse(payload);
+      if (!parsed.success) {
+        const details = parsed.error.issues.map((issue) => `${issue.path.join(" ") || "value"}: ${issue.message}`).join("; ");
+        throw Object.assign(new Error(`CSV row ${index + 2} is incomplete or invalid (${details}). No purchase rows were imported.`), { statusCode: 400 });
+      }
+      return parsed.data;
+    }).filter(Boolean);
+    if (!payloads.length) return response.status(400).json({ success: false, message: "The CSV does not contain any complete purchase rows." });
+
+    const groups = new Map();
+    payloads.forEach((payload, index) => {
+      const invoiceNumber = normalizeText(payload.vendorInvoiceNumber).toLocaleLowerCase();
+      const date = payload.purchaseDate.toISOString().slice(0, 10);
+      const vendor = normalizeText(payload.vendor).toLocaleLowerCase();
+      const location = normalizeText(payload.location).toLocaleLowerCase();
+      const key = invoiceNumber
+        ? JSON.stringify([vendor, invoiceNumber, date, location])
+        : `row:${index}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(payload);
+    });
+
+    const imported = [];
+    for (const items of groups.values()) imported.push(...await createPurchase({ items }));
+    response.status(201).json({ success: true, imported: groups.size, importedInvoices: groups.size, importedLines: imported.length, skippedRows, data: imported });
   } catch (error) { next(error); }
 });
 
