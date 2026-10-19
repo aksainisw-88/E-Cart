@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, KeyRound, ShieldCheck } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useStore } from "../context/storeContext";
+import { signIn } from "../utils/auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const staffRoles = ["admin", "manager", "user"];
@@ -38,14 +39,7 @@ const AdminLogin = () => {
     setError("");
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/auth/login/admin`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email, password }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || "Unable to sign in to the admin console.");
+      await signIn({ audience: "admin", email, password });
       const requestedPath = location.state?.from;
       const returnTo = typeof requestedPath === "string" && (requestedPath === "/admin" || requestedPath.startsWith("/admin/")) && requestedPath !== "/admin/login"
         ? requestedPath

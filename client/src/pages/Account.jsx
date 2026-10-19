@@ -4,6 +4,7 @@ import { ArrowRight, Building2, Check, ChevronRight, Heart, LogOut, Mail, MapPin
 import CustomerAccountNav from "../components/customer/CustomerAccountNav";
 import Footer from "../components/home/Footer";
 import { useStore } from "../context/storeContext";
+import { signIn } from "../utils/auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const authImage = "https://images.unsplash.com/photo-1585435557343-3b092031a831?auto=format&fit=crop&w=1200&q=85";
@@ -213,15 +214,19 @@ const Account = ({ initialMode = "login" }) => {
     setLoading(true);
 
     try {
-      const endpoint = mode === "login" ? "login/customer" : "register";
-      const response = await fetch(`${API_URL}/api/auth/${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(mode === "signup" ? { ...formData, otp: otpCode } : formData),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || "Unable to authenticate.");
+      let result;
+      if (mode === "login") {
+        result = await signIn({ audience: "customer", email: formData.email, password: formData.password });
+      } else {
+        const response = await fetch(`${API_URL}/api/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ ...formData, otp: otpCode }),
+        });
+        result = await response.json();
+        if (!response.ok) throw new Error(result.message || "Unable to create your account.");
+      }
       setSubmitted(true);
       if (["admin", "manager", "user"].includes(result.user.role)) {
         navigate("/admin/login", { replace: true });
