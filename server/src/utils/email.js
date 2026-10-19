@@ -26,10 +26,10 @@ const sendSignupCode = async (email, code, env) => {
   return true;
 };
 
-const sendInventoryResetCode = async (email, code, env, { allowDevelopmentFallback = false } = {}) => {
+const sendInventoryResetCode = async (email, code, env, { allowFallback = false } = {}) => {
   const from = env.SMTP_FROM || env.SMTP_USER;
   if (!isEmailConfigured(env)) {
-    if (allowDevelopmentFallback && env.NODE_ENV !== "production") return false;
+    if (allowFallback) return false;
     throw new Error("Email delivery is not configured.");
   }
 

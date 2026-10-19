@@ -94,13 +94,17 @@ router.post("/inventory-reset/otp", async (request, response, next) => {
     }
     const otp = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
     const env = request.app.locals.env;
-    const sent = await sendInventoryResetCode(admin.email, otp, env, { allowDevelopmentFallback: isLocalDevelopmentOrigin(request.get("origin")) });
+    const sent = await sendInventoryResetCode(admin.email, otp, env, { allowFallback: true });
     await InventoryResetOtp.findOneAndUpdate(
       { user: admin._id },
       { otpHash: hashInventoryResetOtp(admin._id, otp, env.JWT_SECRET), attempts: 0, expiresAt: new Date(Date.now() + 10 * 60_000) },
       { upsert: true, new: true, setDefaultsOnInsert: true },
     );
-    response.json({ success: true, message: `Reset code sent to ${maskEmail(admin.email)}. It expires in 10 minutes.`, ...(!sent ? { developmentOtp: otp } : {}) });
+    response.json({
+      success: true,
+      message: sent ? `Reset code sent to ${maskEmail(admin.email)}. It expires in 10 minutes.` : "Email is not configured. Use the one-time fallback code shown below; it expires in 10 minutes.",
+      ...(!sent ? { fallbackOtp: otp } : {}),
+    });
   } catch (error) {
     if (error.message === "Email delivery is not configured.") return response.status(503).json({ success: false, message: "Admin email delivery is not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_FROM (or use SMTP_USER as the sender) in the Render API environment, then redeploy." });
     next(error);

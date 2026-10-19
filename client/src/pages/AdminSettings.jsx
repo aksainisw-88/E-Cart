@@ -25,7 +25,7 @@ const AdminSettings = () => {
   const [preferences, setPreferences] = useState(readPreferences);
   const [integrations, setIntegrations] = useState(emptyIntegrations);
   const [resetOtp, setResetOtp] = useState("");
-  const [developmentOtp, setDevelopmentOtp] = useState("");
+  const [resetFallbackOtp, setResetFallbackOtp] = useState("");
   const [resetAcknowledged, setResetAcknowledged] = useState(false);
   const [resetBusy, setResetBusy] = useState("");
   const [resetMessage, setResetMessage] = useState("");
@@ -63,6 +63,7 @@ const AdminSettings = () => {
     setResetBusy("send");
     setResetError("");
     setResetMessage("");
+    setResetFallbackOtp("");
     try {
       const response = await fetch(`${API_URL}/api/users/inventory-reset/otp`, {
         method: "POST",
@@ -72,7 +73,7 @@ const AdminSettings = () => {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Unable to send inventory reset code.");
-      setDevelopmentOtp(result.developmentOtp || "");
+      setResetFallbackOtp(result.fallbackOtp || "");
       setResetOtp("");
       setResetAcknowledged(false);
       setResetMessage(result.message || "Reset code sent to the signed-in admin email.");
@@ -97,7 +98,7 @@ const AdminSettings = () => {
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Unable to reset inventory.");
       setResetOtp("");
-      setDevelopmentOtp("");
+      setResetFallbackOtp("");
       setResetAcknowledged(false);
       setResetMessage(`${result.message} ${result.data?.products ?? 0} products and ${result.data?.batches ?? 0} batches updated.`);
     } catch (requestError) {
@@ -111,6 +112,7 @@ const AdminSettings = () => {
     setStoreResetBusy("send");
     setStoreResetError("");
     setStoreResetMessage("");
+    setStoreDevelopmentOtp("");
     try {
       const response = await fetch(`${API_URL}/api/users/store-reset/otp`, {
         method: "POST",
@@ -248,8 +250,8 @@ const AdminSettings = () => {
 
         <section className="rounded-xl border border-red-200 bg-white p-6 sm:p-8">
           <div className="flex items-center gap-3 border-b border-red-100 pb-5"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600"><RotateCcw className="h-5 w-5" /></span><div><h2 className="font-semibold text-slate-900">Reset inventory to zero</h2><p className="mt-1 text-xs text-slate-500">This resets product, location, variant, and purchase-batch stock. It preserves customers, products, orders, sales, purchases, and store settings.</p></div></div>
-          <div className="mt-5 flex flex-wrap items-end gap-3"><button type="button" onClick={sendInventoryResetOtp} disabled={Boolean(resetBusy)} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{resetBusy === "send" ? "Sending code..." : "Send OTP to admin email"}</button><p className="text-xs text-slate-500">Signed in as {profile.email || "admin"}</p></div>
-          {developmentOtp && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Development reset code: <span className="font-bold tracking-widest">{developmentOtp}</span></p>}
+          <div className="mt-5 flex flex-wrap items-end gap-3"><button type="button" onClick={sendInventoryResetOtp} disabled={Boolean(resetBusy)} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{resetBusy === "send" ? "Preparing code..." : "Email OTP or show fallback code"}</button><p className="text-xs text-slate-500">Signed in as {profile.email || "admin"}</p></div>
+          {resetFallbackOtp && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Email is unavailable. One-time reset fallback code: <span className="font-bold tracking-widest">{resetFallbackOtp}</span></p>}
           <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(180px,240px)_1fr] sm:items-end">
             <label className="text-sm font-semibold text-slate-700">6-digit OTP<input inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" value={resetOtp} onChange={(event) => setResetOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm tracking-widest outline-none focus:border-primary" placeholder="Enter code" /></label>
             <label className="flex cursor-pointer items-start gap-2 pb-2 text-xs leading-5 text-slate-600"><input type="checkbox" checked={resetAcknowledged} onChange={(event) => setResetAcknowledged(event.target.checked)} className="mt-0.5 h-4 w-4 accent-red-600" /><span>I understand all current product, branch, variant, and batch stock quantities will be set to zero.</span></label>

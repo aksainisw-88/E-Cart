@@ -35,7 +35,7 @@ Use your provider's SMTP host, port, TLS mode, and credentials. In development o
 
 Forgot-password requests use the same SMTP settings. Reset links expire after one hour and can only be used once. When SMTP is unset in development, the reset screen displays a local-only link for testing.
 
-Admin inventory and store resets also send a six-digit OTP to the signed-in admin email. Configure `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM` on the production API service (Render service `e-mart-api`) before requesting a reset code. `SMTP_FROM` may be omitted when the provider's sender address is the same as `SMTP_USER`. The code expires after 10 minutes; production does not return it in the browser when email delivery is unavailable.
+Admin inventory resets use a six-digit OTP. With SMTP configured, the code is sent to the signed-in admin email. Without SMTP, the authenticated admin can use the one-time fallback code displayed in Admin Settings. Codes are stored as hashes, expire after 10 minutes, and allow at most five attempts. The fallback is visible only to the authenticated admin requesting it. The separate full-store reset continues to require email delivery. Configure `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM` on Render service `e-mart-api` to deliver reset codes by email. `SMTP_FROM` may be omitted when the provider sender is the same as `SMTP_USER`.
 
 ## Promotions and POS integrations
 
