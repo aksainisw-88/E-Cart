@@ -135,8 +135,10 @@ const Account = ({ initialMode = "login" }) => {
   };
   const getCustomerLandingPath = () => {
     const requestedPath = location.state?.from;
-    if (typeof requestedPath !== "string" || !requestedPath.startsWith("/") || requestedPath.startsWith("//")) return "/account";
-    if (requestedPath === "/account" || requestedPath.startsWith("/account/") || requestedPath === "/wishlist") return "/account";
+    if (typeof requestedPath !== "string" || !requestedPath.startsWith("/") || requestedPath.startsWith("//")) return "/";
+    const [requestedPathname] = requestedPath.split(/[?#]/, 1);
+    const isAuthPage = ["/customer/login", "/customer/register", "/login", "/register", "/reset-password"].includes(requestedPathname);
+    if (isAuthPage || requestedPathname === "/admin" || requestedPathname.startsWith("/admin/")) return "/";
     return requestedPath;
   };
   const confirmStoreLocation = () => {
@@ -278,7 +280,7 @@ const Account = ({ initialMode = "login" }) => {
   };
 
   if (!checkingSession && !currentUser && location.pathname === "/account") {
-    return <Navigate to="/customer/login" replace />;
+    return <Navigate to="/customer/login" replace state={{ from: `${location.pathname}${location.search}` }} />;
   }
   if (!checkingSession && currentUser && currentUser.role !== "customer") {
     return <Navigate to="/admin" replace />;
