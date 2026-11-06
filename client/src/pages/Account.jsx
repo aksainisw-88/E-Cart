@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ArrowRight, Building2, Check, ChevronRight, Heart, LogOut, Mail, MapPin, Package, Plus, ShieldCheck, ShoppingBag, Star, Store, Trash2 } from "lucide-react";
 import CustomerAccountNav from "../components/customer/CustomerAccountNav";
 import Footer from "../components/home/Footer";
+import { useAuth } from "../context/authContext";
 import { useStore } from "../context/storeContext";
 import { signIn } from "../utils/auth";
 
@@ -30,9 +31,8 @@ const Account = ({ initialMode = "login" }) => {
   const [forgotError, setForgotError] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
   const [developmentResetUrl, setDevelopmentResetUrl] = useState("");
-  const [currentUser, setCurrentUser] = useState(null);
   const [pendingCustomer, setPendingCustomer] = useState(null);
-  const [checkingSession, setCheckingSession] = useState(true);
+  const { user: currentUser, setUser: setCurrentUser, loading: checkingSession } = useAuth();
   const [recentOrders, setRecentOrders] = useState([]);
   const [supportTickets, setSupportTickets] = useState([]);
   const [addresses, setAddresses] = useState([]);
@@ -56,27 +56,6 @@ const Account = ({ initialMode = "login" }) => {
     setError("");
     setSubmitted(false);
   }, [initialMode]);
-
-  useEffect(() => {
-    let active = true;
-
-    fetch(`${API_URL}/api/auth/me`, { credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        const result = await response.json();
-        return result.user;
-      })
-      .then((user) => {
-        if (!active) return;
-        setCurrentUser(user);
-        setCheckingSession(false);
-      })
-      .catch(() => {
-        if (active) setCheckingSession(false);
-      });
-
-    return () => { active = false; };
-  }, []);
 
   useEffect(() => {
     if (!currentUser || currentUser.role !== "customer") return;

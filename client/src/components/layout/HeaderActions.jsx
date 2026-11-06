@@ -1,35 +1,14 @@
-import { useEffect, useState } from "react";
 import { UserRound, Heart, ShoppingCart } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useCart } from "../../context/cartContext";
+import { useAuth } from "../../context/authContext";
 import { useWishlist } from "../../context/wishlistContext";
-
-const API_URL = import.meta.env.VITE_API_URL || "";
 
 const HeaderActions = () => {
   const { itemCount, setDrawerOpen } = useCart();
   const { items } = useWishlist();
-  const [customer, setCustomer] = useState(null);
-
-  useEffect(() => {
-    let active = true;
-
-    fetch(`${API_URL}/api/auth/me`, { credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return response.json();
-      })
-      .then((result) => {
-        if (active && result?.user?.role === "customer") setCustomer(result.user);
-      })
-      .catch(() => {
-        // Public storefront pages remain usable if session lookup is unavailable.
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
+  const { user } = useAuth();
+  const customer = user?.role === "customer" ? user : null;
 
   const customerName = customer?.name?.trim();
   const customerInitial = customerName?.charAt(0)?.toUpperCase() || "C";
