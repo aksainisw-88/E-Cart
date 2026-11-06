@@ -114,10 +114,10 @@ const Account = ({ initialMode = "login" }) => {
   };
   const getCustomerLandingPath = () => {
     const requestedPath = location.state?.from;
-    if (typeof requestedPath !== "string" || !requestedPath.startsWith("/") || requestedPath.startsWith("//")) return "/";
+    if (typeof requestedPath !== "string" || !requestedPath.startsWith("/") || requestedPath.startsWith("//")) return "/products";
     const [requestedPathname] = requestedPath.split(/[?#]/, 1);
     const isAuthPage = ["/customer/login", "/customer/register", "/login", "/register", "/reset-password"].includes(requestedPathname);
-    if (isAuthPage || requestedPathname === "/admin" || requestedPathname.startsWith("/admin/")) return "/";
+    if (isAuthPage || requestedPathname === "/admin" || requestedPathname.startsWith("/admin/")) return "/products";
     return requestedPath;
   };
   const confirmStoreLocation = () => {
