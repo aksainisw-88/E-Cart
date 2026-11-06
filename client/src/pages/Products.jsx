@@ -128,11 +128,11 @@ const Products = () => {
   return (
     <>
       <main className="bg-[#f4f7f4]">
-        <section className="border-b border-emerald-100 bg-gradient-to-br from-white via-white to-emerald-50/70">
-          <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-            <p className="text-sm font-semibold uppercase tracking-wide text-primary">{businessProfile.label}</p>
-            <h1 className="mt-2 text-3xl font-bold text-gray-900 sm:text-4xl">{businessProfile.productHeading}</h1>
-            <p className="mt-3 max-w-2xl text-gray-500">
+        <section className="border-b border-emerald-100/70 bg-gradient-to-br from-white via-white to-[#eaf5ee]">
+          <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-14 lg:px-8">
+            <p className="inline-flex rounded-full bg-emerald-100/80 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.14em] text-primary">{businessProfile.label}</p>
+            <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">{businessProfile.productHeading}</h1>
+            <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
               {businessProfile.productDescription}
             </p>
 
@@ -142,7 +142,7 @@ const Products = () => {
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Search products or categories"
-                className="h-12 w-full rounded-2xl border border-gray-200 bg-white pl-12 pr-4 text-sm shadow-sm outline-none transition focus:border-primary"
+                className="h-14 w-full rounded-2xl border border-slate-200/80 bg-white pl-12 pr-4 text-sm shadow-lg shadow-slate-900/[0.04] outline-none transition focus:border-primary"
               />
             </div>
           </div>
@@ -177,7 +177,7 @@ const Products = () => {
             </label>
           </div>
 
-          <div className="mt-6 grid gap-8 lg:grid-cols-[220px_1fr]">
+          <div className="mt-7 grid gap-8 lg:grid-cols-[240px_1fr]">
             <aside className={`${filtersOpen ? "block" : "hidden"} rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:sticky lg:top-40 lg:max-h-[calc(100vh-11rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:block`}>
               <div className="flex items-center justify-between">
                 <h2 className="flex items-center gap-2 font-semibold text-gray-900">

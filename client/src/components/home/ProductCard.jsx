@@ -19,10 +19,10 @@ const ProductCard = ({ product }) => {
   const outOfStock = stock <= 0;
 
   return (
-    <article className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-lg hover:shadow-slate-900/5">
+    <article className="group relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.03] transition-all duration-300 hover:-translate-y-1 hover:border-emerald-200 hover:shadow-xl hover:shadow-emerald-950/[0.08]">
       <button
         type="button"
-        className={`absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full shadow-sm transition ${saved ? "bg-red-500 text-white" : "bg-white text-gray-500 hover:bg-primary hover:text-white"}`}
+        className={`absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full border shadow-sm backdrop-blur transition ${saved ? "border-rose-500 bg-rose-500 text-white" : "border-white/80 bg-white/90 text-slate-500 hover:border-primary hover:bg-primary hover:text-white"}`}
         aria-label={saved ? "Remove from wishlist" : "Add to wishlist"}
         onClick={(event) => {
           event.stopPropagation();
@@ -33,13 +33,13 @@ const ProductCard = ({ product }) => {
       </button>
 
       {product.discount && (
-        <span className="absolute left-3 top-3 z-10 rounded bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+        <span className="absolute left-3 top-3 z-10 rounded-full bg-amber-100 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
           {product.discount}% OFF
         </span>
       )}
-      {outOfStock && <span className="absolute left-3 top-10 z-10 rounded bg-slate-800 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">Out of stock</span>}
+      {outOfStock && <span className="absolute left-3 top-11 z-10 rounded-full bg-slate-800 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white">Out of stock</span>}
 
-      <Link to={`/products/${product.id}`} aria-label={`View ${product.name}`} className="flex h-32 items-center justify-center bg-slate-50 p-3 sm:h-40 sm:p-4">
+      <Link to={`/products/${product.id}`} aria-label={`View ${product.name}`} className="flex h-44 items-center justify-center bg-gradient-to-br from-[#f7faf7] to-[#eef6f0] p-5 sm:h-52 sm:p-6">
         <img
           src={product.image}
           alt={product.name}
@@ -47,10 +47,10 @@ const ProductCard = ({ product }) => {
         />
       </Link>
 
-      <div className="p-3 sm:p-4">
-        <p className="truncate text-[10px] text-gray-500 sm:text-xs">{product.brand ? `${product.brand} · ` : ""}{product.category}</p>
+      <div className="p-4 sm:p-5">
+        <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 sm:text-[11px]">{product.brand ? `${product.brand} · ` : ""}{product.category}</p>
 
-        <h3 className="mt-1 min-h-[36px] text-xs font-semibold text-gray-900 sm:text-sm">
+        <h3 className="mt-2 min-h-[40px] text-sm font-bold leading-5 text-slate-900 sm:text-base">
           <Link to={`/products/${product.id}`} className="line-clamp-2 rounded-sm hover:text-primary focus-visible:outline-primary">{product.name}</Link>
         </h3>
 
@@ -67,7 +67,7 @@ const ProductCard = ({ product }) => {
             {[...Array(5)].map((_, index) => (
               <Star
                 key={index}
-                size={14}
+                size={13}
                 className={
                   index < product.rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
                 }
@@ -75,14 +75,14 @@ const ProductCard = ({ product }) => {
             ))}
           </div>
 
-          <span className="text-xs text-gray-500">({product.reviews})</span>
+          <span className="text-xs text-slate-400">({product.reviews})</span>
         </div>
 
-        <div className="mt-3 flex items-center gap-2">
-          <span className="text-base font-bold text-slate-900">₹{product.price}</span>
+        <div className="mt-3 flex items-baseline gap-2">
+          <span className="text-xl font-bold tracking-tight text-slate-900">₹{Number(product.price).toLocaleString("en-IN")}</span>
 
           {product.originalPrice && (
-            <span className="text-sm text-gray-400 line-through">₹{product.originalPrice}</span>
+            <span className="text-sm text-slate-400 line-through">₹{Number(product.originalPrice).toLocaleString("en-IN")}</span>
           )}
         </div>
         <p className={`mt-2 text-xs font-medium ${outOfStock ? "text-red-600" : stock <= 5 ? "text-amber-600" : "text-emerald-600"}`}>{outOfStock ? "Currently unavailable" : stock <= 5 ? `Only ${stock} left` : `${stock} in stock`}</p>
@@ -95,7 +95,7 @@ const ProductCard = ({ product }) => {
             addToCart(product);
           }}
           disabled={outOfStock}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-primary px-3 py-2 text-xs font-semibold text-primary transition hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 sm:text-sm"
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 py-3 text-xs font-bold text-white shadow-sm shadow-primary/15 transition hover:-translate-y-0.5 hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none sm:text-sm"
         >
           <ShoppingCart size={17} />
           {outOfStock ? "Out of stock" : "Add to Cart"}

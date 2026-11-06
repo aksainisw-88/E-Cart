@@ -29,12 +29,12 @@ const supportLinks = [
 const Footer = () => {
   const store = useStore();
   return (
-      <footer className="border-t border-[#1d6478] bg-[#0e5268] text-sky-50">
-      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+      <footer className="border-t border-emerald-950 bg-[#083f35] text-emerald-50">
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-14 lg:px-8">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-[1.35fr_1fr_1fr_1.1fr]">
           <div>
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg bg-primary text-white">
+              <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
                 {store.logoUrl ? <img src={store.logoUrl} alt="" className="h-full w-full object-contain" /> : <HeartPulse className="h-6 w-6" />}
               </div>
               <div>
@@ -43,7 +43,7 @@ const Footer = () => {
               </div>
             </div>
 
-            <p className="mt-4 max-w-sm text-sm leading-6 text-sky-100/80">
+            <p className="mt-4 max-w-sm text-sm leading-6 text-emerald-50/75">
               Trusted healthcare products delivered to your doorstep with care,
               speed, and confidence.
             </p>
@@ -56,7 +56,7 @@ const Footer = () => {
                   target="_blank"
                   rel="noreferrer"
                   aria-label={["Facebook", "Instagram", "Twitter"][index]}
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 text-sky-100/80 transition hover:border-white hover:text-white"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 text-emerald-50/75 transition hover:border-white hover:bg-white/10 hover:text-white"
                 >
                   <Icon className="h-4 w-4" />
                 </a>
@@ -66,7 +66,7 @@ const Footer = () => {
 
           <div>
             <h2 className="font-semibold text-white">Shop</h2>
-            <ul className="mt-4 space-y-2.5 text-sm text-sky-100/75">
+            <ul className="mt-4 space-y-2.5 text-sm text-emerald-50/75">
               {shopLinks.map((link) => (
                 <li key={link.label}>
                   <Link className="transition hover:text-white" to={link.to}>
@@ -79,7 +79,7 @@ const Footer = () => {
 
           <div>
             <h2 className="font-semibold text-white">Customer Care</h2>
-            <ul className="mt-4 space-y-2.5 text-sm text-sky-100/75">
+            <ul className="mt-4 space-y-2.5 text-sm text-emerald-50/75">
               {supportLinks.map((link) => (
                 <li key={link.label}>
                   <Link className="transition hover:text-white" to={link.to}>
@@ -92,7 +92,7 @@ const Footer = () => {
 
           <div>
             <h2 className="font-semibold text-white">Stay connected</h2>
-            <p className="mt-4 text-sm leading-6 text-sky-100/80">
+            <p className="mt-4 text-sm leading-6 text-emerald-50/75">
               Get wellness tips and exclusive offers in your inbox.
             </p>
             <form className="mt-4 flex max-w-sm" onSubmit={(event) => event.preventDefault()}>
@@ -114,7 +114,7 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="mt-8 grid gap-4 border-y border-white/20 py-5 text-sm text-sky-100/85 sm:grid-cols-3">
+        <div className="mt-8 grid gap-4 border-y border-white/15 py-5 text-sm text-emerald-50/85 sm:grid-cols-3">
           <div className="flex items-center gap-3">
             <Truck className="h-5 w-5 text-emerald-300" />
             <span>Fast, reliable delivery</span>
@@ -129,7 +129,7 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-white/20 pt-5 text-xs text-sky-100/70 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-t border-white/15 pt-5 text-xs text-emerald-50/65 sm:flex-row sm:items-center sm:justify-between">
           <p>© 2026 {store.name}. All rights reserved.</p>
           <div className="flex gap-5">
             <Link className="transition hover:text-white" to="/contact">Privacy Policy</Link>

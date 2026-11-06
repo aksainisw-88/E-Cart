@@ -52,12 +52,12 @@ const ShopCategories = () => {
   const businessProfile = getBusinessProfile(store.businessType);
 
   return (
-    <section aria-labelledby="shop-categories-title" className="bg-[#f4f7f4] py-10 sm:py-14">
+    <section aria-labelledby="shop-categories-title" className="bg-[#f4f7f4] py-12 sm:py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4 sm:mb-8">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Shop {businessProfile.label}</p>
-            <h2 id="shop-categories-title" className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Browse by category</h2>
+            <h2 id="shop-categories-title" className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Browse by category</h2>
             <p className="mt-2 text-sm text-slate-500">{businessProfile.description}</p>
           </div>
           <Link to="/products" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-primary hover:text-primary">
@@ -72,7 +72,7 @@ const ShopCategories = () => {
               <Link
                 key={name}
                 to={`/products?category=${encodeURIComponent(name)}`}
-                className="group flex min-h-28 items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md sm:min-h-32 sm:gap-4 sm:p-5"
+                className="group flex min-h-28 items-center gap-3 rounded-3xl border border-slate-200/70 bg-white p-3.5 shadow-sm shadow-slate-900/[0.03] transition duration-300 hover:-translate-y-1 hover:border-emerald-200 hover:shadow-xl hover:shadow-emerald-950/[0.06] sm:min-h-32 sm:gap-4 sm:p-5"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-primary transition group-hover:scale-105 group-hover:bg-emerald-100 sm:h-14 sm:w-14 sm:rounded-2xl">
                   <Icon className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={1.8} />

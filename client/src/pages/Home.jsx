@@ -19,11 +19,11 @@ const Home = () => {
     <main>
       <HeroSlider />
 
-      <section aria-label="Shopping services" className="border-y border-slate-100 bg-white">
-        <div className="mx-auto grid max-w-7xl gap-2 px-4 py-3 sm:grid-cols-3 sm:px-6 sm:py-4 lg:px-8">
+      <section aria-label="Shopping services" className="bg-[#f4f7f4] px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
+        <div className="mx-auto grid max-w-7xl gap-3 sm:grid-cols-3 sm:gap-4">
           {benefits.map(({ icon: Icon, title, detail, to }) => (
-            <Link key={title} to={to} className="group flex items-center gap-3 rounded-2xl p-3 transition hover:bg-emerald-50/70 sm:justify-center sm:p-4">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-primary transition group-hover:bg-white"><Icon className="h-5 w-5" /></span>
+            <Link key={title} to={to} className="group flex items-center gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm shadow-slate-900/[0.03] transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md sm:p-5">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-primary transition group-hover:bg-primary group-hover:text-white"><Icon className="h-5 w-5" /></span>
               <span className="min-w-0"><strong className="block truncate text-sm font-bold text-slate-800">{title}</strong><span className="mt-0.5 block text-xs text-slate-500">{detail}</span></span>
             </Link>
           ))}
@@ -35,7 +35,7 @@ const Home = () => {
       <SpecialOffers />
 
       <section className="bg-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
-        <div className="mx-auto flex max-w-7xl flex-col justify-between gap-5 rounded-3xl bg-gradient-to-r from-[#063d34] to-[#0b7660] p-6 text-white sm:flex-row sm:items-center sm:p-8">
+        <div className="mx-auto flex max-w-7xl flex-col justify-between gap-5 overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#073f35] via-[#08624f] to-[#10846a] p-6 text-white shadow-xl shadow-emerald-950/10 sm:flex-row sm:items-center sm:p-9">
           <div className="max-w-xl">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-200">Need a hand?</p>
             <h2 className="mt-2 text-xl font-bold sm:text-2xl">We can help with your order.</h2>

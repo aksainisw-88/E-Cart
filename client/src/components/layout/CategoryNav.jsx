@@ -17,7 +17,7 @@ const CategoryNav = () => {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <nav className="border-b border-slate-200 bg-white text-slate-700">
+    <nav className="border-b border-slate-200/80 bg-white text-slate-700">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-[42px] items-center">
           <button
@@ -31,7 +31,7 @@ const CategoryNav = () => {
           </button>
           <span className="text-sm font-semibold text-slate-700 md:hidden">Shop categories</span>
 
-          <NavLink to="/products" className="mr-4 hidden items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-primary md:flex">
+          <NavLink to="/products" className="mr-4 hidden items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-xs font-bold text-primary transition hover:bg-emerald-100 md:flex">
             <Store size={17} /> Shop all
           </NavLink>
 
