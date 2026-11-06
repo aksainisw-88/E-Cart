@@ -20,7 +20,12 @@ const normalizeCategory = (value = "") =>
 const Products = () => {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const categoryParam = searchParams.get("category") || "";
+  const routeCategory = location.pathname.startsWith("/products/")
+    ? ""
+    : location.pathname === "/products"
+      ? ""
+      : location.pathname.slice(1);
+  const categoryParam = searchParams.get("category") || routeCategory;
   const store = useStore();
   const businessProfile = getBusinessProfile(store.businessType);
 
@@ -77,7 +82,8 @@ const Products = () => {
       setSelectedCategory("All Products");
       return;
     }
-    const selected = categoryOptions.find((categoryName) => normalizeCategory(categoryName) === normalizeCategory(categoryParam));
+    const normalizedParam = normalizeCategory(categoryParam === "devices" ? "medical-devices" : categoryParam);
+    const selected = categoryOptions.find((categoryName) => normalizeCategory(categoryName) === normalizedParam);
     setSelectedCategory(selected || "All Products");
   }, [categoryOptions, categoryParam]);
 
