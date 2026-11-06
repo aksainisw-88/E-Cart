@@ -172,7 +172,7 @@ const Products = () => {
           </div>
 
           <div className="mt-6 grid gap-8 lg:grid-cols-[220px_1fr]">
-            <aside className={`${filtersOpen ? "block" : "hidden"} rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:sticky lg:top-40 lg:self-start lg:block`}>
+            <aside className={`${filtersOpen ? "block" : "hidden"} rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:sticky lg:top-40 lg:max-h-[calc(100vh-11rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:block`}>
               <div className="flex items-center justify-between">
                 <h2 className="flex items-center gap-2 font-semibold text-gray-900">
                   <Filter className="h-4 w-4 text-primary" />
