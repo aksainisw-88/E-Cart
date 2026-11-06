@@ -112,14 +112,6 @@ const Account = ({ initialMode = "login" }) => {
       setStorePickerLoading(false);
     }
   };
-  const getCustomerLandingPath = () => {
-    const requestedPath = location.state?.from;
-    if (typeof requestedPath !== "string" || !requestedPath.startsWith("/") || requestedPath.startsWith("//")) return "/products";
-    const [requestedPathname] = requestedPath.split(/[?#]/, 1);
-    const isAuthPage = ["/customer/login", "/customer/register", "/login", "/register", "/reset-password"].includes(requestedPathname);
-    if (isAuthPage || requestedPathname === "/admin" || requestedPathname.startsWith("/admin/")) return "/products";
-    return requestedPath;
-  };
   const confirmStoreLocation = () => {
     if (!stores.some((location) => location._id === selectedStoreId)) return;
     localStorage.setItem("e-mart-b2b-store", selectedStoreId);
@@ -128,7 +120,7 @@ const Account = ({ initialMode = "login" }) => {
       setCurrentUser(pendingCustomer);
       setPendingCustomer(null);
     }
-    navigate(getCustomerLandingPath(), { replace: true });
+    navigate("/products", { replace: true });
   };
   const saveAddress = async (event) => {
     event.preventDefault();
@@ -228,7 +220,7 @@ const Account = ({ initialMode = "login" }) => {
         await loadStoreLocations();
       } else {
         setCurrentUser(result.user);
-        navigate(getCustomerLandingPath(), { replace: true });
+        navigate("/products", { replace: true });
       }
     } catch (requestError) {
       setError(requestError instanceof TypeError ? "Unable to reach the server. Start the backend with npm run dev from the server folder." : requestError.message);
