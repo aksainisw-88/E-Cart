@@ -280,7 +280,7 @@ const Account = ({ initialMode = "login" }) => {
   };
 
   if (!checkingSession && !currentUser && location.pathname === "/account") {
-    return <Navigate to="/customer/login" replace state={{ from: `${location.pathname}${location.search}` }} />;
+    return <Navigate to="/customer/login" replace />;
   }
   if (!checkingSession && currentUser && currentUser.role !== "customer") {
     return <Navigate to="/admin" replace />;
