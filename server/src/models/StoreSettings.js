@@ -9,6 +9,8 @@ const hoursSchema = new mongoose.Schema({
 const storeSettingsSchema = new mongoose.Schema({
   key: { type: String, unique: true, default: "default" },
   businessType: { type: String, enum: ["pharmacy", "garments", "footwear", "supermarket", "grocery", "electronics", "beauty", "home_living", "furniture", "jewelry", "toys", "books_stationery", "sports", "pet_supplies", "general"], default: "pharmacy" },
+  businessSegmentId: { type: String, trim: true, uppercase: true, default: "" },
+  businessSegmentCode: { type: String, trim: true, uppercase: true, default: "" },
   name: { type: String, default: "My Medical Store" },
   tagline: { type: String, default: "Your Health, Our Priority" },
   description: { type: String, default: "Trusted healthcare products delivered with care, speed, and confidence." },

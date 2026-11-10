@@ -33,6 +33,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Store,
   TrendingUp,
   UserPlus,
   Users,
@@ -53,6 +54,7 @@ const iconMap = {
   CreditCard,
   KeyRound,
   WalletCards,
+  Store,
 };
 
 const currency = (amount) =>
@@ -96,6 +98,7 @@ function App() {
   const [clients, setClients] = useState([]);
   const [requests, setRequests] = useState([]);
   const [plans, setPlans] = useState([]);
+  const [businessSegments, setBusinessSegments] = useState([]);
   const [activePage, setActivePage] = useState("overview");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All status");
@@ -130,6 +133,11 @@ function App() {
     setPlans(result.data);
   };
 
+  const refreshBusinessSegments = async () => {
+    const result = await apiRequest("/api/super-admin/business-segments");
+    setBusinessSegments(result.data);
+  };
+
   useEffect(() => {
     let active = true;
     apiRequest("/api/super-admin/me")
@@ -138,7 +146,7 @@ function App() {
         setSuperAdmin(result.user);
         setAuthState("authorized");
         try {
-          await Promise.all([refreshSubscriptions(), refreshRequests(), refreshPlans()]);
+          await Promise.all([refreshSubscriptions(), refreshRequests(), refreshPlans(), refreshBusinessSegments()]);
         } catch (error) {
           if (active) notify(error.message);
         }
@@ -192,7 +200,7 @@ function App() {
       setLoginPassword("");
       setAuthState("authorized");
       try {
-        await Promise.all([refreshSubscriptions(), refreshRequests(), refreshPlans()]);
+        await Promise.all([refreshSubscriptions(), refreshRequests(), refreshPlans(), refreshBusinessSegments()]);
       } catch (error) {
         notify(error.message);
       }
@@ -290,6 +298,34 @@ function App() {
       });
       await refreshPlans();
       notify(`Plan ${plan.active ? "deactivated" : "activated"}.`);
+    } catch (error) {
+      notify(error.message);
+    }
+  };
+
+  const saveBusinessSegment = async (segmentId, values) => {
+    try {
+      await apiRequest(segmentId ? `/api/super-admin/business-segments/${segmentId}` : "/api/super-admin/business-segments", {
+        method: segmentId ? "PATCH" : "POST",
+        body: JSON.stringify(values),
+      });
+      await refreshBusinessSegments();
+      notify(segmentId ? "Business segment updated." : "Business segment created.");
+      return true;
+    } catch (error) {
+      notify(error.message);
+      return false;
+    }
+  };
+
+  const toggleBusinessSegment = async (segment) => {
+    try {
+      await apiRequest(`/api/super-admin/business-segments/${segment.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled: !segment.enabled }),
+      });
+      await refreshBusinessSegments();
+      notify(`Business segment ${segment.enabled ? "disabled" : "enabled"}.`);
     } catch (error) {
       notify(error.message);
     }
@@ -425,6 +461,9 @@ function App() {
           )}
           {activePage === "clients" && (
             <ClientsPage clients={visibleClients} query={query} setQuery={setQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} openClient={setSelectedClient} onAdd={() => setDialog({ type: "new-request" })} />
+          )}
+          {activePage === "business-segments" && (
+            <BusinessSegmentsPage segments={businessSegments} saveSegment={saveBusinessSegment} toggleSegment={toggleBusinessSegment} />
           )}
           {activePage === "requests" && (
             <RequestsPage requests={requests} decideRequest={decideRequest} />
@@ -699,6 +738,56 @@ function PlansPage({ plans, savePlan, togglePlan }) {
                   <strong>{currency(plan.price)} <small>/ {plan.billingInterval === "monthly" ? "month" : "year"}</small></strong>
                 </div>
                 <div className="plan-item-actions"><button className="button button-secondary button-small" onClick={() => editPlan(plan)}>Edit</button><button className="button button-secondary button-small" onClick={() => togglePlan(plan)}>{plan.active ? "Deactivate" : "Activate"}</button></div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+function BusinessSegmentsPage({ segments, saveSegment, toggleSegment }) {
+  const emptyForm = { name: "", code: "", description: "", baseProfile: "general", enabled: true };
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    const saved = await saveSegment("", { ...form, code: form.code.trim().toUpperCase() });
+    setSaving(false);
+    if (saved) setForm(emptyForm);
+  };
+
+  return (
+    <>
+      <PageHeading eyebrow="PLATFORM CONFIGURATION" title="Business segments" description="Manage the business categories available during new store registration." actions={<span className="heading-note"><Store size={15} /> {segments.length} segments</span>} />
+      <section className="panel plan-editor">
+        <div className="panel-header"><div><h2>Add a business segment</h2><p>New enabled segments become selectable on the public store signup form.</p></div></div>
+        <form className="form-grid plan-form" onSubmit={submit}>
+          <label>Segment name<input required minLength="2" maxLength="80" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="e.g. Hardware" /></label>
+          <label>Segment code<input required pattern="[A-Za-z][A-Za-z0-9_]{1,39}" maxLength="40" value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, "") }))} placeholder="e.g. HARDWARE" /></label>
+          <label>Storefront profile<select value={form.baseProfile} onChange={(event) => setForm((current) => ({ ...current, baseProfile: event.target.value }))}>
+            <option value="general">General retail</option><option value="pharmacy">Pharmacy</option><option value="supermarket">Supermarket</option><option value="grocery">Grocery</option><option value="garments">Garments</option><option value="footwear">Footwear</option><option value="electronics">Electronics</option><option value="beauty">Beauty</option><option value="home_living">Home & living</option><option value="furniture">Furniture</option><option value="jewelry">Jewelry</option><option value="toys">Toys</option><option value="books_stationery">Books & stationery</option><option value="sports">Sports</option><option value="pet_supplies">Pet supplies</option>
+          </select></label>
+          <label className="plan-description-field">Description<textarea maxLength="300" rows="2" value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Describe this business category." /></label>
+          <label className="plan-checkbox"><input type="checkbox" checked={form.enabled} onChange={(event) => setForm((current) => ({ ...current, enabled: event.target.checked }))} /> Available during signup</label>
+          <div className="plan-form-actions"><button type="submit" className="button button-primary" disabled={saving}><Plus size={15} />{saving ? "Saving..." : "Create segment"}</button></div>
+        </form>
+      </section>
+      <section className="panel data-panel plan-list-panel">
+        <div className="list-toolbar"><div><h2>Segment catalog <span className="table-count">{segments.length}</span></h2><p>Disabling a segment hides it from new signups; existing stores remain unchanged.</p></div></div>
+        {segments.length === 0 ? <EmptyState title="No business segments" text="The platform will seed its standard segments after deployment." /> : (
+          <div className="plan-list">
+            {segments.map((segment) => (
+              <article className={`plan-item ${!segment.enabled ? "plan-item-inactive" : ""}`} key={segment.id}>
+                <div className="plan-item-content">
+                  <div className="plan-item-title"><h3>{segment.name}</h3><StatusBadge status={segment.enabled ? "Active" : "Inactive"} /></div>
+                  <p>{segment.description || "No description provided."}</p>
+                  <strong>{segment.code} <small>· {segment.segmentId} · storefront profile: {segment.baseProfile}</small></strong>
+                </div>
+                <div className="plan-item-actions"><button className="button button-secondary button-small" onClick={() => toggleSegment(segment)}>{segment.enabled ? "Disable" : "Enable"}</button></div>
               </article>
             ))}
           </div>

@@ -43,6 +43,10 @@ Active offer codes can be claimed from the customer Offers page and applied duri
 
 Admin users can configure PhonePe, Paytm, Fingpay, and Pine Labs credentials from Admin > Settings > Payment integrations. Credentials are masked in API responses. Actual terminal charging requires the provider's approved merchant account, device/API access, and provider-specific SDK or API contract.
 
+## Business segments
+
+The shared Super Admin database stores business segments in `businesssegments`. The API seeds the initial segment catalog on startup and exposes enabled segments at `GET /api/business-segments` for registration. Super Admins can add segments or enable/disable them from the Business segments panel. Each segment has a code and a storefront base profile; new custom segments use the general retail profile until segment-specific modules and product fields are configured.
+
 ## Super-admin subscriptions
 
 ## Separate customer database deployments

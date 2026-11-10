@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, KeyRound, ShieldCheck, Store } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { businessTypes } from "../data/businessTypes";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const inputClass = "mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm outline-none focus:border-primary";
@@ -14,7 +13,7 @@ const AdminRegister = () => {
     confirmPassword: "",
     otp: "",
     storeName: "",
-    businessType: "general",
+    businessSegmentId: "",
     tagline: "",
     storeDescription: "",
     storePhone: "",
@@ -31,7 +30,33 @@ const AdminRegister = () => {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [businessSegments, setBusinessSegments] = useState([]);
+  const [segmentsLoading, setSegmentsLoading] = useState(true);
+  const [segmentsError, setSegmentsError] = useState("");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let active = true;
+    fetch(`${API_URL}/api/business-segments`)
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "Unable to load business categories.");
+        return result.data;
+      })
+      .then((segments) => {
+        if (!active) return;
+        setBusinessSegments(segments);
+        setForm((current) => ({ ...current, businessSegmentId: current.businessSegmentId || segments[0]?.segmentId || "" }));
+      })
+      .catch((requestError) => {
+        if (active) setSegmentsError(requestError instanceof TypeError ? "Unable to reach the server. Please try again." : requestError.message);
+      })
+      .finally(() => {
+        if (active) setSegmentsLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
   const updateField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
     if (field === "email") {
@@ -87,7 +112,7 @@ const AdminRegister = () => {
           password: form.password,
           otp: form.otp,
           storeName: form.storeName,
-          businessType: form.businessType,
+          businessSegmentId: form.businessSegmentId,
           tagline: form.tagline,
           storeDescription: form.storeDescription,
           storePhone: form.storePhone,
@@ -154,10 +179,13 @@ const AdminRegister = () => {
                     <input required minLength={2} maxLength={100} autoComplete="organization" value={form.storeName} onChange={updateField("storeName")} className={inputClass} placeholder="Your store name" />
                   </label>
                   <label className="block text-sm font-medium text-slate-700 sm:col-span-2">Business type
-                    <select value={form.businessType} onChange={updateField("businessType")} className={inputClass}>
-                      {businessTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                    <select required disabled={segmentsLoading || !businessSegments.length} value={form.businessSegmentId} onChange={updateField("businessSegmentId")} className={inputClass}>
+                      {segmentsLoading && <option value="">Loading business categories...</option>}
+                      {businessSegments.map((segment) => <option key={segment.id} value={segment.segmentId}>{segment.name}</option>)}
                     </select>
                   </label>
+                  {segmentsError && <p role="alert" className="text-sm text-red-700 sm:col-span-2">{segmentsError}</p>}
+                  {!segmentsLoading && !segmentsError && businessSegments.length === 0 && <p role="alert" className="text-sm text-red-700 sm:col-span-2">No business categories are currently available. Contact the platform administrator.</p>}
                   <label className="block text-sm font-medium text-slate-700">Store phone
                     <input required type="tel" maxLength={30} autoComplete="tel" value={form.storePhone} onChange={updateField("storePhone")} className={inputClass} placeholder="Business phone" />
                   </label>
@@ -217,7 +245,7 @@ const AdminRegister = () => {
               </div>}
               {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
               {message && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p>}
-              <button type="submit" disabled={loading} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60">
+              <button type="submit" disabled={loading || segmentsLoading || !businessSegments.length} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60">
                 {loading ? "Please wait..." : otpSent ? "Verify and create store" : "Send verification code"}<ArrowRight className="h-4 w-4" />
               </button>
             </form>

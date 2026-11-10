@@ -78,6 +78,7 @@ app.use(requireDatabaseReady);
 app.use("/api/webhooks/razorpay", require("./routes/razorpayWebhook.routes"));
 app.use("/api/auth", authRoutes);
 app.use("/api/super-admin", superAdminRoutes);
+app.use("/api/business-segments", require("./routes/businessSegments.routes"));
 app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/customer-database", customerDatabaseRoutes);
 app.use("/api/catalog", catalogRoutes);

@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const { z } = require("zod");
 
 const User = require("../models/User");
+const BusinessSegment = require("../models/BusinessSegment");
 const SignupOtp = require("../models/SignupOtp");
 const AdminSignupOtp = require("../models/AdminSignupOtp");
 const PasswordReset = require("../models/PasswordReset");
@@ -33,7 +34,7 @@ const adminRegistrationSchema = credentialsSchema.extend({
   name: z.string().trim().min(2).max(80),
   otp: z.string().regex(/^\d{6}$/),
   storeName: z.string().trim().min(2).max(100),
-  businessType: z.enum(["pharmacy", "garments", "footwear", "supermarket", "grocery", "electronics", "beauty", "home_living", "furniture", "jewelry", "toys", "books_stationery", "sports", "pet_supplies", "general"]),
+  businessSegmentId: z.string().trim().min(5).max(64),
   tagline: z.string().trim().max(160).optional().default(""),
   storeDescription: z.string().trim().max(500).optional().default(""),
   storePhone: z.string().trim().min(5).max(30),
@@ -234,6 +235,10 @@ router.post("/register/admin", async (request, response, next) => {
     if (await User.exists({ email })) {
       return response.status(409).json({ success: false, message: "An account with this email already exists." });
     }
+    const businessSegment = await BusinessSegment.findOne({ segmentId: data.businessSegmentId.toUpperCase(), enabled: true }).lean();
+    if (!businessSegment) {
+      return response.status(400).json({ success: false, message: "This business segment is no longer available. Select an active segment and try again." });
+    }
     const challenge = await AdminSignupOtp.findOne({ email });
     if (!challenge || challenge.expiresAt <= new Date()) {
       return response.status(400).json({ success: false, message: "Your verification code has expired. Request a new code." });
@@ -255,7 +260,9 @@ router.post("/register/admin", async (request, response, next) => {
     try {
       await StoreSettings.create({
         key: "default",
-        businessType: data.businessType,
+        businessType: businessSegment.baseProfile,
+        businessSegmentId: businessSegment.segmentId,
+        businessSegmentCode: businessSegment.code,
         name: data.storeName,
         tagline: data.tagline,
         description: data.storeDescription,

@@ -7,6 +7,7 @@ const { z } = require("zod");
 const Subscription = require("../models/Subscription");
 const SubscriptionPlan = require("../models/SubscriptionPlan");
 const SubscriptionRequest = require("../models/SubscriptionRequest");
+const BusinessSegment = require("../models/BusinessSegment");
 const SuperAdmin = require("../models/SuperAdmin");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { requireSuperAdminDatabase } = require("../config/superAdminDatabase");
@@ -51,6 +52,16 @@ const createPlanSchema = z.object({
 const updatePlanSchema = createPlanSchema.partial().refine((value) => Object.keys(value).length > 0, {
   message: "Update at least one plan field.",
 });
+const createBusinessSegmentSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  code: z.string().trim().toUpperCase().regex(/^[A-Z][A-Z0-9_]{1,39}$/),
+  description: z.string().trim().max(300).default(""),
+  baseProfile: z.enum(["pharmacy", "garments", "footwear", "supermarket", "grocery", "electronics", "beauty", "home_living", "furniture", "jewelry", "toys", "books_stationery", "sports", "pet_supplies", "general"]).default("general"),
+  enabled: z.boolean().default(true),
+});
+const updateBusinessSegmentSchema = createBusinessSegmentSchema.omit({ code: true }).partial().refine((value) => Object.keys(value).length > 0, {
+  message: "Update at least one business segment field.",
+});
 
 const publicSubscription = (subscription) => {
   const currentDate = today();
@@ -82,6 +93,15 @@ const publicPlan = (plan) => ({
   price: plan.price,
   active: plan.active,
   featured: plan.featured,
+});
+const publicBusinessSegment = (segment) => ({
+  id: segment._id.toString(),
+  segmentId: segment.segmentId,
+  name: segment.name,
+  code: segment.code,
+  description: segment.description,
+  baseProfile: segment.baseProfile,
+  enabled: segment.enabled,
 });
 const publicSubscriptionRequest = (purchaseRequest) => ({
   id: purchaseRequest._id.toString(),
@@ -150,6 +170,42 @@ router.get("/me", requireAuth, requireRole("super_admin"), async (request, respo
 });
 
 router.use(requireAuth, requireRole("super_admin"));
+
+router.get("/business-segments", async (request, response, next) => {
+  try {
+    const segments = await BusinessSegment.find().sort({ createdAt: 1 }).lean();
+    return response.json({ success: true, data: segments.map(publicBusinessSegment) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/business-segments", async (request, response, next) => {
+  try {
+    const parsed = createBusinessSegmentSchema.safeParse(request.body);
+    if (!parsed.success) return response.status(400).json({ success: false, message: parsed.error.issues[0]?.message || "Check the business segment details." });
+    const segment = await BusinessSegment.create({
+      ...parsed.data,
+      segmentId: `SEG-${crypto.randomBytes(4).toString("hex").toUpperCase()}`,
+    });
+    return response.status(201).json({ success: true, data: publicBusinessSegment(segment) });
+  } catch (error) {
+    if (error.code === 11000) return response.status(409).json({ success: false, message: "A segment with this code already exists." });
+    return next(error);
+  }
+});
+
+router.patch("/business-segments/:id", async (request, response, next) => {
+  try {
+    const parsed = updateBusinessSegmentSchema.safeParse(request.body);
+    if (!parsed.success) return response.status(400).json({ success: false, message: parsed.error.issues[0]?.message || "Check the business segment details." });
+    const segment = await BusinessSegment.findByIdAndUpdate(request.params.id, parsed.data, { new: true, runValidators: true });
+    if (!segment) return response.status(404).json({ success: false, message: "Business segment not found." });
+    return response.json({ success: true, data: publicBusinessSegment(segment) });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.get("/plans", async (request, response, next) => {
   try {
