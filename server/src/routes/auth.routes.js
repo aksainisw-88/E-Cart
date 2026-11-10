@@ -41,6 +41,14 @@ const getSubscriptionForAuthentication = async (user) => {
     return null;
   }
 };
+const populateUserLocationForAuthentication = async (user) => {
+  try {
+    await user.populate("location", "name city");
+  } catch (error) {
+    console.error("Unable to load user location during authentication:", error);
+    user.location = null;
+  }
+};
 
 const publicUser = (user) => ({
   id: user._id,
@@ -99,7 +107,7 @@ const createLoginHandler = (allowedRoles) => async (request, response, next) => 
       return response.status(403).json({ success: false, message: "These credentials cannot be used on this sign-in page." });
     }
 
-    await user.populate("location", "name city");
+    await populateUserLocationForAuthentication(user);
     setAuthCookie(response, user, request.app.locals.env);
     const serializedUser = publicUser(user);
     if (["admin", "manager", "user"].includes(user.role)) {
@@ -244,10 +252,11 @@ router.post("/login/admin", createLoginHandler(["admin", "manager", "user"]));
 
 router.get("/me", requireAuth, async (request, response, next) => {
   try {
-    const user = await User.findById(request.user.id).populate("location", "name city");
+    const user = await User.findById(request.user.id);
     if (!user) {
       return response.status(401).json({ success: false, message: "Account no longer exists." });
     }
+    await populateUserLocationForAuthentication(user);
     const serializedUser = publicUser(user);
     if (["admin", "manager", "user"].includes(user.role)) {
       serializedUser.subscription = await getSubscriptionForAuthentication(user);
