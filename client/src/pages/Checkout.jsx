@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import Footer from "../components/home/Footer";
 import { useCart } from "../context/cartContext";
 import { useStore } from "../context/storeContext";
+import { apiUrl } from "../utils/api";
 
 const Checkout = () => {
   const { items, subtotal, discountTotal, promoCode, promoDiscount, promoTitle, promoError, applyPromo, removePromo } = useCart();
@@ -29,7 +30,7 @@ const Checkout = () => {
   const delivery = subtotal >= Number(store.freeDeliveryAbove ?? 999) ? 0 : Number(store.deliveryFee ?? 49);
 
   useEffect(() => {
-    fetch("/api/auth/me", { credentials: "include" })
+    fetch(apiUrl("/api/auth/me"), { credentials: "include" })
       .then(async (response) => {
         if (!response.ok) return null;
         const result = await response.json();
@@ -45,7 +46,7 @@ const Checkout = () => {
 
   useEffect(() => {
     if (session !== "signed-in" || customerType !== "B2B") return;
-    fetch("/api/stores")
+    fetch(apiUrl("/api/stores"))
       .then((response) => response.json())
       .then((result) => {
         const locations = result.data || [];
@@ -66,7 +67,7 @@ const Checkout = () => {
 
   useEffect(() => {
     if (session !== "signed-in") return;
-    fetch("/api/addresses", { credentials: "include" }).then((response) => response.json()).then((result) => { const saved = result.data || []; setAddresses(saved); const preferred = saved.find((address) => address.isDefault) || saved[0]; if (preferred) { setSelectedAddress(preferred._id); setDetails(preferred); } }).catch(() => {});
+    fetch(apiUrl("/api/addresses"), { credentials: "include" }).then((response) => response.json()).then((result) => { const saved = result.data || []; setAddresses(saved); const preferred = saved.find((address) => address.isDefault) || saved[0]; if (preferred) { setSelectedAddress(preferred._id); setDetails(preferred); } }).catch(() => {});
   }, [session]);
 
   const update = (field) => (event) =>
@@ -78,7 +79,7 @@ const Checkout = () => {
       return;
     }
     try {
-      const response = await fetch("/api/store/delivery-check", {
+      const response = await fetch(apiUrl("/api/store/delivery-check"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -91,7 +92,7 @@ const Checkout = () => {
       }
       setDeliveryMessage("");
       if (saveAddress && !selectedAddress) {
-        await fetch("/api/addresses", {
+        await fetch(apiUrl("/api/addresses"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",

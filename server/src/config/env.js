@@ -7,6 +7,7 @@ const envSchema = z.object({
   SUPER_ADMIN_PANEL_URL: z.string().url().optional(),
   MONGO_URI: z.string().optional(),
   SUPER_ADMIN_MONGO_URI: z.string().optional(),
+  CUSTOMER_DATABASE_ENCRYPTION_KEY: z.string().min(32).optional(),
   JWT_SECRET: z.string().min(16).default("development-secret-change-me"),
   JWT_EXPIRES_IN: z.string().default("7d"),
   RAZORPAY_KEY_ID: z.string().optional(),

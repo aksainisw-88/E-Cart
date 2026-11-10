@@ -45,6 +45,30 @@ Admin users can configure PhonePe, Paytm, Fingpay, and Pine Labs credentials fro
 
 ## Super-admin subscriptions
 
+## Separate customer database deployments
+
+Deploy one API instance and one customer-panel build per customer. Do not put a MongoDB URI in the browser or customer-facing settings. Set the database URIs only in the server's private environment:
+
+- `MONGO_URI`: initial/fallback URI for this customer's private database, for example `mongodb+srv://.../e_mart_customer_002`. It is only configured on the API server.
+- `SUPER_ADMIN_MONGO_URI`: the shared platform control-plane database (the `Super_admin` database), identical for all customer API deployments.
+- `CUSTOMER_DATABASE_ENCRYPTION_KEY`: a unique random secret of at least 32 characters for this customer API deployment. Generate one with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Keep it stable in the API's secret environment, and do not reuse it across customer deployments; it encrypts and identifies this deployment's saved database URI.
+- `CLIENT_URL`: this customer's deployed storefront/admin-panel origin.
+- `SUPER_ADMIN_PANEL_URL`: the super-admin panel origin.
+
+Set the customer's `VITE_API_URL` at client build time to that customer's API URL (without a trailing slash). All customer-panel API requests use this value. Leave it empty only when the frontend host proxies `/api` and `/uploads` to the customer's API.
+
+After subscription activation, the customer admin can enter a MongoDB Atlas SRV URI in Admin > Settings > Customer database. The URI is tested before use and stored encrypted in the shared control-plane database with AES-256-GCM; it is never returned to the browser. The URI's host must be an Atlas `*.mongodb.net` host and the target database must be empty. Switching databases copies no store data; it creates only the signed-in admin account in the target database to preserve that admin's existing credentials and license binding. The previous database is left unchanged. This setting requires `CUSTOMER_DATABASE_ENCRYPTION_KEY` on the API deployment.
+
+To provision another customer, create/deploy its API with its own initial `MONGO_URI`, unique `CUSTOMER_DATABASE_ENCRYPTION_KEY`, and the shared `SUPER_ADMIN_MONGO_URI`, then create its store admin on that API:
+
+```powershell
+npm run create-admin -- store-admin@example.com StrongPassword "Store Admin"
+```
+
+In the Super Admin panel, create the subscription using that exact admin email and securely give the generated registration number and license key to that customer. The admin activates the subscription in Settings. Each API instance uses its own active customer database, while license records and super-admin accounts remain in the shared control-plane database. Production API startup fails if required database configuration or the encryption key is missing. MongoDB creates each customer database/collections on first write.
+
+## Super-admin subscriptions
+
 The Super Admin panel uses the API but stores platform accounts and subscriptions in the dedicated MongoDB database configured by `SUPER_ADMIN_MONGO_URI`. Set `SUPER_ADMIN_PANEL_URL` to the panel's exact origin so the API allows credentialed requests. On startup, the API creates the `superadmins` and `subscriptions` collections and indexes if needed. Create the platform account from the server directory:
 
 ```powershell

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight, BarChart3, CircleDollarSign, Clock3, Package, Plus, ShoppingCart, Tag, Users } from "lucide-react";
 import { Link } from "react-router-dom";
+import { apiUrl } from "../utils/api";
 
 const stats = [
   { label: "Total revenue", value: "₹2,48,560", change: "+12.8%", icon: CircleDollarSign, tone: "teal" },
@@ -21,7 +22,7 @@ const statusClasses = { Processing: "bg-amber-50 text-amber-700", Shipped: "bg-b
 
 const AdminDashboard = () => {
   const [overview, setOverview] = useState(null);
-  useEffect(() => { fetch("/api/admin/overview", { credentials: "include" }).then((response) => response.json()).then((result) => setOverview(result.data)).catch(() => {}); }, []);
+  useEffect(() => { fetch(apiUrl("/api/admin/overview"), { credentials: "include" }).then((response) => response.json()).then((result) => setOverview(result.data)).catch(() => {}); }, []);
   const liveStats = overview ? stats.map((stat) => ({ ...stat, value: stat.label === "Total revenue" ? `₹${Number(overview.revenue || 0).toLocaleString("en-IN")}` : stat.label === "Orders this month" ? Number(overview.monthlyOrderCount || 0).toLocaleString("en-IN") : stat.label === "Total customers" ? Number(overview.customerCount || 0).toLocaleString("en-IN") : Number(overview.productCount || 0).toLocaleString("en-IN"), change: stat.label === "Total revenue" ? `₹${Number(overview.monthlyRevenue || 0).toLocaleString("en-IN")} this month` : stat.label === "Orders this month" ? "Current month" : stat.label === "Total customers" ? `+${overview.newCustomers || 0} this week` : "Published catalogue" })) : stats;
   const liveOrders = overview?.recentOrders || orders.map(([orderNumber, customer, items, amount, status]) => ({ orderNumber, customer: { name: customer }, items: Array.from({ length: Number.parseInt(items, 10) || 1 }), total: amount.replace("₹", "").replace(",", ""), status }));
   const revenueTrend = overview?.revenueTrend || [];

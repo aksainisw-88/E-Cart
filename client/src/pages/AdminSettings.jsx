@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bell, CheckCircle2, CreditCard, LockKeyhole, RotateCcw, Save, UserRound } from "lucide-react";
+import { Bell, CheckCircle2, CreditCard, Database, LockKeyhole, RotateCcw, Save, UserRound } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const preferenceKey = "e-mart-admin-preferences";
@@ -46,6 +46,12 @@ const AdminSettings = () => {
   const [licenseMessage, setLicenseMessage] = useState("");
   const [licenseError, setLicenseError] = useState("");
   const [licenseFormOpen, setLicenseFormOpen] = useState(false);
+  const [databaseStatus, setDatabaseStatus] = useState(undefined);
+  const [databaseUri, setDatabaseUri] = useState("");
+  const [databaseAcknowledged, setDatabaseAcknowledged] = useState(false);
+  const [databaseBusy, setDatabaseBusy] = useState(false);
+  const [databaseMessage, setDatabaseMessage] = useState("");
+  const [databaseError, setDatabaseError] = useState("");
 
   useEffect(() => {
     fetch(`${API_URL}/api/auth/me`, { credentials: "include" })
@@ -61,6 +67,14 @@ const AdminSettings = () => {
       .then((data) => {
         setSubscription(data);
         if (!data?.active) return;
+        fetch(`${API_URL}/api/customer-database/status`, { credentials: "include" })
+          .then(async (response) => {
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || "Unable to load database status.");
+            return result.data;
+          })
+          .then(setDatabaseStatus)
+          .catch((requestError) => setDatabaseError(requestError.message));
         return fetch(`${API_URL}/api/store/payment-integrations`, { credentials: "include" })
           .then(async (response) => { const result = await response.json(); if (!response.ok) throw new Error(result.message || "Unable to load payment integrations."); return result.data; })
           .then((data) => setIntegrations((current) => ({ ...current, ...data })));
@@ -98,6 +112,31 @@ const AdminSettings = () => {
       setLicenseError(requestError.message);
     } finally {
       setLicenseBusy(false);
+    }
+  };
+
+  const saveDatabase = async (event) => {
+    event.preventDefault();
+    setDatabaseBusy(true);
+    setDatabaseError("");
+    setDatabaseMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/customer-database`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ uri: databaseUri }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to connect the customer database.");
+      setDatabaseStatus(result.data);
+      setDatabaseUri("");
+      setDatabaseAcknowledged(false);
+      setDatabaseMessage(result.message || "Customer database connected.");
+    } catch (requestError) {
+      setDatabaseError(requestError.message);
+    } finally {
+      setDatabaseBusy(false);
     }
   };
 
@@ -266,6 +305,22 @@ const AdminSettings = () => {
         {subscription && !subscription.active && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">License status: {subscription.status}. Admin operations stay locked until an active license with valid dates is entered.</p>}
         {(licenseMessage || licenseError) && <p role={licenseError ? "alert" : "status"} className={`mt-4 rounded-lg p-3 text-sm ${licenseError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{licenseError || licenseMessage}</p>}
       </section>
+
+      {subscription?.active && <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6 sm:p-8">
+        <div className="flex items-center gap-3 border-b border-slate-100 pb-5"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700"><Database className="h-5 w-5" /></span><div><h2 className="font-semibold text-slate-900">Customer database</h2><p className="mt-1 text-xs text-slate-500">Connect this customer API to a new MongoDB Atlas database.</p></div></div>
+        <div className="mt-5 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
+          <p>Connection: <strong className={databaseStatus?.connected ? "text-emerald-700" : "text-amber-700"}>{databaseStatus === undefined ? "Checking..." : databaseStatus.connected ? "Connected" : "Unavailable"}</strong>{databaseStatus?.databaseName && <span> · Database: <strong>{databaseStatus.databaseName}</strong></span>}</p>
+          <p className="mt-2 text-xs">Only MongoDB Atlas SRV URIs are accepted. Your URI is sent directly to the API, encrypted for this customer deployment, and never shown again. The API must have its database-encryption key configured.</p>
+        </div>
+        <form onSubmit={saveDatabase} className="mt-5 space-y-4">
+          <label className="block text-sm font-medium text-slate-700">MongoDB Atlas connection URI
+            <input required type="password" autoComplete="new-password" value={databaseUri} onChange={(event) => setDatabaseUri(event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 font-mono text-sm outline-none focus:border-primary" placeholder="mongodb+srv://username:password@cluster.mongodb.net/customer_db?retryWrites=true&w=majority" />
+          </label>
+          <label className="flex items-start gap-3 text-xs text-slate-600"><input required type="checkbox" checked={databaseAcknowledged} onChange={(event) => setDatabaseAcknowledged(event.target.checked)} className="mt-0.5" /><span>I understand this switches the API to the selected database. Existing store data is not copied or deleted; only my admin account is added to the new database so I can continue signing in.</span></label>
+          <button type="submit" disabled={databaseBusy || !databaseUri} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white disabled:opacity-60"><Database className="h-4 w-4" />{databaseBusy ? "Testing and connecting..." : "Test and connect database"}</button>
+        </form>
+        {(databaseMessage || databaseError) && <p role={databaseError ? "alert" : "status"} className={`mt-4 rounded-lg p-3 text-sm ${databaseError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{databaseError || databaseMessage}</p>}
+      </section>}
 
       {subscription?.active && <form onSubmit={saveSettings} className="mt-8 space-y-6">
         <section className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8">

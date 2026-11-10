@@ -11,15 +11,17 @@ const connectSuperAdminDatabase = async (uri) => {
   await connection.openUri(uri);
   const SuperAdmin = require("../models/SuperAdmin");
   const Subscription = require("../models/Subscription");
+  const CustomerDatabaseConfig = require("../models/CustomerDatabaseConfig");
   const collections = [
     { name: SuperAdmin.collection.collectionName, model: SuperAdmin },
     { name: Subscription.collection.collectionName, model: Subscription },
+    { name: CustomerDatabaseConfig.collection.collectionName, model: CustomerDatabaseConfig },
   ];
   for (const { name, model } of collections) {
     const exists = await connection.db.listCollections({ name }, { nameOnly: true }).hasNext();
     if (!exists) await model.createCollection();
   }
-  await Promise.all([SuperAdmin.createIndexes(), Subscription.createIndexes()]);
+  await Promise.all([SuperAdmin.createIndexes(), Subscription.createIndexes(), CustomerDatabaseConfig.createIndexes()]);
   console.log("Super-admin MongoDB connected; required collections and indexes are ready");
 };
 

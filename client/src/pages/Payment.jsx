@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import Footer from "../components/home/Footer";
 import { useCart } from "../context/cartContext";
 import { useStore } from "../context/storeContext";
+import { apiUrl } from "../utils/api";
 
 const paymentOptions = [
   { value: "razorpay", label: "Razorpay", icon: "R" },
@@ -56,7 +57,7 @@ const Payment = () => {
       setError("Razorpay checkout is still loading. Please try again.");
       return;
     }
-    const response = await fetch("/api/orders", {
+    const response = await fetch(apiUrl("/api/orders"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -82,7 +83,7 @@ const Payment = () => {
       prefill: { name: details?.name, contact: details?.phone },
       handler: async (paymentResponse) => {
         try {
-          const verification = await fetch(`/api/orders/${result.data._id}/payment/verify`, {
+          const verification = await fetch(apiUrl(`/api/orders/${result.data._id}/payment/verify`), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",

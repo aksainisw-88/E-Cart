@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { CartContext } from "./cartContext";
+import { apiUrl } from "../utils/api";
 const storageKey = "e-mart-cart";
 
 const readCart = () => {
@@ -68,7 +69,7 @@ export const CartProvider = ({ children }) => {
   const updateQuantity = (id, amount) => saveItems(items.map((item) => item.id === id ? { ...item, quantity: Math.min(Number(item.stock ?? Number.MAX_SAFE_INTEGER), Math.max(1, item.quantity + amount)) } : item));
   const removeFromCart = (id) => saveItems(items.filter((item) => item.id !== id));
   const syncCartStock = async () => {
-    const response = await fetch("/api/catalog/products", { cache: "no-store" });
+    const response = await fetch(apiUrl("/api/catalog/products"), { cache: "no-store" });
     const result = await response.json();
     if (!response.ok) throw new Error(result.message || "Unable to check product stock.");
     const productMap = new Map((result.data || []).map((product) => [product._id, product]));
@@ -96,7 +97,7 @@ export const CartProvider = ({ children }) => {
     if (!normalizedCode) { setPromoError("Enter a promo code."); return false; }
     setPromoError("");
     try {
-      const response = await fetch(`/api/catalog/offers/validate?code=${encodeURIComponent(normalizedCode)}&subtotal=${subtotal}&items=${encodeURIComponent(JSON.stringify(items.map(({ id, price, quantity }) => ({ id, price, quantity }))))}`);
+      const response = await fetch(apiUrl(`/api/catalog/offers/validate?code=${encodeURIComponent(normalizedCode)}&subtotal=${subtotal}&items=${encodeURIComponent(JSON.stringify(items.map(({ id, price, quantity }) => ({ id, price, quantity }))))}`));
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Unable to apply promo code.");
       if (result.data.offerType === "buy_product_get_product" && result.data.freeProduct && !items.some((item) => item.id === result.data.freeProduct._id)) {

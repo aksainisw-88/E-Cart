@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Mail, MapPin, MessageCircle, Phone, Send } from "lucide-react";
 import Footer from "../components/home/Footer";
 import { useStore } from "../context/storeContext";
+import { apiUrl } from "../utils/api";
 
 const ContactUs = () => {
   const store = useStore();
@@ -17,7 +18,7 @@ const ContactUs = () => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
   const submit = async (event) => {
     event.preventDefault();
-    const response = await fetch("/api/support", {
+    const response = await fetch(apiUrl("/api/support"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",

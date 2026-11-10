@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { apiUrl } from "./utils/api";
 
 import Navbar from "./components/layout/Navbar";
 import Home from "./pages/Home";
@@ -39,7 +40,7 @@ const RequireCustomerAuth = ({ children }) => {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/auth/me", { credentials: "include" })
+    fetch(apiUrl("/api/auth/me"), { credentials: "include" })
       .then((response) => { if (!response.ok) throw new Error("Unauthenticated"); return response.json(); })
       .then(({ user }) => { if (active) setState(user?.role === "customer" ? "authorized" : "denied"); })
       .catch(() => { if (active) setState("denied"); });

@@ -7,6 +7,7 @@ import {
   adminSecondaryNavigation,
 } from "../../data/adminNavigation";
 import { useStore } from "../../context/storeContext";
+import { apiUrl } from "../../utils/api";
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -30,7 +31,7 @@ const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const store = useStore();
-  const logout = async () => { await fetch("/api/auth/logout", { method: "POST", credentials: "include" }); navigate("/admin/login", { replace: true }); };
+  const logout = async () => { await fetch(apiUrl("/api/auth/logout"), { method: "POST", credentials: "include" }); navigate("/admin/login", { replace: true }); };
   const toggleDarkMode = () => setDarkMode((current) => { const next = !current; localStorage.setItem("e-mart-admin-dark", String(next)); return next; });
 
   useEffect(() => {
@@ -50,7 +51,7 @@ const AdminLayout = () => {
     let active = true;
     const requestedAdminPath = `${window.location.pathname}${window.location.search}`;
 
-    fetch("/api/auth/me", { credentials: "include" })
+    fetch(apiUrl("/api/auth/me"), { credentials: "include" })
       .then(async (response) => {
         const result = await response.json();
         if (!response.ok) throw new Error(result.message);
@@ -83,7 +84,7 @@ const AdminLayout = () => {
 
     const loadOrders = async () => {
       try {
-        const response = await fetch("/api/admin/orders", { credentials: "include" });
+        const response = await fetch(apiUrl("/api/admin/orders"), { credentials: "include" });
         const result = await response.json();
         if (!active || !response.ok) return;
         const orders = result.data || [];
