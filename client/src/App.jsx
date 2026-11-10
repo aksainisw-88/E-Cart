@@ -88,6 +88,7 @@ function App() {
         <Route path="/contact" element={<ContactUs />} />
         <Route path="/offers" element={<Offers />} />
         <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/reset-password" element={<ResetPassword />} />
         <Route path="/admin/register" element={<AdminRegister />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboardOverview />} />

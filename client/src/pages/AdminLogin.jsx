@@ -13,6 +13,11 @@ const AdminLogin = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [existingSession, setExistingSession] = useState("");
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState("");
+  const [forgotError, setForgotError] = useState("");
+  const [developmentResetUrl, setDevelopmentResetUrl] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
   const store = useStore();
@@ -52,6 +57,29 @@ const AdminLogin = () => {
     }
   };
 
+  const requestPasswordReset = async (event) => {
+    event.preventDefault();
+    setForgotLoading(true);
+    setForgotMessage("");
+    setForgotError("");
+    setDevelopmentResetUrl("");
+    try {
+      const response = await fetch(`${API_URL}/api/auth/admin-forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to request a password reset.");
+      setForgotMessage(result.message || "If an admin account exists for that email, a reset link will be sent.");
+      setDevelopmentResetUrl(result.developmentResetUrl || "");
+    } catch (requestError) {
+      setForgotError(requestError instanceof TypeError ? "Unable to reach the server. Please try again." : requestError.message);
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-10 sm:px-6">
       <div aria-hidden="true" className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-emerald-500/20 blur-3xl" />
@@ -88,7 +116,7 @@ const AdminLogin = () => {
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-primary"><KeyRound className="h-5 w-5" /></span>
             <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-primary">Staff access</p>
             <h2 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">Admin sign in</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">Use your admin or staff credentials to continue.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-500">Use the credentials and customer URL for the store where your account was created.</p>
 
             {existingSession === "customer" && <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">A customer session is active. Signing in here will switch this browser to the staff account.</p>}
 
@@ -99,11 +127,23 @@ const AdminLogin = () => {
               <label className="block text-sm font-medium text-slate-700">Password
                 <input required type="password" minLength={8} maxLength={128} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm outline-none focus:border-primary" placeholder="Enter your password" />
               </label>
+              <div className="flex justify-end"><button type="button" onClick={() => { setForgotOpen((current) => !current); setForgotMessage(""); setForgotError(""); }} className="text-xs font-semibold text-primary hover:underline">{forgotOpen ? "Close password recovery" : "Forgot password?"}</button></div>
               {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
               <button type="submit" disabled={loading} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60">
                 {loading ? "Signing in..." : "Sign in to admin"}<ArrowRight className="h-4 w-4" />
               </button>
             </form>
+
+            {forgotOpen && <form onSubmit={requestPasswordReset} className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <h3 className="text-sm font-semibold text-slate-800">Reset admin password</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500">We’ll send a reset link if this email belongs to an admin on this store.</p>
+              <label className="mt-3 block text-xs font-medium text-slate-700">Admin email
+                <input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary" placeholder="name@store.com" />
+              </label>
+              {forgotError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-xs text-red-700">{forgotError}</p>}
+              {forgotMessage && <p role="status" className="mt-3 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800">{forgotMessage}{developmentResetUrl && <a href={developmentResetUrl} className="mt-2 block break-all font-semibold underline">Open development reset link</a>}</p>}
+              <button type="submit" disabled={forgotLoading} className="mt-3 h-10 w-full rounded-lg bg-slate-900 px-3 text-xs font-semibold text-white disabled:opacity-60">{forgotLoading ? "Sending..." : "Send reset link"}</button>
+            </form>}
 
             <p className="mt-7 border-t border-slate-100 pt-5 text-center text-sm text-slate-500">Shopping with us? <Link to="/customer/login" className="font-semibold text-primary hover:text-primary-dark">Customer sign in</Link></p>
             <p className="mt-3 text-center text-sm text-slate-500">New to store admin? <Link to="/admin/register" className="font-semibold text-primary hover:text-primary-dark">Create admin account</Link></p>

@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { ArrowRight, KeyRound } from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const isAdminReset = location.pathname.startsWith("/admin/");
   const token = searchParams.get("token") || "";
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -23,7 +25,7 @@ const ResetPassword = () => {
     }
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/auth/reset-password`, {
+      const response = await fetch(`${API_URL}/api/auth/${isAdminReset ? "admin-reset-password" : "reset-password"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, password }),
@@ -47,7 +49,7 @@ const ResetPassword = () => {
           <h1 className="mt-1 text-2xl font-bold text-slate-900">Set a new password</h1>
           <p className="mt-2 text-sm text-slate-500">Choose a password with at least 8 characters.</p>
           {!token ? <p role="alert" className="mt-6 rounded-lg bg-red-50 p-3 text-sm text-red-700">This reset link is invalid. Request a new one from sign in.</p> : message ? (
-            <div className="mt-6 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-800"><p>{message}</p><Link to="/customer/login" className="mt-3 inline-flex items-center gap-2 font-semibold text-primary hover:text-primary-dark">Go to sign in <ArrowRight className="h-4 w-4" /></Link></div>
+            <div className="mt-6 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-800"><p>{message}</p><Link to={isAdminReset ? "/admin/login" : "/customer/login"} className="mt-3 inline-flex items-center gap-2 font-semibold text-primary hover:text-primary-dark">Go to sign in <ArrowRight className="h-4 w-4" /></Link></div>
           ) : (
             <form onSubmit={submit} className="mt-6 space-y-4">
               <label className="block text-sm font-medium text-slate-700">New password<input required minLength={8} maxLength={128} autoComplete="new-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>

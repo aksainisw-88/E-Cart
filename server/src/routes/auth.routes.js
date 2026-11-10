@@ -16,7 +16,7 @@ const { isEmailConfigured, sendPasswordResetLink, sendSignupCode } = require("..
 
 const router = express.Router();
 const credentialsSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email(),
   password: z.string().min(8).max(128),
 });
 const registrationSchema = credentialsSchema.extend({
@@ -47,7 +47,7 @@ const adminRegistrationSchema = credentialsSchema.extend({
   theme: z.enum(["teal", "blue", "emerald", "amber"]).default("teal"),
 });
 const signupOtpSchema = z.object({ email: z.string().email() });
-const forgotPasswordSchema = z.object({ email: z.string().email() });
+const forgotPasswordSchema = z.object({ email: z.string().trim().email() });
 const resetPasswordSchema = z.object({ token: z.string().regex(/^[a-f0-9]{64}$/), password: z.string().min(8).max(128) });
 
 const ensureNewStoreCanRegister = async () => {
@@ -364,6 +364,49 @@ router.post("/forgot-password", async (request, response, next) => {
   }
 });
 
+router.post("/admin-forgot-password", async (request, response, next) => {
+  try {
+    const data = parseBody(forgotPasswordSchema, request, response);
+    if (!data) return;
+    const env = request.app.locals.env;
+    const genericResponse = { success: true, message: "If an admin account exists for that email on this store, a reset link will be sent." };
+    if (env.NODE_ENV === "production" && !isEmailConfigured(env)) {
+      return response.status(503).json({ success: false, message: "Password reset email delivery is not configured." });
+    }
+
+    const user = await User.findOne({
+      email: data.email.toLowerCase(),
+      role: { $in: ["admin", "manager", "user"] },
+    }).select("_id email");
+    if (!user) return response.json(genericResponse);
+
+    const existingReset = await PasswordReset.findOne({ user: user._id });
+    if (existingReset && Date.now() - existingReset.createdAt.getTime() < 60_000) {
+      return response.json(genericResponse);
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const resetUrl = new URL(`/admin/reset-password?token=${token}`, env.CLIENT_URL).toString();
+    await PasswordReset.findOneAndUpdate(
+      { user: user._id },
+      { tokenHash: hashResetToken(token), expiresAt: new Date(Date.now() + 60 * 60_000) },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+    try {
+      const sent = await sendPasswordResetLink(user.email, resetUrl, env);
+      return response.json({ ...genericResponse, ...(!sent ? { developmentResetUrl: resetUrl } : {}) });
+    } catch (error) {
+      await PasswordReset.deleteOne({ user: user._id });
+      throw error;
+    }
+  } catch (error) {
+    if (error.message === "Email delivery is not configured.") {
+      return response.status(503).json({ success: false, message: "Password reset email delivery is not configured." });
+    }
+    return next(error);
+  }
+});
+
 router.post("/reset-password", async (request, response, next) => {
   try {
     const data = parseBody(resetPasswordSchema, request, response);
@@ -380,6 +423,27 @@ router.post("/reset-password", async (request, response, next) => {
     await PasswordReset.deleteMany({ user: user._id });
     response.clearCookie("accessToken", { httpOnly: true, sameSite: request.app.locals.env.NODE_ENV === "production" ? "none" : "lax", secure: request.app.locals.env.NODE_ENV === "production" });
     return response.json({ success: true, message: "Password updated. Sign in with your new password." });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/admin-reset-password", async (request, response, next) => {
+  try {
+    const data = parseBody(resetPasswordSchema, request, response);
+    if (!data) return;
+    const reset = await PasswordReset.findOne({ tokenHash: hashResetToken(data.token), expiresAt: { $gt: new Date() } });
+    if (!reset) return response.status(400).json({ success: false, message: "This reset link is invalid or expired. Request a new one." });
+    const user = await User.findOne({ _id: reset.user, role: { $in: ["admin", "manager", "user"] } });
+    if (!user) {
+      await reset.deleteOne();
+      return response.status(400).json({ success: false, message: "This reset link is invalid or expired. Request a new one." });
+    }
+    user.password = await bcrypt.hash(data.password, 12);
+    await user.save();
+    await PasswordReset.deleteMany({ user: user._id });
+    response.clearCookie("accessToken", { httpOnly: true, sameSite: request.app.locals.env.NODE_ENV === "production" ? "none" : "lax", secure: request.app.locals.env.NODE_ENV === "production" });
+    return response.json({ success: true, message: "Admin password updated. Sign in with your new password." });
   } catch (error) {
     return next(error);
   }
