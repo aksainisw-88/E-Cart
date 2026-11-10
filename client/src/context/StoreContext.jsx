@@ -37,6 +37,10 @@ export const StoreProvider = ({ children }) => {
     document.documentElement.style.setProperty("--color-primary-dark", dark);
   }, [store.theme]);
 
+  useEffect(() => {
+    document.title = store.name || "E-Cart";
+  }, [store.name]);
+
   const value = { ...store, logoUrl: store.logo ? `${API_URL}${store.logo}` : "", refreshStore: loadStore };
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 };
