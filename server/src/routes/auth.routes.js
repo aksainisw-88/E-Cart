@@ -173,6 +173,12 @@ router.post("/admin-signup-otp", async (request, response, next) => {
     const data = parseBody(signupOtpSchema, request, response);
     if (!data) return;
     const email = data.email.toLowerCase();
+    if (await User.exists({ role: "admin" })) {
+      return response.status(409).json({
+        success: false,
+        message: "This API deployment is already linked to a store. A separate business needs its own customer API deployment and database.",
+      });
+    }
     if (await User.exists({ email })) {
       return response.status(409).json({ success: false, message: "An account with this email already exists." });
     }
@@ -204,6 +210,12 @@ router.post("/register/admin", async (request, response, next) => {
     if (!data) return;
 
     const email = data.email.toLowerCase();
+    if (await User.exists({ role: "admin" })) {
+      return response.status(409).json({
+        success: false,
+        message: "This API deployment is already linked to a store. A separate business needs its own customer API deployment and database.",
+      });
+    }
     if (await User.exists({ email })) {
       return response.status(409).json({ success: false, message: "An account with this email already exists." });
     }

@@ -15,6 +15,23 @@ const databaseUriSchema = z.object({
 });
 let configurationInProgress = false;
 
+const atlasConnectionFailureMessage = (error) => {
+  const cause = error.cause || error;
+  const code = String(error.code || cause.code || "");
+  const details = `${error.name || ""} ${error.message || ""} ${cause.name || ""} ${cause.message || ""}`.toLowerCase();
+
+  if (code === "18" || /authentication failed|bad auth|auth failed/.test(details)) {
+    return "Atlas rejected the database credentials. Verify the Atlas database username and password, URL-encode special characters in the password, and grant the user read/write access to the selected database.";
+  }
+  if (code === "13" || /not authorized|unauthorized/.test(details)) {
+    return "The Atlas database user does not have enough permissions. Grant it read/write access to the selected database, including permission to create collections and indexes.";
+  }
+  if (/enotfound|querysrv|serverselection|etimedout|econnrefused|network|no dns records/.test(details)) {
+    return "The API could not reach the Atlas cluster. Verify the SRV hostname and allow the Render API's outbound IP addresses in Atlas Network Access.";
+  }
+  return "The Atlas connection test failed. Verify the SRV hostname, Atlas Network Access, database credentials, password URL-encoding, and database-user permissions.";
+};
+
 const parseAtlasUri = (uri) => {
   let parsed;
   try {
@@ -198,7 +215,7 @@ router.put("/", async (request, response) => {
     return response.status(502).json({
       success: false,
       message: failureStage === "testing the target MongoDB Atlas database"
-        ? "Unable to connect to the selected database. Check the Atlas network access and database user permissions."
+        ? atlasConnectionFailureMessage(error)
         : failureStage === "saving the encrypted database configuration"
           ? "The database was tested, but the configuration could not be saved. No database switch was made."
           : failureStage === "switching the customer API database"

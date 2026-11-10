@@ -401,6 +401,8 @@ const AdminSettings = () => {
         <div className="mt-5 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
           <p>Connection: <strong className={databaseStatus?.connected ? "text-emerald-700" : "text-amber-700"}>{databaseStatus === undefined ? "Checking..." : databaseStatus.connected ? "Connected" : "Unavailable"}</strong>{databaseStatus?.databaseName && <span> · Database: <strong>{databaseStatus.databaseName}</strong></span>}</p>
           <p className="mt-2 text-xs">Only MongoDB Atlas SRV URIs are accepted. Your URI is sent directly to the API, encrypted for this customer deployment, and never shown again. The API must have its database-encryption key configured.</p>
+          <p className="mt-2 text-xs font-medium text-amber-800">This switches the database for the entire API deployment, not just this admin account. Store branding and catalog data come from the currently connected database until the switch succeeds. Each separate business needs its own customer API deployment and database.</p>
+          <p className="mt-2 text-xs">For Atlas connection failures, allow the Render API's outbound IP addresses in Atlas Network Access and give the Atlas database user read/write permissions on the selected database. After connecting a clean database, set your logo and store details under Store management.</p>
         </div>
         <form onSubmit={saveDatabase} className="mt-5 space-y-4">
           <label className="block text-sm font-medium text-slate-700">MongoDB Atlas connection URI
