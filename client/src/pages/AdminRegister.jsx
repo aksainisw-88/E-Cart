@@ -24,6 +24,9 @@ const AdminRegister = () => {
     deliveryFee: "49",
     freeDeliveryAbove: "999",
     theme: "teal",
+    registrationNumber: "",
+    licenseKey: "",
+    customerDatabaseUri: "",
   });
   const [otpSent, setOtpSent] = useState(false);
   const [developmentOtp, setDevelopmentOtp] = useState("");
@@ -74,7 +77,7 @@ const AdminRegister = () => {
       const response = await fetch(`${API_URL}/api/auth/admin-signup-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email }),
+        body: JSON.stringify({ email: form.email.trim() }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Unable to send a verification code.");
@@ -123,6 +126,9 @@ const AdminRegister = () => {
           deliveryFee: form.deliveryFee,
           freeDeliveryAbove: form.freeDeliveryAbove,
           theme: form.theme,
+          registrationNumber: form.registrationNumber,
+          licenseKey: form.licenseKey,
+          customerDatabaseUri: form.customerDatabaseUri,
         }),
       });
       const result = await response.json();
@@ -151,7 +157,7 @@ const AdminRegister = () => {
           <div className="relative max-w-md py-12">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-200/20"><ShieldCheck className="h-6 w-6" /></span>
             <h1 className="mt-6 text-3xl font-semibold leading-tight">Create your store and admin account.</h1>
-            <p className="mt-3 text-sm leading-6 text-white/65">Add your business details, verify your email, then request a subscription license from Settings.</p>
+            <p className="mt-3 text-sm leading-6 text-white/65">Add your business details, verify your email, then enter your pre-issued license and private customer database connection.</p>
           </div>
           <p className="relative text-xs text-white/45">Store details are saved to this customer API's database.</p>
         </div>
@@ -169,7 +175,7 @@ const AdminRegister = () => {
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-primary"><KeyRound className="h-5 w-5" /></span>
             <p className="mt-5 text-xs font-bold uppercase tracking-[0.16em] text-primary">Store onboarding</p>
             <h2 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">Create your store</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">Enter your business and owner details. You can update these settings and upload your logo after signup.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-500">Enter your business and owner details. After email verification, provide the subscription issued for this admin email and a new customer database.</p>
 
             <form onSubmit={submit} className="mt-6 space-y-6">
               <section className="space-y-4 rounded-2xl border border-slate-200 p-4 sm:p-5">
@@ -243,6 +249,19 @@ const AdminRegister = () => {
                 {developmentOtp && <p className="mt-2 text-xs font-medium text-amber-800">Development code: {developmentOtp}</p>}
                 <div className="mt-3 flex justify-end"><button type="button" disabled={loading} onClick={requestCode} className="text-xs font-semibold text-primary hover:underline disabled:opacity-50">Resend code</button></div>
               </div>}
+              {otpSent && <section className="space-y-4 rounded-2xl border border-slate-200 p-4 sm:p-5">
+                <div><h3 className="font-semibold text-slate-900">Subscription and database setup</h3><p className="mt-1 text-xs leading-5 text-slate-500">Enter the license issued for this admin email and a new, empty MongoDB Atlas database. The database URI is stored encrypted and is never displayed after signup.</p></div>
+                <label className="block text-sm font-medium text-slate-700">Registration number
+                  <input required minLength={5} maxLength={40} autoComplete="off" value={form.registrationNumber} onChange={updateField("registrationNumber")} className={inputClass} placeholder="Enter your registration number" />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">License key
+                  <input required type="password" minLength={8} maxLength={80} autoComplete="new-password" value={form.licenseKey} onChange={updateField("licenseKey")} className={inputClass} placeholder="Enter your license key" />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">MongoDB Atlas connection URI
+                  <input required type="password" minLength={20} maxLength={2048} autoComplete="new-password" spellCheck="false" value={form.customerDatabaseUri} onChange={updateField("customerDatabaseUri")} className={inputClass} placeholder="mongodb+srv://..." />
+                </label>
+                <p className="text-xs leading-5 text-amber-800">Use this only on your newly provisioned customer API. It switches that API to the database you provide. Existing stores are protected and cannot be replaced.</p>
+              </section>}
               {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
               {message && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p>}
               <button type="submit" disabled={loading || segmentsLoading || !businessSegments.length} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60">

@@ -333,11 +333,21 @@ router.put("/:id", async (request, response, next) => {
     }
     const newEmail = data.email.toLowerCase();
     if (user.email !== newEmail) {
-      await renameClientCredential(user.email, newEmail, request.app.locals.env);
+      const previousEmail = user.email;
+      await renameClientCredential(previousEmail, newEmail, request.app.locals.env);
+      try {
+        Object.assign(user, { name: data.name, email: newEmail, role: data.role, location: location?._id || null, menuPermissions: data.menuPermissions });
+        user.subscriptionOwner = data.role === "admin" ? null : (user.subscriptionOwner || request.user.id);
+        await user.save();
+      } catch (error) {
+        await renameClientCredential(newEmail, previousEmail, request.app.locals.env);
+        throw error;
+      }
+    } else {
+      Object.assign(user, { name: data.name, role: data.role, location: location?._id || null, menuPermissions: data.menuPermissions });
+      user.subscriptionOwner = data.role === "admin" ? null : (user.subscriptionOwner || request.user.id);
+      await user.save();
     }
-    Object.assign(user, { name: data.name, email: newEmail, role: data.role, location: location?._id || null, menuPermissions: data.menuPermissions });
-    user.subscriptionOwner = data.role === "admin" ? null : (user.subscriptionOwner || request.user.id);
-    await user.save();
     await user.populate("location", "name city");
     response.json({ success: true, data: user });
   } catch (error) { next(error); }

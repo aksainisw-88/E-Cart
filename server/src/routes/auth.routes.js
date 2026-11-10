@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 const { z } = require("zod");
 
 const User = require("../models/User");
@@ -9,11 +10,18 @@ const BusinessSegment = require("../models/BusinessSegment");
 const SignupOtp = require("../models/SignupOtp");
 const AdminSignupOtp = require("../models/AdminSignupOtp");
 const PasswordReset = require("../models/PasswordReset");
+const Subscription = require("../models/Subscription");
 const StoreSettings = require("../models/StoreSettings");
+const { getActiveMongoUri, switchCustomerDatabase } = require("../config/database");
+const { clearUri, getSavedUri, saveUri } = require("../utils/customerDatabaseConfig");
+const { parseAtlasUri } = require("../utils/atlasUri");
+const { today } = require("../utils/subscription");
 const { requireAuth } = require("../middleware/auth");
 const { getSubscriptionForUser } = require("../utils/subscription");
 const {
   createClientCredential,
+  deleteClientCredential,
+  getClientDeploymentId,
   getClientCredential,
   updateClientCredentialPassword,
 } = require("../utils/clientCredentials");
@@ -50,6 +58,9 @@ const adminRegistrationSchema = credentialsSchema.extend({
   deliveryFee: z.coerce.number().min(0).max(100000).default(49),
   freeDeliveryAbove: z.coerce.number().min(0).max(10000000).default(999),
   theme: z.enum(["teal", "blue", "emerald", "amber"]).default("teal"),
+  registrationNumber: z.string().trim().min(5).max(40),
+  licenseKey: z.string().trim().min(8).max(80),
+  customerDatabaseUri: z.string().trim().min(20).max(2048),
 });
 const signupOtpSchema = z.object({ email: z.string().email() });
 const forgotPasswordSchema = z.object({ email: z.string().trim().email() });
@@ -69,6 +80,7 @@ const existingStoreResponse = (response) => response.status(409).json({
 
 const hashOtp = (email, otp, secret) => crypto.createHmac("sha256", secret).update(`${email}:${otp}`).digest("hex");
 const hashResetToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
+let adminRegistrationInProgress = false;
 const getSubscriptionForAuthentication = async (user) => {
   try {
     return await getSubscriptionForUser(user);
@@ -238,7 +250,22 @@ router.post("/admin-signup-otp", async (request, response, next) => {
 });
 
 router.post("/register/admin", async (request, response, next) => {
+  let env;
+  let previousUri;
+  let previousSavedUri;
+  let user;
+  let storeSettingsCreated = false;
+  let credentialCreated = false;
+  let databaseSwitched = false;
+  let subscriptionClaimed = false;
+  let subscriptionWasUnassigned = false;
+  let subscription;
+  let deploymentId;
   try {
+    if (adminRegistrationInProgress) {
+      return response.status(409).json({ success: false, message: "Another store signup is being processed. Please retry shortly." });
+    }
+    adminRegistrationInProgress = true;
     const data = parseBody(adminRegistrationSchema, request, response);
     if (!data) return;
 
@@ -267,39 +294,139 @@ router.post("/register/admin", async (request, response, next) => {
       return response.status(400).json({ success: false, message: "The verification code is incorrect." });
     }
 
-    const password = await bcrypt.hash(data.password, 12);
-    const user = await User.create({ name: data.name, email, password, role: "admin" });
-    let storeSettingsCreated = false;
+    env = request.app.locals.env;
+    if (!env.CUSTOMER_DATABASE_ENCRYPTION_KEY) {
+      return response.status(503).json({ success: false, message: "Secure customer database setup is unavailable. Contact the platform administrator." });
+    }
+    subscription = await Subscription.findOne({
+      email,
+      registrationNumber: data.registrationNumber.toUpperCase(),
+    }).select("+licenseKeyHash");
+    const submittedLicenseHash = crypto.createHash("sha256").update(data.licenseKey.toUpperCase()).digest();
+    const storedLicenseHash = Buffer.from(subscription?.licenseKeyHash || "", "hex");
+    const validLicenseKey = storedLicenseHash.length === submittedLicenseHash.length
+      && crypto.timingSafeEqual(storedLicenseHash, submittedLicenseHash);
+    const currentDate = today();
+    if (
+      !subscription
+      || !validLicenseKey
+      || subscription.status !== "Active"
+      || subscription.validFrom > currentDate
+      || subscription.validTill < currentDate
+    ) {
+      return response.status(403).json({ success: false, message: "The registration number or license key is invalid, expired, or not assigned to this admin email." });
+    }
+    deploymentId = getClientDeploymentId(env);
+    if (subscription.clientDeploymentId && subscription.clientDeploymentId !== deploymentId) {
+      return response.status(409).json({ success: false, message: "This subscription is already assigned to another customer API." });
+    }
+
     try {
-      await StoreSettings.create({
-        key: "default",
-        businessType: businessSegment.baseProfile,
-        businessSegmentId: businessSegment.segmentId,
-        businessSegmentCode: businessSegment.code,
-        name: data.storeName,
-        tagline: data.tagline,
-        description: data.storeDescription,
-        phone: data.storePhone,
-        email: data.storeEmail.toLowerCase(),
-        address: data.storeAddress,
-        city: data.city,
-        deliveryPincode: data.deliveryPincode,
-        deliveryFee: data.deliveryFee,
-        freeDeliveryAbove: data.freeDeliveryAbove,
-        theme: data.theme,
-      });
-      storeSettingsCreated = true;
-      await createClientCredential(email, password, request.app.locals.env);
+      parseAtlasUri(data.customerDatabaseUri);
     } catch (error) {
-      const cleanup = [User.deleteOne({ _id: user._id })];
-      if (storeSettingsCreated) cleanup.push(StoreSettings.deleteOne({ key: "default" }));
-      await Promise.all(cleanup);
+      return response.status(400).json({ success: false, message: error.message });
+    }
+    let targetConnection;
+    let targetConnectionFailed = false;
+    let targetDatabaseHasData = false;
+    try {
+      targetConnection = await mongoose.createConnection(data.customerDatabaseUri, {
+        serverSelectionTimeoutMS: 10000,
+        connectTimeoutMS: 10000,
+      }).asPromise();
+      const collections = await targetConnection.db.listCollections({}, { nameOnly: true }).toArray();
+      targetDatabaseHasData = collections.some(({ name }) => !name.startsWith("system."));
+    } catch {
+      targetConnectionFailed = true;
+    }
+    if (targetConnection) {
+      try {
+        await targetConnection.close();
+      } catch {
+        return response.status(503).json({ success: false, message: "The temporary MongoDB connection could not be closed. Contact the platform administrator." });
+      }
+    }
+    if (targetConnectionFailed) {
+      return response.status(400).json({ success: false, message: "Could not connect to the selected MongoDB Atlas database. Check its URI, database user permissions, and Atlas network access." });
+    }
+    if (targetDatabaseHasData) {
+      return response.status(409).json({ success: false, message: "The selected customer database is not empty. Choose a new database to protect its existing data." });
+    }
+
+    previousUri = getActiveMongoUri();
+    previousSavedUri = await getSavedUri(env.CUSTOMER_DATABASE_ENCRYPTION_KEY);
+    subscriptionWasUnassigned = !subscription.clientDeploymentId;
+    subscription = await Subscription.findOneAndUpdate(
+      {
+        _id: subscription._id,
+        $or: [{ clientDeploymentId: { $in: ["", null] } }, { clientDeploymentId: deploymentId }],
+      },
+      { $set: { clientDeploymentId: deploymentId } },
+      { new: true },
+    ).select("+licenseKeyHash");
+    if (!subscription) {
+      return response.status(409).json({ success: false, message: "This subscription was assigned to another customer API. Contact Super Admin for assistance." });
+    }
+    subscriptionClaimed = true;
+    try {
+      await switchCustomerDatabase(data.customerDatabaseUri);
+    } catch {
+      const error = new Error("Could not activate the selected customer database. Check Atlas network access and database permissions.");
+      error.statusCode = 503;
       throw error;
     }
+    databaseSwitched = true;
+    await saveUri(data.customerDatabaseUri, env.CUSTOMER_DATABASE_ENCRYPTION_KEY);
+
+    const password = await bcrypt.hash(data.password, 12);
+    user = await User.create({
+      name: data.name,
+      email,
+      password,
+      role: "admin",
+      subscriptionRegistrationNumber: subscription.registrationNumber,
+      subscriptionKeyHash: submittedLicenseHash.toString("hex"),
+    });
+    await StoreSettings.create({
+      key: "default",
+      businessType: businessSegment.baseProfile,
+      businessSegmentId: businessSegment.segmentId,
+      businessSegmentCode: businessSegment.code,
+      name: data.storeName,
+      tagline: data.tagline,
+      description: data.storeDescription,
+      phone: data.storePhone,
+      email: data.storeEmail.toLowerCase(),
+      address: data.storeAddress,
+      city: data.city,
+      deliveryPincode: data.deliveryPincode,
+      deliveryFee: data.deliveryFee,
+      freeDeliveryAbove: data.freeDeliveryAbove,
+      theme: data.theme,
+    });
+    storeSettingsCreated = true;
+    await createClientCredential(email, password, env);
+    credentialCreated = true;
     await challenge.deleteOne();
     setAuthCookie(response, user, request.app.locals.env);
-    return response.status(201).json({ success: true, user: publicUser(user), message: "Store and admin account created. Choose a subscription plan in Settings to request a license." });
+    return response.status(201).json({ success: true, user: publicUser(user), message: "Store and admin account created. Your subscription is active." });
   } catch (error) {
+    const cleanup = [];
+    if (credentialCreated) cleanup.push(deleteClientCredential(user.email, env));
+    if (user) cleanup.push(User.deleteOne({ _id: user._id }));
+    if (storeSettingsCreated) cleanup.push(StoreSettings.deleteOne({ key: "default" }));
+    if (cleanup.length) await Promise.all(cleanup);
+    if (databaseSwitched) {
+      if (previousSavedUri) await saveUri(previousSavedUri, env.CUSTOMER_DATABASE_ENCRYPTION_KEY);
+      else await clearUri(env.CUSTOMER_DATABASE_ENCRYPTION_KEY);
+      if (previousUri) await switchCustomerDatabase(previousUri);
+    }
+    if (subscriptionClaimed && subscriptionWasUnassigned) {
+      await Subscription.updateOne(
+        { _id: subscription._id, clientDeploymentId: deploymentId },
+        { $set: { clientDeploymentId: "" } },
+      );
+    }
     if (error.code === 11000) {
       return response.status(409).json({
         success: false,
@@ -309,6 +436,8 @@ router.post("/register/admin", async (request, response, next) => {
       });
     }
     return next(error);
+  } finally {
+    adminRegistrationInProgress = false;
   }
 });
 

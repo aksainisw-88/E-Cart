@@ -6,6 +6,7 @@ const deploymentIdFor = (env) => {
   const identity = env.CUSTOMER_DATABASE_ENCRYPTION_KEY || env.MONGO_URI || env.CLIENT_URL;
   return crypto.createHash("sha256").update(`client-credentials:${identity}`).digest("hex");
 };
+const getClientDeploymentId = deploymentIdFor;
 
 const ensureControlPlaneReady = () => {
   if (connection.readyState !== 1) {
@@ -88,4 +89,5 @@ module.exports = {
   renameClientCredential,
   deleteClientCredential,
   syncExistingStaffCredentials,
+  getClientDeploymentId,
 };

@@ -12,6 +12,7 @@ const subscriptionSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, maxlength: 80 },
   business: { type: String, required: true, trim: true, maxlength: 120 },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  clientDeploymentId: { type: String, trim: true, default: "" },
   phone: { type: String, trim: true, maxlength: 30, default: "" },
   registrationNumber: { type: String, required: true, unique: true, uppercase: true, trim: true },
   licenseKeyHash: { type: String, required: true, select: false },

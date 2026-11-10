@@ -9,6 +9,7 @@ const User = require("../models/User");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { requireSuperAdminDatabase } = require("../config/superAdminDatabase");
 const { getSubscriptionForUser, today } = require("../utils/subscription");
+const { getClientDeploymentId } = require("../utils/clientCredentials");
 
 const router = express.Router();
 router.use(requireSuperAdminDatabase);
@@ -170,8 +171,24 @@ router.post("/activate", requireAuth, requireRole("admin"), async (request, resp
       return response.status(403).json({ success: false, message: "This subscription is not currently within its valid dates." });
     }
 
-    user.subscriptionRegistrationNumber = subscription.registrationNumber;
-    user.subscriptionKeyHash = subscription.licenseKeyHash;
+    const deploymentId = getClientDeploymentId(request.app.locals.env);
+    if (subscription.clientDeploymentId && subscription.clientDeploymentId !== deploymentId) {
+      return response.status(409).json({ success: false, message: "This subscription is assigned to another customer API." });
+    }
+    const claimedSubscription = await Subscription.findOneAndUpdate(
+      {
+        _id: subscription._id,
+        $or: [{ clientDeploymentId: { $in: ["", null] } }, { clientDeploymentId: deploymentId }],
+      },
+      { $set: { clientDeploymentId: deploymentId } },
+      { new: true },
+    ).select("+licenseKeyHash");
+    if (!claimedSubscription) {
+      return response.status(409).json({ success: false, message: "This subscription was assigned to another customer API." });
+    }
+
+    user.subscriptionRegistrationNumber = claimedSubscription.registrationNumber;
+    user.subscriptionKeyHash = claimedSubscription.licenseKeyHash;
     await user.save();
     return response.json({
       success: true,
