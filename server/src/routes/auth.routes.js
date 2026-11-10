@@ -12,6 +12,11 @@ const PasswordReset = require("../models/PasswordReset");
 const StoreSettings = require("../models/StoreSettings");
 const { requireAuth } = require("../middleware/auth");
 const { getSubscriptionForUser } = require("../utils/subscription");
+const {
+  createClientCredential,
+  getClientCredential,
+  updateClientCredentialPassword,
+} = require("../utils/clientCredentials");
 const { isEmailConfigured, sendPasswordResetLink, sendSignupCode } = require("../utils/email");
 
 const router = express.Router();
@@ -127,8 +132,15 @@ const createLoginHandler = (allowedRoles) => async (request, response, next) => 
 
     authStage = "looking up account";
     const user = await User.findOne({ email: data.email.toLowerCase() }).select("+password");
+    const isStaffLogin = allowedRoles?.some((role) => ["admin", "manager", "user"].includes(role));
+    const clientCredential = isStaffLogin
+      ? await getClientCredential(data.email, request.app.locals.env)
+      : null;
     authStage = "verifying password";
-    const validPassword = user && await bcrypt.compare(data.password, user.password);
+    const validPassword = user
+      && (!isStaffLogin || clientCredential)
+      && await bcrypt.compare(data.password, user.password)
+      && (!isStaffLogin || await bcrypt.compare(data.password, clientCredential.passwordHash));
     if (!validPassword) {
       return response.status(401).json({ success: false, message: "Invalid email or password." });
     }
@@ -257,6 +269,7 @@ router.post("/register/admin", async (request, response, next) => {
 
     const password = await bcrypt.hash(data.password, 12);
     const user = await User.create({ name: data.name, email, password, role: "admin" });
+    let storeSettingsCreated = false;
     try {
       await StoreSettings.create({
         key: "default",
@@ -275,8 +288,12 @@ router.post("/register/admin", async (request, response, next) => {
         freeDeliveryAbove: data.freeDeliveryAbove,
         theme: data.theme,
       });
+      storeSettingsCreated = true;
+      await createClientCredential(email, password, request.app.locals.env);
     } catch (error) {
-      await User.deleteOne({ _id: user._id });
+      const cleanup = [User.deleteOne({ _id: user._id })];
+      if (storeSettingsCreated) cleanup.push(StoreSettings.deleteOne({ key: "default" }));
+      await Promise.all(cleanup);
       throw error;
     }
     await challenge.deleteOne();
@@ -379,6 +396,8 @@ router.post("/admin-forgot-password", async (request, response, next) => {
       role: { $in: ["admin", "manager", "user"] },
     }).select("_id email");
     if (!user) return response.json(genericResponse);
+    const clientCredential = await getClientCredential(user.email, env);
+    if (!clientCredential) return response.json(genericResponse);
 
     const existingReset = await PasswordReset.findOne({ user: user._id });
     if (existingReset && Date.now() - existingReset.createdAt.getTime() < 60_000) {
@@ -434,13 +453,21 @@ router.post("/admin-reset-password", async (request, response, next) => {
     if (!data) return;
     const reset = await PasswordReset.findOne({ tokenHash: hashResetToken(data.token), expiresAt: { $gt: new Date() } });
     if (!reset) return response.status(400).json({ success: false, message: "This reset link is invalid or expired. Request a new one." });
-    const user = await User.findOne({ _id: reset.user, role: { $in: ["admin", "manager", "user"] } });
+    const user = await User.findOne({ _id: reset.user, role: { $in: ["admin", "manager", "user"] } }).select("+password");
     if (!user) {
       await reset.deleteOne();
       return response.status(400).json({ success: false, message: "This reset link is invalid or expired. Request a new one." });
     }
-    user.password = await bcrypt.hash(data.password, 12);
-    await user.save();
+    const previousPasswordHash = user.password;
+    const passwordHash = await bcrypt.hash(data.password, 12);
+    await updateClientCredentialPassword(user.email, passwordHash, request.app.locals.env);
+    try {
+      user.password = passwordHash;
+      await user.save();
+    } catch (error) {
+      await updateClientCredentialPassword(user.email, previousPasswordHash, request.app.locals.env);
+      throw error;
+    }
     await PasswordReset.deleteMany({ user: user._id });
     response.clearCookie("accessToken", { httpOnly: true, sameSite: request.app.locals.env.NODE_ENV === "production" ? "none" : "lax", secure: request.app.locals.env.NODE_ENV === "production" });
     return response.json({ success: true, message: "Admin password updated. Sign in with your new password." });

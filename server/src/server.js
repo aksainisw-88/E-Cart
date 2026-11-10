@@ -5,6 +5,7 @@ dotenv.config();
 const app = require("./app");
 const { connectDatabase } = require("./config/database");
 const env = require("./config/env");
+const { syncExistingStaffCredentials } = require("./utils/clientCredentials");
 
 const startServer = async () => {
   try {
@@ -14,6 +15,8 @@ const startServer = async () => {
       env.NODE_ENV,
       env.CUSTOMER_DATABASE_ENCRYPTION_KEY,
     );
+    const syncedCredentials = await syncExistingStaffCredentials(env);
+    if (syncedCredentials) console.log(`Verified ${syncedCredentials} existing staff credential(s) in the Super Admin database`);
 
     app.listen(env.PORT, () => {
       console.log(`E-Mart API listening on http://localhost:${env.PORT}`);

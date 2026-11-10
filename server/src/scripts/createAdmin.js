@@ -4,6 +4,11 @@ const mongoose = require("mongoose");
 
 dotenv.config();
 
+const env = require("../config/env");
+const { connectDatabase } = require("../config/database");
+const { connection: superAdminConnection } = require("../config/superAdminDatabase");
+const { upsertClientCredential } = require("../utils/clientCredentials");
+
 const User = require("../models/User");
 
 const [, , emailArgument, password, ...nameParts] = process.argv;
@@ -16,14 +21,15 @@ if (!email || !password || password.length < 8) {
 }
 
 const createAdmin = async () => {
-  await mongoose.connect(process.env.MONGO_URI);
+  await connectDatabase(env.MONGO_URI, env.SUPER_ADMIN_MONGO_URI, env.NODE_ENV, env.CUSTOMER_DATABASE_ENCRYPTION_KEY);
   const hashedPassword = await bcrypt.hash(password, 12);
   const user = await User.findOneAndUpdate(
     { email },
     { name, email, password: hashedPassword, role: "admin" },
     { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
   );
-  await mongoose.disconnect();
+  await upsertClientCredential(email, hashedPassword, env);
+  await Promise.all([mongoose.disconnect(), superAdminConnection.close()]);
   console.log(`Admin account ready for ${user.email}`);
 };
 

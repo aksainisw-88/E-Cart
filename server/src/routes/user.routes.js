@@ -24,6 +24,7 @@ const PasswordReset = require("../models/PasswordReset");
 const InventoryResetOtp = require("../models/InventoryResetOtp");
 const StoreResetOtp = require("../models/StoreResetOtp");
 const { sendInventoryResetCode, sendStoreResetCode } = require("../utils/email");
+const { createClientCredential, deleteClientCredential, renameClientCredential } = require("../utils/clientCredentials");
 
 const router = express.Router();
 const menuPermissionSchema = z.array(z.enum([
@@ -297,15 +298,22 @@ router.post("/", async (request, response, next) => {
     if (await User.exists({ email })) return response.status(409).json({ success: false, message: "A user with this email already exists." });
     const location = data.locationId ? await StoreLocation.findOne({ _id: data.locationId, active: true }).select("_id").lean() : null;
     if (data.locationId && !location) return response.status(400).json({ success: false, message: "Select an active store location." });
+    const passwordHash = await bcrypt.hash(data.password, 12);
     const user = await User.create({
       name: data.name,
       email,
-      password: await bcrypt.hash(data.password, 12),
+      password: passwordHash,
       role: data.role,
       location: location?._id || null,
       menuPermissions: data.menuPermissions,
       subscriptionOwner: data.role === "admin" ? null : request.user.id,
     });
+    try {
+      await createClientCredential(email, passwordHash, request.app.locals.env);
+    } catch (error) {
+      await User.deleteOne({ _id: user._id });
+      throw error;
+    }
     await user.populate("location", "name city");
     response.status(201).json({ success: true, data: { _id: user._id, name: user.name, email: user.email, role: user.role, status: user.status, menuPermissions: user.menuPermissions, location: user.location } });
   } catch (error) { next(error); }
@@ -323,7 +331,11 @@ router.put("/:id", async (request, response, next) => {
     if (user.email !== data.email.toLowerCase() && await Subscription.exists({ email: user.email })) {
       return response.status(409).json({ success: false, message: "This admin email is bound to a subscription. Contact the platform administrator to transfer the license before changing it." });
     }
-    Object.assign(user, { name: data.name, email: data.email.toLowerCase(), role: data.role, location: location?._id || null, menuPermissions: data.menuPermissions });
+    const newEmail = data.email.toLowerCase();
+    if (user.email !== newEmail) {
+      await renameClientCredential(user.email, newEmail, request.app.locals.env);
+    }
+    Object.assign(user, { name: data.name, email: newEmail, role: data.role, location: location?._id || null, menuPermissions: data.menuPermissions });
     user.subscriptionOwner = data.role === "admin" ? null : (user.subscriptionOwner || request.user.id);
     await user.save();
     await user.populate("location", "name city");
@@ -344,6 +356,7 @@ router.delete("/:id", async (request, response, next) => {
     if (request.params.id === request.user.id) return response.status(400).json({ success: false, message: "You cannot delete your own admin account." });
     const user = await User.findOneAndDelete({ _id: request.params.id, role: { $in: ["admin", "manager", "user"] } });
     if (!user) return response.status(404).json({ success: false, message: "Admin user not found" });
+    await deleteClientCredential(user.email, request.app.locals.env);
     response.json({ success: true, message: "Admin user deleted" });
   } catch (error) { next(error); }
 });
