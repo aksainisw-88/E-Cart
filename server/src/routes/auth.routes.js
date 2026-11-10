@@ -89,11 +89,14 @@ const parseBody = (schema, request, response) => {
 };
 
 const createLoginHandler = (allowedRoles) => async (request, response, next) => {
+  let authStage = "validating credentials";
   try {
     const data = parseBody(credentialsSchema, request, response);
     if (!data) return;
 
+    authStage = "looking up account";
     const user = await User.findOne({ email: data.email.toLowerCase() }).select("+password");
+    authStage = "verifying password";
     const validPassword = user && await bcrypt.compare(data.password, user.password);
     if (!validPassword) {
       return response.status(401).json({ success: false, message: "Invalid email or password." });
@@ -107,14 +110,18 @@ const createLoginHandler = (allowedRoles) => async (request, response, next) => 
       return response.status(403).json({ success: false, message: "These credentials cannot be used on this sign-in page." });
     }
 
+    authStage = "loading store location";
     await populateUserLocationForAuthentication(user);
+    authStage = "creating login session";
     setAuthCookie(response, user, request.app.locals.env);
     const serializedUser = publicUser(user);
     if (["admin", "manager", "user"].includes(user.role)) {
+      authStage = "loading subscription status";
       serializedUser.subscription = await getSubscriptionForAuthentication(user);
     }
     return response.json({ success: true, user: serializedUser });
   } catch (error) {
+    console.error(`Sign-in failed while ${authStage}:`, error.name, error.message);
     return next(error);
   }
 };
