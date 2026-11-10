@@ -13,6 +13,8 @@ services:
         value: https://e-cart-client-gamma.vercel.app
       - key: MONGO_URI
         sync: false
+      - key: TENANT_MONGO_URI
+        sync: false
       - key: JWT_SECRET
         sync: false
       - key: JWT_EXPIRES_IN

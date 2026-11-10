@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, KeyRound, ShieldCheck, Store } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { getTenantId, tenantHeaders } from "../utils/tenant";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const inputClass = "mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm outline-none focus:border-primary";
@@ -24,6 +25,7 @@ const AdminRegister = () => {
     deliveryFee: "49",
     freeDeliveryAbove: "999",
     theme: "teal",
+    tenantId: getTenantId(),
     registrationNumber: "",
     licenseKey: "",
     customerDatabaseUri: "",
@@ -62,6 +64,11 @@ const AdminRegister = () => {
 
   const updateField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
+    if (field === "tenantId") {
+      const tenantId = event.target.value.trim().toLowerCase();
+      if (tenantId) window.localStorage.setItem("eCartTenantId", tenantId);
+      else window.localStorage.removeItem("eCartTenantId");
+    }
     if (field === "email") {
       setOtpSent(false);
       setDevelopmentOtp("");
@@ -76,7 +83,7 @@ const AdminRegister = () => {
     try {
       const response = await fetch(`${API_URL}/api/auth/admin-signup-otp`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: tenantHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ email: form.email.trim() }),
       });
       const result = await response.json();
@@ -107,7 +114,7 @@ const AdminRegister = () => {
     try {
       const response = await fetch(`${API_URL}/api/auth/register/admin`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: tenantHeaders({ "Content-Type": "application/json" }),
         credentials: "include",
         body: JSON.stringify({
           name: form.name,
@@ -128,7 +135,7 @@ const AdminRegister = () => {
           theme: form.theme,
           registrationNumber: form.registrationNumber,
           licenseKey: form.licenseKey,
-          customerDatabaseUri: form.customerDatabaseUri,
+          ...(form.tenantId ? {} : { customerDatabaseUri: form.customerDatabaseUri }),
         }),
       });
       const result = await response.json();
@@ -235,6 +242,9 @@ const AdminRegister = () => {
                 <label className="block text-sm font-medium text-slate-700">Admin email
                   <input required type="email" autoComplete="email" value={form.email} onChange={updateField("email")} className={inputClass} placeholder="name@store.com" />
                 </label>
+                <label className="block text-sm font-medium text-slate-700">Tenant ID (shared platform)
+                  <input value={form.tenantId} onChange={updateField("tenantId")} autoComplete="off" className={inputClass} placeholder="Provided by Super Admin" />
+                </label>
                 <label className="block text-sm font-medium text-slate-700">Password
                   <input required type="password" minLength={8} maxLength={128} autoComplete="new-password" value={form.password} onChange={updateField("password")} className={inputClass} placeholder="At least 8 characters" />
                 </label>
@@ -250,17 +260,19 @@ const AdminRegister = () => {
                 <div className="mt-3 flex justify-end"><button type="button" disabled={loading} onClick={requestCode} className="text-xs font-semibold text-primary hover:underline disabled:opacity-50">Resend code</button></div>
               </div>}
               {otpSent && <section className="space-y-4 rounded-2xl border border-slate-200 p-4 sm:p-5">
-                <div><h3 className="font-semibold text-slate-900">Subscription and database setup</h3><p className="mt-1 text-xs leading-5 text-slate-500">Enter the license issued for this admin email and a new, empty MongoDB Atlas database. The database URI is stored encrypted and is never displayed after signup.</p></div>
+                <div><h3 className="font-semibold text-slate-900">Subscription and database setup</h3><p className="mt-1 text-xs leading-5 text-slate-500">Enter the license issued for this admin email. For the shared platform, use the tenant ID from Super Admin; database credentials are managed by the platform.</p></div>
                 <label className="block text-sm font-medium text-slate-700">Registration number
                   <input required minLength={5} maxLength={40} autoComplete="off" value={form.registrationNumber} onChange={updateField("registrationNumber")} className={inputClass} placeholder="Enter your registration number" />
                 </label>
                 <label className="block text-sm font-medium text-slate-700">License key
                   <input required type="password" minLength={8} maxLength={80} autoComplete="new-password" value={form.licenseKey} onChange={updateField("licenseKey")} className={inputClass} placeholder="Enter your license key" />
                 </label>
-                <label className="block text-sm font-medium text-slate-700">MongoDB Atlas connection URI
-                  <input required type="password" minLength={20} maxLength={2048} autoComplete="new-password" spellCheck="false" value={form.customerDatabaseUri} onChange={updateField("customerDatabaseUri")} className={inputClass} placeholder="mongodb+srv://..." />
-                </label>
-                <p className="text-xs leading-5 text-amber-800">Use this only on your newly provisioned customer API. It switches that API to the database you provide. Existing stores are protected and cannot be replaced.</p>
+                {!form.tenantId && <>
+                  <label className="block text-sm font-medium text-slate-700">MongoDB Atlas connection URI (legacy deployments)
+                    <input required type="password" minLength={20} maxLength={2048} autoComplete="new-password" spellCheck="false" value={form.customerDatabaseUri} onChange={updateField("customerDatabaseUri")} className={inputClass} placeholder="mongodb+srv://..." />
+                  </label>
+                  <p className="text-xs leading-5 text-amber-800">Only use this for a legacy single-store API. New shared-platform accounts must use a tenant ID instead.</p>
+                </>}
               </section>}
               {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
               {message && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p>}

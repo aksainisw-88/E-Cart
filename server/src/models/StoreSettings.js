@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { createTenantModel } = require("../utils/tenantDatabase");
 
 const hoursSchema = new mongoose.Schema({
   open: { type: String, default: "09:00" },
@@ -33,4 +34,4 @@ const storeSettingsSchema = new mongoose.Schema({
   heroSlides: { type: [{ eyebrow: String, title: String, description: String, button: String, to: String, image: String }], default: () => [] },
 }, { timestamps: true });
 
-module.exports = mongoose.model("StoreSettings", storeSettingsSchema);
+module.exports = createTenantModel("StoreSettings", storeSettingsSchema);

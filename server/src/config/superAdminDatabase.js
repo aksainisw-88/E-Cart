@@ -16,6 +16,7 @@ const connectSuperAdminDatabase = async (uri) => {
   const BusinessSegment = require("../models/BusinessSegment");
   const CustomerDatabaseConfig = require("../models/CustomerDatabaseConfig");
   const ClientCredential = require("../models/ClientCredential");
+  const Tenant = require("../models/Tenant");
   const collections = [
     { name: SuperAdmin.collection.collectionName, model: SuperAdmin },
     { name: Subscription.collection.collectionName, model: Subscription },
@@ -24,6 +25,7 @@ const connectSuperAdminDatabase = async (uri) => {
     { name: BusinessSegment.collection.collectionName, model: BusinessSegment },
     { name: CustomerDatabaseConfig.collection.collectionName, model: CustomerDatabaseConfig },
     { name: ClientCredential.collection.collectionName, model: ClientCredential },
+    { name: Tenant.collection.collectionName, model: Tenant },
   ];
   for (const { name, model } of collections) {
     const exists = await connection.db.listCollections({ name }, { nameOnly: true }).hasNext();
@@ -37,6 +39,7 @@ const connectSuperAdminDatabase = async (uri) => {
     BusinessSegment.createIndexes(),
     CustomerDatabaseConfig.createIndexes(),
     ClientCredential.createIndexes(),
+    Tenant.createIndexes(),
   ]);
   const defaultSegments = [
     ["SEG001", "Pharma / Medical Store", "PHARMA", "Medicines, healthcare products, and wellness essentials.", "pharmacy"],

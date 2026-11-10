@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { createTenantModel } = require("../utils/tenantDatabase");
 
 const saleItemSchema = new mongoose.Schema({
   product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
@@ -39,4 +40,4 @@ const posSaleSchema = new mongoose.Schema({
   paymentStatus: { type: String, enum: ["Paid", "Pending"], default: "Paid" },
 }, { timestamps: true });
 
-module.exports = mongoose.model("PosSale", posSaleSchema);
+module.exports = createTenantModel("PosSale", posSaleSchema);

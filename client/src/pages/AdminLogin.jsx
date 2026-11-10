@@ -3,6 +3,7 @@ import { ArrowRight, KeyRound, ShieldCheck } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useStore } from "../context/storeContext";
 import { signIn } from "../utils/auth";
+import { tenantHeaders } from "../utils/tenant";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const staffRoles = ["admin", "manager", "user"];
@@ -66,7 +67,7 @@ const AdminLogin = () => {
     try {
       const response = await fetch(`${API_URL}/api/auth/admin-forgot-password`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: tenantHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ email: email.trim() }),
       });
       const result = await response.json();

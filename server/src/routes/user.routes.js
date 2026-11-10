@@ -25,6 +25,7 @@ const InventoryResetOtp = require("../models/InventoryResetOtp");
 const StoreResetOtp = require("../models/StoreResetOtp");
 const { sendInventoryResetCode, sendStoreResetCode } = require("../utils/email");
 const { createClientCredential, deleteClientCredential, renameClientCredential } = require("../utils/clientCredentials");
+const { getCurrentTenantId } = require("../utils/tenantDatabase");
 
 const router = express.Router();
 const menuPermissionSchema = z.array(z.enum([
@@ -334,13 +335,13 @@ router.put("/:id", async (request, response, next) => {
     const newEmail = data.email.toLowerCase();
     if (user.email !== newEmail) {
       const previousEmail = user.email;
-      await renameClientCredential(previousEmail, newEmail, request.app.locals.env);
+      await renameClientCredential(previousEmail, newEmail, request.app.locals.env, getCurrentTenantId());
       try {
         Object.assign(user, { name: data.name, email: newEmail, role: data.role, location: location?._id || null, menuPermissions: data.menuPermissions });
         user.subscriptionOwner = data.role === "admin" ? null : (user.subscriptionOwner || request.user.id);
         await user.save();
       } catch (error) {
-        await renameClientCredential(newEmail, previousEmail, request.app.locals.env);
+        await renameClientCredential(newEmail, previousEmail, request.app.locals.env, getCurrentTenantId());
         throw error;
       }
     } else {
@@ -366,7 +367,7 @@ router.delete("/:id", async (request, response, next) => {
     if (request.params.id === request.user.id) return response.status(400).json({ success: false, message: "You cannot delete your own admin account." });
     const user = await User.findOneAndDelete({ _id: request.params.id, role: { $in: ["admin", "manager", "user"] } });
     if (!user) return response.status(404).json({ success: false, message: "Admin user not found" });
-    await deleteClientCredential(user.email, request.app.locals.env);
+    await deleteClientCredential(user.email, request.app.locals.env, getCurrentTenantId());
     response.json({ success: true, message: "Admin user deleted" });
   } catch (error) { next(error); }
 });

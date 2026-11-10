@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { createTenantModel } = require("../utils/tenantDatabase");
 
 const addressSchema = new mongoose.Schema({
   label: { type: String, trim: true, default: "Home" },
@@ -66,4 +67,4 @@ const userSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-module.exports = mongoose.model("User", userSchema);
+module.exports = createTenantModel("User", userSchema);

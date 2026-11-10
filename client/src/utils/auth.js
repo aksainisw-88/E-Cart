@@ -1,3 +1,4 @@
+import { tenantHeaders } from "./tenant";
 const API_URL = import.meta.env.VITE_API_URL || "";
 const allowedRoles = {
   customer: ["customer"],
@@ -13,7 +14,7 @@ const readResponse = async (response) => {
 };
 
 export const signIn = async ({ audience, email, password }) => {
-  const credentials = { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ email: email.trim(), password }) };
+  const credentials = { method: "POST", headers: tenantHeaders({ "Content-Type": "application/json" }), credentials: "include", body: JSON.stringify({ email: email.trim(), password }) };
   let response = await fetch(`${API_URL}/api/auth/login/${audience}`, credentials);
   let result = await readResponse(response);
 

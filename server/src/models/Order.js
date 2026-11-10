@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { createTenantModel } = require("../utils/tenantDatabase");
 
 const orderSchema = new mongoose.Schema(
   {
@@ -43,4 +44,4 @@ const orderSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-module.exports = mongoose.model("Order", orderSchema);
+module.exports = createTenantModel("Order", orderSchema);

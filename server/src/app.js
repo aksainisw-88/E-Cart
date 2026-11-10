@@ -12,6 +12,7 @@ const authRoutes = require("./routes/auth.routes");
 const { errorHandler, notFound } = require("./middleware/errorHandler");
 const { requireAuth, requireAnyRole, requireRole, requireAnyMenuPermission } = require("./middleware/auth");
 const { requireDatabaseReady } = require("./config/database");
+const { tenantDatabaseMiddleware } = require("./utils/tenantDatabase");
 const superAdminRoutes = require("./routes/superAdmin.routes");
 const subscriptionRoutes = require("./routes/subscription.routes");
 const customerDatabaseRoutes = require("./routes/customerDatabase.routes");
@@ -75,6 +76,7 @@ app.get("/", (request, response) => {
 
 app.use("/api/health", healthRoutes);
 app.use(requireDatabaseReady);
+app.use(tenantDatabaseMiddleware);
 app.use("/api/webhooks/razorpay", require("./routes/razorpayWebhook.routes"));
 app.use("/api/auth", authRoutes);
 app.use("/api/super-admin", superAdminRoutes);

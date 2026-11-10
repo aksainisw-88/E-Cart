@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { createTenantModel } = require("../utils/tenantDatabase");
 
 const supportTicketSchema = new mongoose.Schema({
   customer: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -12,4 +13,4 @@ const supportTicketSchema = new mongoose.Schema({
   adminReply: { type: String, default: "" },
 }, { timestamps: true });
 
-module.exports = mongoose.model("SupportTicket", supportTicketSchema);
+module.exports = createTenantModel("SupportTicket", supportTicketSchema);

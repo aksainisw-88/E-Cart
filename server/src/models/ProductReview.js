@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { createTenantModel } = require("../utils/tenantDatabase");
 
 const productReviewSchema = new mongoose.Schema({
   product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
@@ -10,4 +11,4 @@ const productReviewSchema = new mongoose.Schema({
 
 productReviewSchema.index({ product: 1, customer: 1, order: 1 }, { unique: true });
 
-module.exports = mongoose.model("ProductReview", productReviewSchema);
+module.exports = createTenantModel("ProductReview", productReviewSchema);

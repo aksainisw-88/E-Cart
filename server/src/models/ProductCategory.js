@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { createTenantModel } = require("../utils/tenantDatabase");
 
 const productCategorySchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, maxlength: 80 },
@@ -8,4 +9,4 @@ const productCategorySchema = new mongoose.Schema({
   isDeleted: { type: Boolean, default: false },
 }, { timestamps: true });
 
-module.exports = mongoose.model("ProductCategory", productCategorySchema);
+module.exports = createTenantModel("ProductCategory", productCategorySchema);

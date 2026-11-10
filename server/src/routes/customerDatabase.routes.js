@@ -9,6 +9,7 @@ const { getActiveMongoUri, switchCustomerDatabase } = require("../config/databas
 const { getSavedUri, saveUri, clearUri } = require("../utils/customerDatabaseConfig");
 const { parseAtlasUri } = require("../utils/atlasUri");
 const { getSubscriptionForUser } = require("../utils/subscription");
+const { getCurrentTenant } = require("../utils/tenantDatabase");
 
 const router = express.Router();
 const databaseUriSchema = z.object({
@@ -53,6 +54,13 @@ router.get("/status", async (request, response, next) => {
   try {
     const admin = await loadActiveAdmin(request, response);
     if (!admin) return;
+    const tenant = getCurrentTenant();
+    if (tenant) {
+      return response.json({
+        success: true,
+        data: { connected: true, configuredInSettings: true, databaseName: tenant.databaseName },
+      });
+    }
     const encryptionKey = request.app.locals.env.CUSTOMER_DATABASE_ENCRYPTION_KEY;
     const savedUri = encryptionKey ? await getSavedUri(encryptionKey) : null;
     return response.json({
@@ -69,6 +77,12 @@ router.get("/status", async (request, response, next) => {
 });
 
 router.put("/", async (request, response) => {
+  if (getCurrentTenant() || request.app.locals.env.TENANT_MONGO_URI) {
+    return response.status(403).json({
+      success: false,
+      message: "Databases on a shared API are provisioned by the platform and cannot be changed from store settings.",
+    });
+  }
   const parsed = databaseUriSchema.safeParse(request.body);
   if (!parsed.success) {
     return response.status(400).json({ success: false, message: "Enter a valid MongoDB Atlas connection URI." });

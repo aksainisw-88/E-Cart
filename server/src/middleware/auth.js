@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { getSubscriptionForUser } = require("../utils/subscription");
+const { getCurrentTenantId } = require("../utils/tenantDatabase");
 
 const getTokenFromRequest = (request) => request.cookies.accessToken;
 
@@ -13,6 +14,9 @@ const requireAuth = (request, response, next) => {
 
   try {
     request.user = jwt.verify(token, request.app.locals.env.JWT_SECRET);
+    if (getCurrentTenantId() !== (request.user.tenantId || "")) {
+      return response.status(403).json({ success: false, message: "The selected store does not match this session." });
+    }
     return next();
   } catch {
     return response.status(401).json({ success: false, message: "Session expired. Please sign in again." });
@@ -36,6 +40,7 @@ const requireOptionalAuth = (request, response, next) => {
 
   try {
     request.user = jwt.verify(token, request.app.locals.env.JWT_SECRET);
+    if (getCurrentTenantId() !== (request.user.tenantId || "")) return next();
     return next();
   } catch {
     return next();

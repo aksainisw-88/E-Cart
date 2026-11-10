@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { createTenantModel } = require("../utils/tenantDatabase");
 
 const taxCategorySchema = new mongoose.Schema({
   appliedOn: { type: String, enum: ["Sales", "Purchase", "Both"], required: true, default: "Both" },
@@ -17,4 +18,4 @@ const taxCategorySchema = new mongoose.Schema({
   active: { type: Boolean, default: true },
 }, { timestamps: true });
 
-module.exports = mongoose.model("TaxCategory", taxCategorySchema);
+module.exports = createTenantModel("TaxCategory", taxCategorySchema);

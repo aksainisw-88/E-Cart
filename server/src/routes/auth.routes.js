@@ -18,6 +18,7 @@ const { parseAtlasUri } = require("../utils/atlasUri");
 const { today } = require("../utils/subscription");
 const { requireAuth } = require("../middleware/auth");
 const { getSubscriptionForUser } = require("../utils/subscription");
+const { getCurrentTenant, getCurrentTenantId } = require("../utils/tenantDatabase");
 const {
   createClientCredential,
   deleteClientCredential,
@@ -60,7 +61,7 @@ const adminRegistrationSchema = credentialsSchema.extend({
   theme: z.enum(["teal", "blue", "emerald", "amber"]).default("teal"),
   registrationNumber: z.string().trim().min(5).max(40),
   licenseKey: z.string().trim().min(8).max(80),
-  customerDatabaseUri: z.string().trim().min(20).max(2048),
+  customerDatabaseUri: z.string().trim().min(20).max(2048).optional(),
 });
 const signupOtpSchema = z.object({ email: z.string().email() });
 const forgotPasswordSchema = z.object({ email: z.string().trim().email() });
@@ -80,7 +81,7 @@ const existingStoreResponse = (response) => response.status(409).json({
 
 const hashOtp = (email, otp, secret) => crypto.createHmac("sha256", secret).update(`${email}:${otp}`).digest("hex");
 const hashResetToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
-let adminRegistrationInProgress = false;
+const adminRegistrationInProgress = new Set();
 const getSubscriptionForAuthentication = async (user) => {
   try {
     return await getSubscriptionForUser(user);
@@ -109,8 +110,9 @@ const publicUser = (user) => ({
 });
 
 const setAuthCookie = (response, user, env) => {
+  const tenantId = getCurrentTenantId();
   const token = jwt.sign(
-    { id: user._id.toString(), role: user.role },
+    { id: user._id.toString(), role: user.role, ...(tenantId ? { tenantId } : {}) },
     env.JWT_SECRET,
     { expiresIn: env.JWT_EXPIRES_IN },
   );
@@ -146,7 +148,7 @@ const createLoginHandler = (allowedRoles) => async (request, response, next) => 
     const user = await User.findOne({ email: data.email.toLowerCase() }).select("+password");
     const isStaffLogin = allowedRoles?.some((role) => ["admin", "manager", "user"].includes(role));
     const clientCredential = isStaffLogin
-      ? await getClientCredential(data.email, request.app.locals.env)
+      ? await getClientCredential(data.email, request.app.locals.env, getCurrentTenantId())
       : null;
     authStage = "verifying password";
     const validPassword = user
@@ -223,7 +225,16 @@ router.post("/admin-signup-otp", async (request, response, next) => {
     const data = parseBody(signupOtpSchema, request, response);
     if (!data) return;
     const email = data.email.toLowerCase();
-    if (!await ensureNewStoreCanRegister()) return existingStoreResponse(response);
+    const tenant = getCurrentTenant();
+    if (tenant) {
+      if (tenant.adminEmail !== email) {
+        return response.status(403).json({ success: false, message: "This license was issued to a different admin email." });
+      }
+    } else if (request.app.locals.env.TENANT_MONGO_URI) {
+      return response.status(400).json({ success: false, message: "Enter the tenant ID issued by Super Admin to register on the shared platform." });
+    } else if (!await ensureNewStoreCanRegister()) {
+      return existingStoreResponse(response);
+    }
     if (await User.exists({ email })) {
       return response.status(409).json({ success: false, message: "An account with this email already exists." });
     }
@@ -261,16 +272,24 @@ router.post("/register/admin", async (request, response, next) => {
   let subscriptionWasUnassigned = false;
   let subscription;
   let deploymentId;
+  const tenant = getCurrentTenant();
+  const signupLockKey = getCurrentTenantId() || "legacy";
   try {
-    if (adminRegistrationInProgress) {
+    if (adminRegistrationInProgress.has(signupLockKey)) {
       return response.status(409).json({ success: false, message: "Another store signup is being processed. Please retry shortly." });
     }
-    adminRegistrationInProgress = true;
+    adminRegistrationInProgress.add(signupLockKey);
     const data = parseBody(adminRegistrationSchema, request, response);
     if (!data) return;
 
     const email = data.email.toLowerCase();
-    if (!await ensureNewStoreCanRegister()) return existingStoreResponse(response);
+    if (tenant) {
+      if (tenant.adminEmail !== email) {
+        return response.status(403).json({ success: false, message: "This license was issued to a different admin email." });
+      }
+    } else if (!await ensureNewStoreCanRegister()) {
+      return existingStoreResponse(response);
+    }
     if (await User.exists({ email })) {
       return response.status(409).json({ success: false, message: "An account with this email already exists." });
     }
@@ -295,12 +314,16 @@ router.post("/register/admin", async (request, response, next) => {
     }
 
     env = request.app.locals.env;
-    if (!env.CUSTOMER_DATABASE_ENCRYPTION_KEY) {
+    if (!tenant && env.TENANT_MONGO_URI) {
+      return response.status(409).json({ success: false, message: "This shared API requires the tenant ID issued by Super Admin. Legacy database URI signup is disabled to protect existing stores." });
+    }
+    if (!tenant && !env.CUSTOMER_DATABASE_ENCRYPTION_KEY) {
       return response.status(503).json({ success: false, message: "Secure customer database setup is unavailable. Contact the platform administrator." });
     }
     subscription = await Subscription.findOne({
       email,
       registrationNumber: data.registrationNumber.toUpperCase(),
+      ...(tenant ? { _id: tenant.subscription, tenantId: tenant.tenantId } : {}),
     }).select("+licenseKeyHash");
     const submittedLicenseHash = crypto.createHash("sha256").update(data.licenseKey.toUpperCase()).digest();
     const storedLicenseHash = Buffer.from(subscription?.licenseKeyHash || "", "hex");
@@ -316,28 +339,41 @@ router.post("/register/admin", async (request, response, next) => {
     ) {
       return response.status(403).json({ success: false, message: "The registration number or license key is invalid, expired, or not assigned to this admin email." });
     }
+    if (tenant && tenant.tenantId !== subscription.tenantId) {
+      return response.status(403).json({ success: false, message: "This license is not assigned to the selected store." });
+    }
+    if (!tenant && subscription.tenantId) {
+      return response.status(409).json({ success: false, message: "This license is for the shared multi-tenant platform. Enter the tenant ID issued by Super Admin; database credentials are not required." });
+    }
     deploymentId = getClientDeploymentId(env);
-    if (subscription.clientDeploymentId && subscription.clientDeploymentId !== deploymentId) {
+    if (!tenant && subscription.clientDeploymentId && subscription.clientDeploymentId !== deploymentId) {
       return response.status(409).json({ success: false, message: "This subscription is already assigned to another customer API." });
     }
 
-    try {
-      parseAtlasUri(data.customerDatabaseUri);
-    } catch (error) {
-      return response.status(400).json({ success: false, message: error.message });
+    if (!tenant) {
+      if (!data.customerDatabaseUri) {
+        return response.status(400).json({ success: false, message: "Enter the customer database URI." });
+      }
+      try {
+        parseAtlasUri(data.customerDatabaseUri);
+      } catch (error) {
+        return response.status(400).json({ success: false, message: error.message });
+      }
     }
     let targetConnection;
     let targetConnectionFailed = false;
     let targetDatabaseHasData = false;
-    try {
-      targetConnection = await mongoose.createConnection(data.customerDatabaseUri, {
-        serverSelectionTimeoutMS: 10000,
-        connectTimeoutMS: 10000,
-      }).asPromise();
-      const collections = await targetConnection.db.listCollections({}, { nameOnly: true }).toArray();
-      targetDatabaseHasData = collections.some(({ name }) => !name.startsWith("system."));
-    } catch {
-      targetConnectionFailed = true;
+    if (!tenant) {
+      try {
+        targetConnection = await mongoose.createConnection(data.customerDatabaseUri, {
+          serverSelectionTimeoutMS: 10000,
+          connectTimeoutMS: 10000,
+        }).asPromise();
+        const collections = await targetConnection.db.listCollections({}, { nameOnly: true }).toArray();
+        targetDatabaseHasData = collections.some(({ name }) => !name.startsWith("system."));
+      } catch {
+        targetConnectionFailed = true;
+      }
     }
     if (targetConnection) {
       try {
@@ -353,30 +389,32 @@ router.post("/register/admin", async (request, response, next) => {
       return response.status(409).json({ success: false, message: "The selected customer database is not empty. Choose a new database to protect its existing data." });
     }
 
-    previousUri = getActiveMongoUri();
-    previousSavedUri = await getSavedUri(env.CUSTOMER_DATABASE_ENCRYPTION_KEY);
-    subscriptionWasUnassigned = !subscription.clientDeploymentId;
-    subscription = await Subscription.findOneAndUpdate(
-      {
-        _id: subscription._id,
-        $or: [{ clientDeploymentId: { $in: ["", null] } }, { clientDeploymentId: deploymentId }],
-      },
-      { $set: { clientDeploymentId: deploymentId } },
-      { new: true },
-    ).select("+licenseKeyHash");
-    if (!subscription) {
-      return response.status(409).json({ success: false, message: "This subscription was assigned to another customer API. Contact Super Admin for assistance." });
+    if (!tenant) {
+      previousUri = getActiveMongoUri();
+      previousSavedUri = await getSavedUri(env.CUSTOMER_DATABASE_ENCRYPTION_KEY);
+      subscriptionWasUnassigned = !subscription.clientDeploymentId;
+      subscription = await Subscription.findOneAndUpdate(
+        {
+          _id: subscription._id,
+          $or: [{ clientDeploymentId: { $in: ["", null] } }, { clientDeploymentId: deploymentId }],
+        },
+        { $set: { clientDeploymentId: deploymentId } },
+        { new: true },
+      ).select("+licenseKeyHash");
+      if (!subscription) {
+        return response.status(409).json({ success: false, message: "This subscription was assigned to another customer API. Contact Super Admin for assistance." });
+      }
+      subscriptionClaimed = true;
+      try {
+        await switchCustomerDatabase(data.customerDatabaseUri);
+      } catch {
+        const error = new Error("Could not activate the selected customer database. Check Atlas network access and database permissions.");
+        error.statusCode = 503;
+        throw error;
+      }
+      databaseSwitched = true;
+      await saveUri(data.customerDatabaseUri, env.CUSTOMER_DATABASE_ENCRYPTION_KEY);
     }
-    subscriptionClaimed = true;
-    try {
-      await switchCustomerDatabase(data.customerDatabaseUri);
-    } catch {
-      const error = new Error("Could not activate the selected customer database. Check Atlas network access and database permissions.");
-      error.statusCode = 503;
-      throw error;
-    }
-    databaseSwitched = true;
-    await saveUri(data.customerDatabaseUri, env.CUSTOMER_DATABASE_ENCRYPTION_KEY);
 
     const password = await bcrypt.hash(data.password, 12);
     user = await User.create({
@@ -405,14 +443,14 @@ router.post("/register/admin", async (request, response, next) => {
       theme: data.theme,
     });
     storeSettingsCreated = true;
-    await createClientCredential(email, password, env);
+    await createClientCredential(email, password, env, getCurrentTenantId());
     credentialCreated = true;
     await challenge.deleteOne();
     setAuthCookie(response, user, request.app.locals.env);
     return response.status(201).json({ success: true, user: publicUser(user), message: "Store and admin account created. Your subscription is active." });
   } catch (error) {
     const cleanup = [];
-    if (credentialCreated) cleanup.push(deleteClientCredential(user.email, env));
+    if (credentialCreated) cleanup.push(deleteClientCredential(user.email, env, getCurrentTenantId()));
     if (user) cleanup.push(User.deleteOne({ _id: user._id }));
     if (storeSettingsCreated) cleanup.push(StoreSettings.deleteOne({ key: "default" }));
     if (cleanup.length) await Promise.all(cleanup);
@@ -437,7 +475,7 @@ router.post("/register/admin", async (request, response, next) => {
     }
     return next(error);
   } finally {
-    adminRegistrationInProgress = false;
+    adminRegistrationInProgress.delete(signupLockKey);
   }
 });
 
@@ -525,7 +563,7 @@ router.post("/admin-forgot-password", async (request, response, next) => {
       role: { $in: ["admin", "manager", "user"] },
     }).select("_id email");
     if (!user) return response.json(genericResponse);
-    const clientCredential = await getClientCredential(user.email, env);
+    const clientCredential = await getClientCredential(user.email, env, getCurrentTenantId());
     if (!clientCredential) return response.json(genericResponse);
 
     const existingReset = await PasswordReset.findOne({ user: user._id });
@@ -534,7 +572,8 @@ router.post("/admin-forgot-password", async (request, response, next) => {
     }
 
     const token = crypto.randomBytes(32).toString("hex");
-    const resetUrl = new URL(`/admin/reset-password?token=${token}`, env.CLIENT_URL).toString();
+    const tenantQuery = getCurrentTenantId() ? `&tenant=${encodeURIComponent(getCurrentTenantId())}` : "";
+    const resetUrl = new URL(`/admin/reset-password?token=${token}${tenantQuery}`, env.CLIENT_URL).toString();
     await PasswordReset.findOneAndUpdate(
       { user: user._id },
       { tokenHash: hashResetToken(token), expiresAt: new Date(Date.now() + 60 * 60_000) },
@@ -589,12 +628,12 @@ router.post("/admin-reset-password", async (request, response, next) => {
     }
     const previousPasswordHash = user.password;
     const passwordHash = await bcrypt.hash(data.password, 12);
-    await updateClientCredentialPassword(user.email, passwordHash, request.app.locals.env);
+    await updateClientCredentialPassword(user.email, passwordHash, request.app.locals.env, getCurrentTenantId());
     try {
       user.password = passwordHash;
       await user.save();
     } catch (error) {
-      await updateClientCredentialPassword(user.email, previousPasswordHash, request.app.locals.env);
+      await updateClientCredentialPassword(user.email, previousPasswordHash, request.app.locals.env, getCurrentTenantId());
       throw error;
     }
     await PasswordReset.deleteMany({ user: user._id });

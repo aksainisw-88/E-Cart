@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { createTenantModel } = require("../utils/tenantDatabase");
 
 const signupOtpSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
@@ -7,4 +8,4 @@ const signupOtpSchema = new mongoose.Schema({
   expiresAt: { type: Date, required: true, index: { expires: 0 } },
 }, { timestamps: true });
 
-module.exports = mongoose.model("SignupOtp", signupOtpSchema);
+module.exports = createTenantModel("SignupOtp", signupOtpSchema);

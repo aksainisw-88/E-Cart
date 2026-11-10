@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { createTenantModel } = require("../utils/tenantDatabase");
 
 const purchaseSchema = new mongoose.Schema(
   {
@@ -32,4 +33,4 @@ const purchaseSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-module.exports = mongoose.model("Purchase", purchaseSchema);
+module.exports = createTenantModel("Purchase", purchaseSchema);

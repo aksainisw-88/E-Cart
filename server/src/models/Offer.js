@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { createTenantModel } = require("../utils/tenantDatabase");
 
 const offerSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true },
@@ -17,4 +18,4 @@ const offerSchema = new mongoose.Schema({
   status: { type: String, enum: ["Active", "Draft", "Expired"], default: "Active" },
 }, { timestamps: true });
 
-module.exports = mongoose.model("Offer", offerSchema);
+module.exports = createTenantModel("Offer", offerSchema);

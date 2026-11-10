@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { createTenantModel } = require("../utils/tenantDatabase");
 
 const locationStockSchema = new mongoose.Schema({
   location: { type: mongoose.Schema.Types.ObjectId, ref: "StoreLocation", required: true },
@@ -48,4 +49,4 @@ const productSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-module.exports = mongoose.model("Product", productSchema);
+module.exports = createTenantModel("Product", productSchema);

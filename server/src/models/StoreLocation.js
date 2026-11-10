@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { createTenantModel } = require("../utils/tenantDatabase");
 
 const storeLocationSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, minlength: 2, maxlength: 100 },
@@ -14,4 +15,4 @@ const storeLocationSchema = new mongoose.Schema({
 
 storeLocationSchema.index({ isDefault: 1 }, { unique: true, partialFilterExpression: { isDefault: true } });
 
-module.exports = mongoose.model("StoreLocation", storeLocationSchema);
+module.exports = createTenantModel("StoreLocation", storeLocationSchema);

@@ -16,9 +16,11 @@ const ensureControlPlaneReady = () => {
   }
 };
 
-const createClientCredential = async (email, passwordHash, env) => {
+const credentialDeploymentId = (env, tenantId) => tenantId || deploymentIdFor(env);
+
+const createClientCredential = async (email, passwordHash, env, tenantId) => {
   ensureControlPlaneReady();
-  return ClientCredential.create({ deploymentId: deploymentIdFor(env), email: email.toLowerCase(), passwordHash });
+  return ClientCredential.create({ deploymentId: credentialDeploymentId(env, tenantId), email: email.toLowerCase(), passwordHash });
 };
 
 const upsertClientCredential = async (email, passwordHash, env) => {
@@ -30,15 +32,15 @@ const upsertClientCredential = async (email, passwordHash, env) => {
   );
 };
 
-const getClientCredential = async (email, env) => {
+const getClientCredential = async (email, env, tenantId) => {
   ensureControlPlaneReady();
-  return ClientCredential.findOne({ deploymentId: deploymentIdFor(env), email: email.toLowerCase() }).select("+passwordHash");
+  return ClientCredential.findOne({ deploymentId: credentialDeploymentId(env, tenantId), email: email.toLowerCase() }).select("+passwordHash");
 };
 
-const updateClientCredentialPassword = async (email, passwordHash, env) => {
+const updateClientCredentialPassword = async (email, passwordHash, env, tenantId) => {
   ensureControlPlaneReady();
   const credential = await ClientCredential.findOneAndUpdate(
-    { deploymentId: deploymentIdFor(env), email: email.toLowerCase() },
+    { deploymentId: credentialDeploymentId(env, tenantId), email: email.toLowerCase() },
     { passwordHash },
     { new: true, runValidators: true },
   );
@@ -49,10 +51,10 @@ const updateClientCredentialPassword = async (email, passwordHash, env) => {
   }
 };
 
-const renameClientCredential = async (oldEmail, newEmail, env) => {
+const renameClientCredential = async (oldEmail, newEmail, env, tenantId) => {
   ensureControlPlaneReady();
   const credential = await ClientCredential.findOneAndUpdate(
-    { deploymentId: deploymentIdFor(env), email: oldEmail.toLowerCase() },
+    { deploymentId: credentialDeploymentId(env, tenantId), email: oldEmail.toLowerCase() },
     { email: newEmail.toLowerCase() },
     { new: true, runValidators: true },
   );
@@ -63,9 +65,9 @@ const renameClientCredential = async (oldEmail, newEmail, env) => {
   }
 };
 
-const deleteClientCredential = async (email, env) => {
+const deleteClientCredential = async (email, env, tenantId) => {
   ensureControlPlaneReady();
-  await ClientCredential.deleteOne({ deploymentId: deploymentIdFor(env), email: email.toLowerCase() });
+  await ClientCredential.deleteOne({ deploymentId: credentialDeploymentId(env, tenantId), email: email.toLowerCase() });
 };
 
 const syncExistingStaffCredentials = async (env) => {

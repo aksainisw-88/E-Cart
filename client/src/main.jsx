@@ -7,6 +7,16 @@ import { AuthProvider } from "./context/AuthContext.jsx";
 import { CartProvider } from "./context/CartContext.jsx";
 import { StoreProvider } from "./context/StoreContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
+import { tenantHeaders } from "./utils/tenant.js";
+
+const apiOrigin = new URL(import.meta.env.VITE_API_URL || window.location.origin).origin;
+const browserFetch = window.fetch.bind(window);
+window.fetch = (input, options = {}) => {
+  const url = input instanceof Request ? input.url : String(input);
+  if (new URL(url, window.location.origin).origin !== apiOrigin) return browserFetch(input, options);
+  const headers = tenantHeaders(input instanceof Request ? input.headers : options.headers);
+  return browserFetch(input, { ...options, headers });
+};
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>

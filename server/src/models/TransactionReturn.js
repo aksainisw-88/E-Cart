@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { createTenantModel } = require("../utils/tenantDatabase");
 
 const returnItemSchema = new mongoose.Schema({
   sourceItemIndex: { type: Number, min: 0 },
@@ -34,4 +35,4 @@ transactionReturnSchema.index({ type: 1, invoiceDate: -1 });
 transactionReturnSchema.index({ sourceSale: 1, type: 1 });
 transactionReturnSchema.index({ sourcePurchases: 1, type: 1 });
 
-module.exports = mongoose.model("TransactionReturn", transactionReturnSchema);
+module.exports = createTenantModel("TransactionReturn", transactionReturnSchema);

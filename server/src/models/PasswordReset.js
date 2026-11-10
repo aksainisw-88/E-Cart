@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { createTenantModel } = require("../utils/tenantDatabase");
 
 const passwordResetSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
@@ -6,4 +7,4 @@ const passwordResetSchema = new mongoose.Schema({
   expiresAt: { type: Date, required: true, index: { expires: 0 } },
 }, { timestamps: true });
 
-module.exports = mongoose.model("PasswordReset", passwordResetSchema);
+module.exports = createTenantModel("PasswordReset", passwordResetSchema);
