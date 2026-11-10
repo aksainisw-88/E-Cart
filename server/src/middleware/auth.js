@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { getSubscriptionForUser } = require("../utils/subscription");
 
 const getTokenFromRequest = (request) => request.cookies.accessToken;
 
@@ -50,9 +51,20 @@ const requireAnyRole = (...roles) => (request, response, next) => {
 
 const requireAnyMenuPermission = (...permissions) => async (request, response, next) => {
   try {
-    const user = await User.findById(request.user.id).select("menuPermissions role location").lean();
+    const user = await User.findById(request.user.id).select("menuPermissions role location email subscriptionOwner _id").lean();
     if (!user) return response.status(401).json({ success: false, message: "Account no longer exists." });
     if (user.role !== request.user.role) return response.status(403).json({ success: false, message: "Your staff access changed. Sign in again to continue." });
+    if (["admin", "manager", "user"].includes(user.role)) {
+      const subscription = await getSubscriptionForUser(user);
+      if (!subscription?.active) {
+        return response.status(403).json({
+          success: false,
+          code: "SUBSCRIPTION_REQUIRED",
+          message: "A valid, active subscription is required to use admin operations. Enter your registration number and license key in Settings.",
+          subscription,
+        });
+      }
+    }
     if (user.role === "user" && !user.location) {
       return response.status(403).json({ success: false, message: "Your staff account is not assigned a store location. Ask an admin to assign one." });
     }

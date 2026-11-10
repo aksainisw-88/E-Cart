@@ -17,6 +17,7 @@ const VendorPayment = require("../models/VendorPayment");
 const Offer = require("../models/Offer");
 const StoreLocation = require("../models/StoreLocation");
 const StoreSettings = require("../models/StoreSettings");
+const Subscription = require("../models/Subscription");
 const SupportTicket = require("../models/SupportTicket");
 const SignupOtp = require("../models/SignupOtp");
 const PasswordReset = require("../models/PasswordReset");
@@ -296,7 +297,15 @@ router.post("/", async (request, response, next) => {
     if (await User.exists({ email })) return response.status(409).json({ success: false, message: "A user with this email already exists." });
     const location = data.locationId ? await StoreLocation.findOne({ _id: data.locationId, active: true }).select("_id").lean() : null;
     if (data.locationId && !location) return response.status(400).json({ success: false, message: "Select an active store location." });
-    const user = await User.create({ name: data.name, email, password: await bcrypt.hash(data.password, 12), role: data.role, location: location?._id || null, menuPermissions: data.menuPermissions });
+    const user = await User.create({
+      name: data.name,
+      email,
+      password: await bcrypt.hash(data.password, 12),
+      role: data.role,
+      location: location?._id || null,
+      menuPermissions: data.menuPermissions,
+      subscriptionOwner: data.role === "admin" ? null : request.user.id,
+    });
     await user.populate("location", "name city");
     response.status(201).json({ success: true, data: { _id: user._id, name: user.name, email: user.email, role: user.role, status: user.status, menuPermissions: user.menuPermissions, location: user.location } });
   } catch (error) { next(error); }
@@ -311,7 +320,11 @@ router.put("/:id", async (request, response, next) => {
     if (data.locationId && !location) return response.status(400).json({ success: false, message: "Select an active store location." });
     const user = await User.findOne({ _id: request.params.id, role: { $in: ["admin", "manager", "user"] } });
     if (!user) return response.status(404).json({ success: false, message: "Admin user not found" });
+    if (user.email !== data.email.toLowerCase() && await Subscription.exists({ email: user.email })) {
+      return response.status(409).json({ success: false, message: "This admin email is bound to a subscription. Contact the platform administrator to transfer the license before changing it." });
+    }
     Object.assign(user, { name: data.name, email: data.email.toLowerCase(), role: data.role, location: location?._id || null, menuPermissions: data.menuPermissions });
+    user.subscriptionOwner = data.role === "admin" ? null : (user.subscriptionOwner || request.user.id);
     await user.save();
     await user.populate("location", "name city");
     response.json({ success: true, data: user });

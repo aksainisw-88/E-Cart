@@ -8,7 +8,7 @@ const env = require("./config/env");
 
 const startServer = async () => {
   try {
-    await connectDatabase(env.MONGO_URI);
+    await connectDatabase(env.MONGO_URI, env.SUPER_ADMIN_MONGO_URI);
 
     app.listen(env.PORT, () => {
       console.log(`E-Mart API listening on http://localhost:${env.PORT}`);

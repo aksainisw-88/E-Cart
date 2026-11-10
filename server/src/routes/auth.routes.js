@@ -8,6 +8,7 @@ const User = require("../models/User");
 const SignupOtp = require("../models/SignupOtp");
 const PasswordReset = require("../models/PasswordReset");
 const { requireAuth } = require("../middleware/auth");
+const { getSubscriptionForUser } = require("../utils/subscription");
 const { isEmailConfigured, sendPasswordResetLink, sendSignupCode } = require("../utils/email");
 
 const router = express.Router();
@@ -92,7 +93,11 @@ const createLoginHandler = (allowedRoles) => async (request, response, next) => 
 
     await user.populate("location", "name city");
     setAuthCookie(response, user, request.app.locals.env);
-    return response.json({ success: true, user: publicUser(user) });
+    const serializedUser = publicUser(user);
+    if (["admin", "manager", "user"].includes(user.role)) {
+      serializedUser.subscription = await getSubscriptionForUser(user);
+    }
+    return response.json({ success: true, user: serializedUser });
   } catch (error) {
     return next(error);
   }
@@ -235,7 +240,11 @@ router.get("/me", requireAuth, async (request, response, next) => {
     if (!user) {
       return response.status(401).json({ success: false, message: "Account no longer exists." });
     }
-    return response.json({ success: true, user: publicUser(user) });
+    const serializedUser = publicUser(user);
+    if (["admin", "manager", "user"].includes(user.role)) {
+      serializedUser.subscription = await getSubscriptionForUser(user);
+    }
+    return response.json({ success: true, user: serializedUser });
   } catch (error) {
     return next(error);
   }

@@ -39,6 +39,13 @@ const AdminSettings = () => {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [subscription, setSubscription] = useState(undefined);
+  const [registrationNumber, setRegistrationNumber] = useState("");
+  const [licenseKey, setLicenseKey] = useState("");
+  const [licenseBusy, setLicenseBusy] = useState(false);
+  const [licenseMessage, setLicenseMessage] = useState("");
+  const [licenseError, setLicenseError] = useState("");
+  const [licenseFormOpen, setLicenseFormOpen] = useState(false);
 
   useEffect(() => {
     fetch(`${API_URL}/api/auth/me`, { credentials: "include" })
@@ -49,15 +56,50 @@ const AdminSettings = () => {
       })
       .then((user) => setProfile({ id: user.id, name: user.name, email: user.email, role: user.role }))
       .catch((requestError) => setError(requestError.message));
-    fetch(`${API_URL}/api/store/payment-integrations`, { credentials: "include" })
-      .then(async (response) => { const result = await response.json(); if (!response.ok) throw new Error(result.message || "Unable to load payment integrations."); return result.data; })
-      .then((data) => setIntegrations((current) => ({ ...current, ...data })))
-      .catch((requestError) => setError(requestError.message));
+    fetch(`${API_URL}/api/subscription/status`, { credentials: "include" })
+      .then(async (response) => { const result = await response.json(); if (!response.ok) throw new Error(result.message || "Unable to load subscription status."); return result.data; })
+      .then((data) => {
+        setSubscription(data);
+        if (!data?.active) return;
+        return fetch(`${API_URL}/api/store/payment-integrations`, { credentials: "include" })
+          .then(async (response) => { const result = await response.json(); if (!response.ok) throw new Error(result.message || "Unable to load payment integrations."); return result.data; })
+          .then((data) => setIntegrations((current) => ({ ...current, ...data })));
+      })
+      .catch((requestError) => {
+        setSubscription(null);
+        setLicenseError(requestError.message);
+      });
   }, []);
 
   const updateProfile = (field) => (event) => setProfile((current) => ({ ...current, [field]: event.target.value }));
   const updatePreference = (field) => (event) => setPreferences((current) => ({ ...current, [field]: event.target.checked }));
   const updateIntegration = (provider, field) => (event) => setIntegrations((current) => ({ ...current, [provider]: { ...current[provider], [field]: field === "enabled" ? event.target.checked : event.target.value } }));
+
+  const activateSubscription = async (event) => {
+    event.preventDefault();
+    setLicenseBusy(true);
+    setLicenseError("");
+    setLicenseMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/subscription/activate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ registrationNumber, licenseKey }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to verify your subscription.");
+      setSubscription(result.data);
+      setRegistrationNumber("");
+      setLicenseKey("");
+      setLicenseFormOpen(false);
+      setLicenseMessage(result.message || "Subscription verified.");
+    } catch (requestError) {
+      setLicenseError(requestError.message);
+    } finally {
+      setLicenseBusy(false);
+    }
+  };
 
   const sendInventoryResetOtp = async () => {
     setResetBusy("send");
@@ -186,6 +228,10 @@ const AdminSettings = () => {
     }
   };
 
+  if (subscription === undefined) {
+    return <div className="mx-auto max-w-275 rounded-xl border border-slate-200 bg-white p-8 text-sm text-slate-500">Checking subscription status...</div>;
+  }
+
   return (
     <div className="mx-auto max-w-275">
       <div>
@@ -196,12 +242,37 @@ const AdminSettings = () => {
 
       {(message || error) && <div className={`mt-5 rounded-lg p-3 text-sm ${error ? "bg-red-50 text-red-700" : "bg-teal-50 text-teal-700"}`}>{error || message}</div>}
 
-      <form onSubmit={saveSettings} className="mt-8 space-y-6">
+      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6 sm:p-8">
+        <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-5">
+          <div className="flex items-center gap-3"><span className={`flex h-10 w-10 items-center justify-center rounded-lg ${subscription?.active ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}><LockKeyhole className="h-5 w-5" /></span><div><h2 className="font-semibold text-slate-900">Subscription license</h2><p className="mt-1 text-xs text-slate-500">Admin operations require a matching registration number, license key, and valid subscription date.</p></div></div>
+          {subscription?.active && <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Active</span>}
+        </div>
+        {subscription?.active && !licenseFormOpen ? (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-slate-700">Registration no. <strong className="ml-1 font-mono">{subscription.registrationNumber}</strong><span className="mx-3 text-slate-300">|</span>Valid until <strong>{subscription.validTill}</strong></p>
+            <button type="button" onClick={() => setLicenseFormOpen(true)} className="text-sm font-semibold text-primary">Change license</button>
+          </div>
+        ) : (
+          <form onSubmit={activateSubscription} className="mt-5 grid gap-4 sm:grid-cols-2">
+            <label className="text-sm font-medium text-slate-700">Registration number<input required value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} autoComplete="off" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 font-mono outline-none focus:border-primary" placeholder="EC-YYYY-XXXXXXXXXXXX" /></label>
+            <label className="text-sm font-medium text-slate-700">License key<input required type="password" value={licenseKey} onChange={(event) => setLicenseKey(event.target.value)} autoComplete="off" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 font-mono outline-none focus:border-primary" placeholder="Enter the key provided by E-Cart" /></label>
+            <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+              <button type="submit" disabled={licenseBusy} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white disabled:opacity-60"><LockKeyhole className="h-4 w-4" />{licenseBusy ? "Verifying..." : "Verify and activate"}</button>
+              {subscription?.active && <button type="button" onClick={() => setLicenseFormOpen(false)} className="text-sm text-slate-500">Cancel</button>}
+              <span className="text-xs text-slate-500">Credentials are matched against the signed-in admin email.</span>
+            </div>
+          </form>
+        )}
+        {subscription && !subscription.active && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">License status: {subscription.status}. Admin operations stay locked until an active license with valid dates is entered.</p>}
+        {(licenseMessage || licenseError) && <p role={licenseError ? "alert" : "status"} className={`mt-4 rounded-lg p-3 text-sm ${licenseError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{licenseError || licenseMessage}</p>}
+      </section>
+
+      {subscription?.active && <form onSubmit={saveSettings} className="mt-8 space-y-6">
         <section className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8">
           <div className="flex items-center gap-3 border-b border-slate-100 pb-5"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-50 text-primary"><UserRound className="h-5 w-5" /></span><div><h2 className="font-semibold text-slate-900">Profile</h2><p className="mt-1 text-xs text-slate-500">This information identifies you in the admin console.</p></div></div>
           <div className="mt-6 grid gap-5 sm:grid-cols-2">
             <label className="text-sm font-medium text-slate-700">Full name<input required minLength="2" value={profile.name} onChange={updateProfile("name")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
-            <label className="text-sm font-medium text-slate-700">Email address<input required type="email" value={profile.email} onChange={updateProfile("email")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" /></label>
+            <label className="text-sm font-medium text-slate-700">Email address<input required type="email" readOnly={Boolean(subscription?.active)} value={profile.email} onChange={updateProfile("email")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary read-only:bg-slate-50" /></label>
             <div className="rounded-lg bg-slate-50 p-4 text-sm sm:col-span-2"><p className="text-xs uppercase tracking-wide text-slate-400">Access role</p><p className="mt-1 font-semibold capitalize text-slate-700">{profile.role || "Loading..."}</p><p className="mt-1 text-xs text-slate-500">Role permissions are managed from the Users module.</p></div>
           </div>
         </section>
@@ -275,7 +346,7 @@ const AdminSettings = () => {
         </section>
 
         <div className="flex justify-end"><button type="submit" disabled={saving || !profile.id} className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"><Save className="h-4 w-4" />{saving ? "Saving..." : "Save settings"}</button></div>
-      </form>
+      </form>}
     </div>
   );
 };

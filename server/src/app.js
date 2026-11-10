@@ -11,6 +11,8 @@ const env = require("./config/env");
 const authRoutes = require("./routes/auth.routes");
 const { errorHandler, notFound } = require("./middleware/errorHandler");
 const { requireAuth, requireAnyRole, requireRole, requireAnyMenuPermission } = require("./middleware/auth");
+const superAdminRoutes = require("./routes/superAdmin.routes");
+const subscriptionRoutes = require("./routes/subscription.routes");
 const healthRoutes = require("./routes/health.routes");
 const productRoutes = require("./routes/product.routes");
 const catalogRoutes = require("./routes/catalog.routes");
@@ -35,7 +37,16 @@ const app = express();
 app.locals.env = env;
 
 app.use(helmet());
-app.use(cors({ origin: env.CLIENT_URL, credentials: true }));
+const allowedOrigins = [env.CLIENT_URL, env.SUPER_ADMIN_PANEL_URL].filter(Boolean);
+app.use(cors({
+  origin: (origin, callback) => {
+    const localDevelopmentOrigin = env.NODE_ENV !== "production"
+      && /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(origin || "");
+    if (!origin || allowedOrigins.includes(origin) || localDevelopmentOrigin) return callback(null, true);
+    return callback(new Error("This origin is not allowed by the CORS policy."));
+  },
+  credentials: true,
+}));
 app.use(express.json({
   limit: "1mb",
   verify: (request, response, buffer) => {
@@ -53,6 +64,8 @@ app.get("/", (request, response) => {
 app.use("/api/health", healthRoutes);
 app.use("/api/webhooks/razorpay", require("./routes/razorpayWebhook.routes"));
 app.use("/api/auth", authRoutes);
+app.use("/api/super-admin", superAdminRoutes);
+app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/catalog", catalogRoutes);
 app.use("/api/admin/overview", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission("/admin"), overviewRoutes);
 app.use("/api/admin/reports", requireAuth, requireAnyRole("admin", "manager", "user"), requireAnyMenuPermission((request) => request.path === "/sales-transactions" ? ["/admin/sales-transactions", "/admin/reports"] : ["/admin/reports"]), reportsRoutes);

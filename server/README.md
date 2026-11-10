@@ -43,6 +43,16 @@ Active offer codes can be claimed from the customer Offers page and applied duri
 
 Admin users can configure PhonePe, Paytm, Fingpay, and Pine Labs credentials from Admin > Settings > Payment integrations. Credentials are masked in API responses. Actual terminal charging requires the provider's approved merchant account, device/API access, and provider-specific SDK or API contract.
 
+## Super-admin subscriptions
+
+The Super Admin panel uses the API but stores platform accounts and subscriptions in the dedicated MongoDB database configured by `SUPER_ADMIN_MONGO_URI`. Set `SUPER_ADMIN_PANEL_URL` to the panel's exact origin so the API allows credentialed requests. On startup, the API creates the `superadmins` and `subscriptions` collections and indexes if needed. Create the platform account from the server directory:
+
+```powershell
+npm run create-super-admin -- platform@example.com StrongPassword "Platform Admin"
+```
+
+In the deployed panel build, set `VITE_API_URL` to this API's URL. The super-admin creates a client using the email address of that client's admin account. The API stores only a hash of the issued license key. The customer admin enters the registration number and key under Admin > Settings. Admin API operations require a matching admin email, active subscription, and current validity date; subscription status and license activation remain accessible so the account can be renewed or activated.
+
 The API starts at `http://localhost:5000` by default.
 
 ## Current endpoints
@@ -65,4 +75,4 @@ Public registration creates `customer` accounts. Admin/store-head accounts are c
 npm run create-admin -- admin@example.com StrongPassword "Store Head"
 ```
 
-Customers can use the storefront, while admin API resources and the `/admin` console require an authenticated account with the `admin` role.
+Customers can use the storefront, while admin API resources and the `/admin` console require an authenticated admin/staff account and an active subscription. The platform panel requires a `super_admin` account.

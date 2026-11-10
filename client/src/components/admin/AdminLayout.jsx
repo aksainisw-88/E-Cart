@@ -64,6 +64,9 @@ const AdminLayout = () => {
         }
         setAdminUser(user);
         setAuthState("authorized");
+        if (!user.subscription?.active) {
+          navigate("/admin/settings", { replace: true });
+        }
       })
       .catch(() => {
         if (active) navigate("/admin/login", { replace: true, state: { from: requestedAdminPath } });
