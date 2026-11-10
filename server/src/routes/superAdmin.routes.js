@@ -52,6 +52,28 @@ const createPlanSchema = z.object({
 const updatePlanSchema = createPlanSchema.partial().refine((value) => Object.keys(value).length > 0, {
   message: "Update at least one plan field.",
 });
+const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}, "Enter a valid date.");
+const updateSubscriptionSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  business: z.string().trim().min(2).max(120),
+  phone: z.string().trim().max(30),
+  plan: z.string().trim().min(1).max(80),
+  billingInterval: z.enum(["monthly", "yearly"]),
+  amount: z.coerce.number().min(0),
+  paid: z.coerce.number().min(0),
+  validFrom: isoDateSchema,
+  validTill: isoDateSchema,
+}).superRefine((value, context) => {
+  if (value.paid > value.amount) {
+    context.addIssue({ code: "custom", path: ["paid"], message: "Paid amount cannot exceed the subscription amount." });
+  }
+  if (value.validTill < value.validFrom) {
+    context.addIssue({ code: "custom", path: ["validTill"], message: "Valid until date must be on or after the valid from date." });
+  }
+});
 const createBusinessSegmentSchema = z.object({
   name: z.string().trim().min(2).max(80),
   code: z.string().trim().toUpperCase().regex(/^[A-Z][A-Z0-9_]{1,39}$/),
@@ -419,6 +441,34 @@ router.patch("/subscriptions/:id/status", async (request, response, next) => {
     const subscription = await Subscription.findByIdAndUpdate(request.params.id, parsed.data, { new: true, runValidators: true });
     if (!subscription) return response.status(404).json({ success: false, message: "Subscription not found." });
     return response.json({ success: true, data: publicSubscription(subscription) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch("/subscriptions/:id", async (request, response, next) => {
+  try {
+    const parsed = updateSubscriptionSchema.safeParse(request.body);
+    if (!parsed.success) return response.status(400).json({ success: false, message: parsed.error.issues[0]?.message || "Check the client details." });
+    const subscription = await Subscription.findById(request.params.id);
+    if (!subscription) return response.status(404).json({ success: false, message: "Subscription not found." });
+
+    const paymentStatus = parsed.data.paid >= parsed.data.amount
+      ? "Paid"
+      : parsed.data.paid > 0 ? "Partial" : "Unpaid";
+    const paidDelta = parsed.data.paid - subscription.paid;
+    const financialDetailsChanged = parsed.data.amount !== subscription.amount || paidDelta !== 0;
+    Object.assign(subscription, parsed.data, { paymentStatus });
+    if (financialDetailsChanged) {
+      subscription.history.push({
+        date: today(),
+        amount: Math.abs(paidDelta),
+        type: paidDelta ? `Payment correction (${paidDelta > 0 ? "+" : "-"}${Math.abs(paidDelta)})` : "Subscription amount adjustment",
+        status: paymentStatus,
+      });
+    }
+    await subscription.save();
+    return response.json({ success: true, data: publicSubscription(subscription), message: "Client details updated." });
   } catch (error) {
     return next(error);
   }

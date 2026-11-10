@@ -230,6 +230,25 @@ function App() {
     notify(`License ${status.toLowerCase()}.`);
   };
 
+  const saveClientDetails = async (client, values) => {
+    try {
+      const result = await apiRequest(`/api/super-admin/subscriptions/${client.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          ...values,
+          amount: Number(values.amount),
+          paid: Number(values.paid),
+        }),
+      });
+      setClients((current) => current.map((item) => item.id === client.id ? result.data : item));
+      setSelectedClient(result.data);
+      setDialog(null);
+      notify(result.message);
+    } catch (error) {
+      notify(error.message);
+    }
+  };
+
   const approveRequest = async (request, amount, paid = 0) => {
     try {
       const result = request.id
@@ -486,6 +505,7 @@ function App() {
           close={() => setSelectedClient(null)}
           onStatusChange={(client) => updateClient(client, client.status === "Suspended" ? "Active" : "Suspended")}
           onRenew={(client) => setDialog({ type: "renew", client })}
+          onEdit={(client) => setDialog({ type: "edit-client", client })}
           onRotateKey={rotateLicenseKey}
           onCopy={(value) => {
             if (!navigator.clipboard) return notify("Clipboard access is unavailable.");
@@ -499,6 +519,7 @@ function App() {
           close={() => setDialog(null)}
           approveRequest={approveRequest}
           renewLicense={renewLicense}
+          saveClientDetails={saveClientDetails}
           createRequest={(values) => approveRequest({
             name: values.name,
             business: values.business,
@@ -832,14 +853,14 @@ function PaymentsPage({ clients, openClient }) {
   );
 }
 
-function ClientDrawer({ client, close, onStatusChange, onRenew, onRotateKey, onCopy }) {
+function ClientDrawer({ client, close, onStatusChange, onRenew, onEdit, onRotateKey, onCopy }) {
   const pendingAmount = Math.max(client.amount - client.paid, 0);
   return (
     <div className="drawer-layer" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
       <aside className="client-drawer" role="dialog" aria-modal="true" aria-label={`${client.business} client details`}>
         <div className="drawer-top"><span className="eyebrow">CLIENT PROFILE</span><button className="icon-button" onClick={close} aria-label="Close client details"><X size={19} /></button></div>
         <div className="drawer-client-heading"><div className={`avatar drawer-avatar ${avatarColor(client.business)}`}>{client.business.slice(0, 1)}</div><div><h2>{client.business}</h2><p>{client.name}</p></div><StatusBadge status={client.status} /></div>
-        <div className="drawer-actions"><button className="button button-primary" onClick={() => onRenew(client)}><FileClock size={16} /> Renew license</button><button className="button button-secondary" onClick={() => onStatusChange(client)}>{client.status === "Suspended" ? <CheckCircle2 size={16} /> : <XCircle size={16} />}{client.status === "Suspended" ? "Activate" : "Suspend"}</button><button className="button button-secondary" onClick={() => onRotateKey(client)}><RefreshCw size={15} /> Reissue key</button></div>
+        <div className="drawer-actions"><button className="button button-primary" onClick={() => onEdit(client)}><Settings size={15} /> Edit details</button><button className="button button-secondary" onClick={() => onRenew(client)}><FileClock size={16} /> Renew license</button><button className="button button-secondary" onClick={() => onStatusChange(client)}>{client.status === "Suspended" ? <CheckCircle2 size={16} /> : <XCircle size={16} />}{client.status === "Suspended" ? "Activate" : "Suspend"}</button><button className="button button-secondary" onClick={() => onRotateKey(client)}><RefreshCw size={15} /> Reissue key</button></div>
         <div className="drawer-section"><div className="drawer-section-heading"><h3>Business details</h3></div><DetailRow label="Primary contact" value={client.name} /><DetailRow label="Email address" value={client.email} /><DetailRow label="Phone number" value={client.phone || "—"} /><DetailRow label="Registered on" value={shortDate(client.registeredAt)} /></div>
         <div className="drawer-section"><div className="drawer-section-heading"><h3>License details</h3><ShieldCheck size={17} className="section-heading-icon" /></div><CredentialRow label="Registration number" value={client.registrationNumber || "Not issued"} onCopy={onCopy} /><CredentialRow label="License key" value={client.licenseKey || "Hidden after issuance"} onCopy={onCopy} /><DetailRow label="Activated on" value={shortDate(client.activatedAt)} /><DetailRow label="Valid from" value={shortDate(client.validFrom)} /><DetailRow label="Valid until" value={shortDate(client.validTill)} /></div>
         <div className="drawer-section"><div className="drawer-section-heading"><h3>Payment overview</h3><span className="mini-plan">{client.plan} plan</span></div><div className="drawer-finance"><div><small>Platform amount</small><strong>{currency(client.amount)}</strong></div><div><small>Paid amount</small><strong className="text-green">{currency(client.paid)}</strong></div><div><small>Pending amount</small><strong className="text-amber">{currency(pendingAmount)}</strong></div></div><div className="payment-progress"><span style={{ width: `${client.amount ? Math.min((client.paid / client.amount) * 100, 100) : 0}%` }} /></div><div className="payment-progress-label"><span>Payment completion</span><span>{client.amount ? Math.round((client.paid / client.amount) * 100) : 0}%</span></div></div>
@@ -850,11 +871,23 @@ function ClientDrawer({ client, close, onStatusChange, onRenew, onRotateKey, onC
   );
 }
 
-function Dialog({ dialog, close, approveRequest, renewLicense, createRequest }) {
+function Dialog({ dialog, close, approveRequest, renewLicense, createRequest, saveClientDetails }) {
   const [amount, setAmount] = useState(dialog.amount ?? dialog.client?.amount ?? "");
   const [paidNow, setPaidNow] = useState(dialog.client?.paid ?? 0);
   const [form, setForm] = useState({ name: "", business: "", email: "", phone: "", proposedAmount: "", paid: "0" });
+  const [clientForm, setClientForm] = useState(dialog.type === "edit-client" ? {
+    name: dialog.client.name,
+    business: dialog.client.business,
+    phone: dialog.client.phone || "",
+    plan: dialog.client.plan || "Annual",
+    billingInterval: dialog.client.billingInterval || "yearly",
+    amount: String(dialog.client.amount ?? 0),
+    paid: String(dialog.client.paid ?? 0),
+    validFrom: dialog.client.validFrom,
+    validTill: dialog.client.validTill,
+  } : null);
   const onChange = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+  const onClientChange = (event) => setClientForm((current) => ({ ...current, [event.target.name]: event.target.value }));
   const submitNewRequest = (event) => {
     event.preventDefault();
     createRequest(form);
@@ -867,6 +900,24 @@ function Dialog({ dialog, close, approveRequest, renewLicense, createRequest }) 
           <div className="form-grid"><label>Contact name<input required minLength="2" name="name" value={form.name} onChange={onChange} placeholder="e.g. Maya Patel" /></label><label>Business name<input required minLength="2" name="business" value={form.business} onChange={onChange} placeholder="e.g. Studio Bloom" /></label><label>Email address<input required type="email" name="email" value={form.email} onChange={onChange} placeholder="Customer admin login email" /></label><label>Phone number<input required name="phone" value={form.phone} onChange={onChange} placeholder="+91 98765 43210" /></label><label>Subscription amount<input required type="number" min="0" name="proposedAmount" value={form.proposedAmount} onChange={onChange} placeholder="e.g. 45000" /></label><label>Paid now<input required type="number" min="0" max={form.proposedAmount || undefined} name="paid" value={form.paid} onChange={onChange} /></label></div>
           <div className="credential-notice"><KeyRound size={17} /><span>The license key is shown once after creation. Send both credentials to the customer admin securely.</span></div>
           <div className="modal-footer"><button type="button" className="button button-secondary" onClick={close}>Cancel</button><button className="button button-primary" type="submit"><Plus size={16} /> Create subscription</button></div>
+        </form>
+      ) : dialog.type === "edit-client" ? (
+        <form className="modal-card" role="dialog" aria-modal="true" onSubmit={(event) => { event.preventDefault(); saveClientDetails(dialog.client, clientForm); }}>
+          <div className="modal-header"><div><span className="eyebrow">CLIENT MANAGEMENT</span><h2>Edit client details</h2><p>Changes apply to this Super Admin subscription record.</p></div><button type="button" className="icon-button" onClick={close} aria-label="Close"><X size={19} /></button></div>
+          <div className="form-grid">
+            <label>Contact name<input required minLength="2" maxLength="80" name="name" value={clientForm.name} onChange={onClientChange} /></label>
+            <label>Business / store name<input required minLength="2" maxLength="120" name="business" value={clientForm.business} onChange={onClientChange} /></label>
+            <label>Email / license identity<input type="email" value={dialog.client.email} readOnly /></label>
+            <label>Phone<input maxLength="30" name="phone" value={clientForm.phone} onChange={onClientChange} /></label>
+            <label>Plan name<input required minLength="1" maxLength="80" name="plan" value={clientForm.plan} onChange={onClientChange} /></label>
+            <label>Billing interval<select name="billingInterval" value={clientForm.billingInterval} onChange={onClientChange}><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label>
+            <label>Subscription amount<input required type="number" min="0" step="0.01" name="amount" value={clientForm.amount} onChange={onClientChange} /></label>
+            <label>Amount paid<input required type="number" min="0" max={clientForm.amount} step="0.01" name="paid" value={clientForm.paid} onChange={onClientChange} /></label>
+            <label>Valid from<input required type="date" name="validFrom" value={clientForm.validFrom} onChange={onClientChange} /></label>
+            <label>Valid until<input required type="date" name="validTill" value={clientForm.validTill} onChange={onClientChange} /></label>
+          </div>
+          <div className="credential-notice"><ShieldCheck size={17} /><span>Email remains locked because it is the license identity. Email synchronization, business segment, and store URL editing require the per-client API mapping phase.</span></div>
+          <div className="modal-footer"><button type="button" className="button button-secondary" onClick={close}>Cancel</button><button className="button button-primary" type="submit"><Check size={16} /> Save client details</button></div>
         </form>
       ) : dialog.type === "approve" ? (
         <form className="modal-card" role="dialog" aria-modal="true" onSubmit={(event) => { event.preventDefault(); approveRequest(dialog.request, amount, paidNow); }}>

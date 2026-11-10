@@ -84,6 +84,8 @@ In the Super Admin panel, create the subscription using that exact admin email a
 
 The Super Admin panel uses the API but stores platform accounts, plans, requests, subscriptions, and customer database configurations in the dedicated MongoDB database configured by `SUPER_ADMIN_MONGO_URI`. Set `SUPER_ADMIN_PANEL_URL` to the panel's exact origin so the API allows credentialed requests. On startup, the API creates the required control-plane collections and indexes if needed. Create the platform account from the server directory:
 
+Super Admin client details can be edited from a client's profile: contact name, business name, phone, plan label, billing interval, subscription amount, paid amount, and validity dates. Financial and plan changes are validated and recorded as a subscription-history adjustment. The license email remains immutable because each customer admin account is stored in its separate customer database. Email synchronization, business-segment editing, and store slug/URL editing require the future per-client API mapping and are not changed by this editor.
+
 ```powershell
 npm run create-super-admin -- platform@example.com StrongPassword "Platform Admin"
 ```
