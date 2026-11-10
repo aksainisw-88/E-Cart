@@ -53,6 +53,7 @@ Deploy one API instance and one customer-panel build per customer. Do not put a 
 - `SUPER_ADMIN_MONGO_URI`: the shared platform control-plane database (the `Super_admin` database), identical for all customer API deployments.
 - `CUSTOMER_DATABASE_ENCRYPTION_KEY`: a unique random secret of at least 32 characters for this customer API deployment. Generate one with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Keep it stable in the API's secret environment, and do not reuse it across customer deployments; it encrypts and identifies this deployment's saved database URI.
 - `CLIENT_URL`: this customer's deployed storefront/admin-panel origin.
+- `CUSTOMER_PANEL_URL`: this customer's deployed Vercel origin, for example `https://e-cart-client-gamma.vercel.app`. Configure this on Render when `CLIENT_URL` is not set to the same customer-panel origin.
 - `SUPER_ADMIN_PANEL_URL`: the super-admin panel origin.
 
 Set the customer's `VITE_API_URL` at client build time to that customer's API URL (without a trailing slash). All customer-panel API requests use this value. Leave it empty only when the frontend host proxies `/api` and `/uploads` to the customer's API.

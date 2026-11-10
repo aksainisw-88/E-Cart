@@ -39,13 +39,18 @@ const app = express();
 app.locals.env = env;
 
 app.use(helmet());
-const allowedOrigins = [env.CLIENT_URL, env.SUPER_ADMIN_PANEL_URL].filter(Boolean);
+const allowedOrigins = [env.CLIENT_URL, env.CUSTOMER_PANEL_URL, env.SUPER_ADMIN_PANEL_URL]
+  .filter(Boolean)
+  .map((url) => new URL(url).origin);
 app.use(cors({
   origin: (origin, callback) => {
     const localDevelopmentOrigin = env.NODE_ENV !== "production"
       && /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(origin || "");
     if (!origin || allowedOrigins.includes(origin) || localDevelopmentOrigin) return callback(null, true);
-    return callback(new Error("This origin is not allowed by the CORS policy."));
+    console.error("Blocked CORS origin:", origin);
+    const error = new Error("This origin is not allowed by the CORS policy.");
+    error.statusCode = 403;
+    return callback(error);
   },
   credentials: true,
 }));
