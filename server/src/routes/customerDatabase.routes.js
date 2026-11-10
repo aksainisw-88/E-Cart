@@ -145,6 +145,19 @@ router.put("/", async (request, response) => {
       return response.status(503).json({ success: false, message: "The current customer database is unavailable." });
     }
 
+    if (parsed.data.uri === originalUri) {
+      const savedUri = await getSavedUri(env.CUSTOMER_DATABASE_ENCRYPTION_KEY);
+      return response.json({
+        success: true,
+        message: "This database is already active. No database changes were made.",
+        data: {
+          connected: mongoose.connection.readyState === 1,
+          configuredInSettings: Boolean(savedUri),
+          databaseName: mongoose.connection.name || "",
+        },
+      });
+    }
+
     failureStage = "testing the target MongoDB Atlas database";
     const collectionsBefore = [];
     targetConnection = await mongoose.createConnection(parsed.data.uri, {
