@@ -32,7 +32,7 @@ const getSubscriptionForUser = async (user) => {
 
   const currentDate = today();
   const storedHash = Buffer.from(owner.subscriptionKeyHash || "", "hex");
-  const currentHash = Buffer.from(subscription.licenseKeyHash, "hex");
+  const currentHash = Buffer.from(typeof subscription.licenseKeyHash === "string" ? subscription.licenseKeyHash : "", "hex");
   const keyMatches = storedHash.length === currentHash.length
     && storedHash.length > 0
     && crypto.timingSafeEqual(storedHash, currentHash);

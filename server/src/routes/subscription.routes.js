@@ -154,7 +154,9 @@ router.post("/activate", requireAuth, requireRole("admin"), async (request, resp
     const registrationNumber = parsed.data.registrationNumber.toUpperCase();
     const subscription = await Subscription.findOne({ registrationNumber, email: user.email }).select("+licenseKeyHash");
     const submittedHash = crypto.createHash("sha256").update(parsed.data.licenseKey.toUpperCase()).digest();
-    const storedHash = subscription ? Buffer.from(subscription.licenseKeyHash, "hex") : Buffer.alloc(0);
+    const storedHash = typeof subscription?.licenseKeyHash === "string"
+      ? Buffer.from(subscription.licenseKeyHash, "hex")
+      : Buffer.alloc(0);
     const validKey = storedHash.length === submittedHash.length && crypto.timingSafeEqual(storedHash, submittedHash);
     if (!subscription || !validKey) {
       return response.status(403).json({ success: false, message: "Registration number or license key does not match this admin email." });
