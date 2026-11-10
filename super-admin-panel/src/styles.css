@@ -238,6 +238,32 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .request-contact small { color: #a1a9b7; font-size: 7.5px; font-weight: 700; letter-spacing: .6px; }
 .request-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 11px; }
 .request-resolved { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 12px; color: #188460; font-size: 9px; font-weight: 700; text-transform: capitalize; }
+.plan-editor { padding: 17px; margin-bottom: 14px; }
+.plan-form { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 14px; }
+.plan-form label { margin-top: 12px; }
+.plan-form input:not([type="checkbox"]), .plan-form select, .plan-form textarea { width: 100%; min-height: 36px; padding: 8px 10px; color: #46516a; border: 1px solid #e5e9f0; border-radius: 6px; background: #fff; font: 400 10px "DM Sans", sans-serif; }
+.plan-form textarea { resize: vertical; }
+.plan-form input:focus, .plan-form select:focus, .plan-form textarea:focus { border-color: #9aa8f1; outline: 3px solid #6178e51a; }
+.plan-description-field { grid-column: span 2; }
+.plan-form .plan-checkbox { display: flex; flex-direction: row; align-items: center; gap: 7px; color: #67728a; font-size: 9px; }
+.plan-checkbox input { accent-color: #536be1; }
+.plan-form-actions { display: flex; align-items: end; justify-content: flex-end; gap: 7px; grid-column: 1 / -1; margin-top: 14px; }
+.plan-form-actions button:disabled { opacity: .6; cursor: wait; }
+.plan-list-panel { margin-bottom: 16px; }
+.plan-list { display: grid; gap: 9px; padding: 0 16px 16px; }
+.plan-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px; border: 1px solid #edf0f5; border-radius: 8px; }
+.plan-item-inactive { background: #fafbfd; }
+.plan-item-content { min-width: 0; }
+.plan-item-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.plan-item-title h3 { margin: 0; color: #2f3b55; font: 700 12px "Manrope", sans-serif; }
+.plan-item-content > p { margin: 6px 0; color: #929bad; font-size: 9px; }
+.plan-item-content > strong { color: #48536c; font-size: 11px; }
+.plan-item-content > strong small { color: #929bad; font-size: 9px; font-weight: 400; }
+.plan-featured { padding: 4px 7px; color: #6554b6; border-radius: 5px; background: #f0edff; font-size: 8px; font-weight: 700; }
+.plan-item-actions { display: flex; flex: 0 0 auto; gap: 7px; }
+.status-inactive { color: #7d879b; background: #f0f2f6; }
+.approval-plan { margin: 12px 0 0; padding: 9px 10px; color: #6c7891; border-radius: 6px; background: #f7f8fc; font-size: 9px; }
+.approval-plan strong { color: #3e4a64; }
 .subscription-table { min-width: 900px; }
 .subscription-table .license-key { letter-spacing: -.5px; }
 
@@ -395,6 +421,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .modal-card { padding: 17px; border-radius: 12px; }
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .full-field { grid-column: auto; }
+  .plan-form { grid-template-columns: 1fr; }
+  .plan-description-field { grid-column: auto; }
   .toast { right: 10px; bottom: 10px; left: 10px; max-width: none; }
 }
 @keyframes drawer-up { from { transform: translateY(30px); opacity: .8; } to { transform: translateY(0); opacity: 1; } }

@@ -5,11 +5,12 @@ const jwt = require("jsonwebtoken");
 const { z } = require("zod");
 
 const Subscription = require("../models/Subscription");
+const SubscriptionPlan = require("../models/SubscriptionPlan");
 const SubscriptionRequest = require("../models/SubscriptionRequest");
 const SuperAdmin = require("../models/SuperAdmin");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { requireSuperAdminDatabase } = require("../config/superAdminDatabase");
-const { today } = require("../utils/subscription");
+const { addBillingPeriod, today } = require("../utils/subscription");
 
 const router = express.Router();
 router.use(requireSuperAdminDatabase);
@@ -39,6 +40,17 @@ const renewalSchema = z.object({
     context.addIssue({ code: "custom", path: ["paidNow"], message: "Payment cannot exceed the renewal amount." });
   }
 });
+const createPlanSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  description: z.string().trim().max(500).default(""),
+  billingInterval: z.enum(["monthly", "yearly"]),
+  price: z.coerce.number().min(0),
+  active: z.boolean().default(true),
+  featured: z.boolean().default(false),
+});
+const updatePlanSchema = createPlanSchema.partial().refine((value) => Object.keys(value).length > 0, {
+  message: "Update at least one plan field.",
+});
 
 const publicSubscription = (subscription) => {
   const currentDate = today();
@@ -58,9 +70,19 @@ const publicSubscription = (subscription) => {
     paymentStatus: subscription.paymentStatus,
     status: subscription.status === "Active" && subscription.validTill < currentDate ? "Expired" : subscription.status,
     plan: subscription.plan,
+    billingInterval: subscription.billingInterval || "yearly",
     history: subscription.history,
   };
 };
+const publicPlan = (plan) => ({
+  id: plan._id.toString(),
+  name: plan.name,
+  description: plan.description,
+  billingInterval: plan.billingInterval,
+  price: plan.price,
+  active: plan.active,
+  featured: plan.featured,
+});
 const publicSubscriptionRequest = (purchaseRequest) => ({
   id: purchaseRequest._id.toString(),
   name: purchaseRequest.name,
@@ -68,6 +90,9 @@ const publicSubscriptionRequest = (purchaseRequest) => ({
   email: purchaseRequest.email,
   phone: purchaseRequest.phone,
   plan: purchaseRequest.plan,
+  planId: purchaseRequest.planId?.toString() || "",
+  billingInterval: purchaseRequest.billingInterval || "yearly",
+  planPrice: purchaseRequest.planPrice,
   notes: purchaseRequest.notes,
   status: purchaseRequest.status,
   requestedAt: purchaseRequest.requestedAt,
@@ -125,6 +150,45 @@ router.get("/me", requireAuth, requireRole("super_admin"), async (request, respo
 });
 
 router.use(requireAuth, requireRole("super_admin"));
+
+router.get("/plans", async (request, response, next) => {
+  try {
+    const plans = await SubscriptionPlan.find().sort({ createdAt: -1 }).lean();
+    return response.json({ success: true, data: plans.map(publicPlan) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/plans", async (request, response, next) => {
+  try {
+    const parsed = createPlanSchema.safeParse(request.body);
+    if (!parsed.success) return response.status(400).json({ success: false, message: parsed.error.issues[0]?.message || "Check the plan details." });
+    const plan = await SubscriptionPlan.create({
+      ...parsed.data,
+      nameKey: parsed.data.name.toLowerCase(),
+    });
+    return response.status(201).json({ success: true, data: publicPlan(plan) });
+  } catch (error) {
+    if (error.code === 11000) return response.status(409).json({ success: false, message: "A plan with this name and billing interval already exists." });
+    return next(error);
+  }
+});
+
+router.patch("/plans/:id", async (request, response, next) => {
+  try {
+    const parsed = updatePlanSchema.safeParse(request.body);
+    if (!parsed.success) return response.status(400).json({ success: false, message: parsed.error.issues[0]?.message || "Check the plan details." });
+    const updates = { ...parsed.data };
+    if (updates.name) updates.nameKey = updates.name.toLowerCase();
+    const plan = await SubscriptionPlan.findByIdAndUpdate(request.params.id, updates, { new: true, runValidators: true });
+    if (!plan) return response.status(404).json({ success: false, message: "Subscription plan not found." });
+    return response.json({ success: true, data: publicPlan(plan) });
+  } catch (error) {
+    if (error.code === 11000) return response.status(409).json({ success: false, message: "A plan with this name and billing interval already exists." });
+    return next(error);
+  }
+});
 
 router.get("/requests", async (request, response, next) => {
   try {
@@ -190,9 +254,8 @@ router.post("/requests/:id/approve", async (request, response, next) => {
     }
 
     const currentDate = today();
-    const validTill = new Date(`${currentDate}T00:00:00.000Z`);
-    validTill.setUTCFullYear(validTill.getUTCFullYear() + 1);
-    const validTillDate = validTill.toISOString().slice(0, 10);
+    const billingInterval = purchaseRequest.billingInterval || "yearly";
+    const validTillDate = addBillingPeriod(currentDate, billingInterval);
     const credentials = makeCredentials();
     const { amount, paidNow } = parsed.data;
     const paymentStatus = paidNow >= amount ? "Paid" : paidNow > 0 ? "Partial" : "Unpaid";
@@ -202,6 +265,7 @@ router.post("/requests/:id/approve", async (request, response, next) => {
       email: purchaseRequest.email,
       phone: purchaseRequest.phone,
       plan: purchaseRequest.plan,
+      billingInterval,
       amount,
       paid: paidNow,
       ...credentials,
@@ -261,9 +325,7 @@ router.post("/subscriptions", async (request, response, next) => {
     }
 
     const currentDate = today();
-    const validTill = new Date(`${currentDate}T00:00:00.000Z`);
-    validTill.setUTCFullYear(validTill.getUTCFullYear() + 1);
-    const validTillDate = validTill.toISOString().slice(0, 10);
+    const validTillDate = addBillingPeriod(currentDate, "yearly");
     const credentials = makeCredentials();
     const paymentStatus = data.paid >= data.amount ? "Paid" : data.paid > 0 ? "Partial" : "Unpaid";
     const subscription = await Subscription.create({
@@ -334,9 +396,8 @@ router.post("/subscriptions/:id/renew", async (request, response, next) => {
 
     const currentDate = today();
     const startDate = subscription.validTill >= currentDate ? subscription.validTill : currentDate;
-    const endDate = new Date(`${startDate}T00:00:00.000Z`);
-    endDate.setUTCFullYear(endDate.getUTCFullYear() + 1);
-    const validTill = endDate.toISOString().slice(0, 10);
+    const billingInterval = subscription.billingInterval || "yearly";
+    const validTill = addBillingPeriod(startDate, billingInterval);
     const paymentStatus = parsed.data.paidNow >= parsed.data.amount ? "Paid" : parsed.data.paidNow > 0 ? "Partial" : "Unpaid";
     subscription.validFrom = startDate;
     subscription.validTill = validTill;

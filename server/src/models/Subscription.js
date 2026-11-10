@@ -24,6 +24,7 @@ const subscriptionSchema = new mongoose.Schema({
   paymentStatus: { type: String, enum: ["Paid", "Partial", "Unpaid"], default: "Unpaid" },
   status: { type: String, enum: ["Active", "Suspended"], default: "Active" },
   plan: { type: String, trim: true, default: "Annual" },
+  billingInterval: { type: String, enum: ["monthly", "yearly"], default: "yearly" },
   history: { type: [historySchema], default: [] },
 }, { timestamps: true, collection: "subscriptions" });
 

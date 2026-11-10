@@ -3,6 +3,7 @@ const express = require("express");
 const { z } = require("zod");
 
 const Subscription = require("../models/Subscription");
+const SubscriptionPlan = require("../models/SubscriptionPlan");
 const SubscriptionRequest = require("../models/SubscriptionRequest");
 const User = require("../models/User");
 const { requireAuth, requireRole } = require("../middleware/auth");
@@ -19,8 +20,17 @@ const purchaseRequestSchema = z.object({
   name: z.string().trim().min(2).max(80),
   business: z.string().trim().min(2).max(120),
   phone: z.string().trim().max(30).default(""),
-  plan: z.string().trim().min(1).max(40).default("Annual"),
+  planId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
+  plan: z.string().trim().min(1).max(80).default("Annual"),
   notes: z.string().trim().max(500).default(""),
+});
+const publicPlan = (plan) => ({
+  id: plan._id.toString(),
+  name: plan.name,
+  description: plan.description,
+  billingInterval: plan.billingInterval,
+  price: plan.price,
+  featured: plan.featured,
 });
 const publicPurchaseRequest = (purchaseRequest) => ({
   id: purchaseRequest._id.toString(),
@@ -29,6 +39,9 @@ const publicPurchaseRequest = (purchaseRequest) => ({
   email: purchaseRequest.email,
   phone: purchaseRequest.phone,
   plan: purchaseRequest.plan,
+  planId: purchaseRequest.planId?.toString() || "",
+  billingInterval: purchaseRequest.billingInterval,
+  planPrice: purchaseRequest.planPrice,
   notes: purchaseRequest.notes,
   status: purchaseRequest.status,
   requestedAt: purchaseRequest.requestedAt,
@@ -42,6 +55,17 @@ router.get("/status", requireAuth, async (request, response, next) => {
       return response.status(403).json({ success: false, message: "An admin account is required to view subscription status." });
     }
     return response.json({ success: true, data: await getSubscriptionForUser(user) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get("/plans", requireAuth, requireRole("admin"), async (request, response, next) => {
+  try {
+    const plans = await SubscriptionPlan.find({ active: true })
+      .sort({ featured: -1, price: 1, name: 1 })
+      .lean();
+    return response.json({ success: true, data: plans.map(publicPlan) });
   } catch (error) {
     return next(error);
   }
@@ -75,12 +99,31 @@ router.post("/request", requireAuth, requireRole("admin"), async (request, respo
     if (await Subscription.exists({ email: user.email })) {
       return response.status(409).json({ success: false, message: "A subscription already exists for this admin email. Contact the platform administrator for renewal or license support." });
     }
+    let planDetails = {
+      plan: parsed.data.plan,
+      planId: null,
+      billingInterval: "yearly",
+      planPrice: null,
+    };
+    if (parsed.data.planId) {
+      const plan = await SubscriptionPlan.findOne({ _id: parsed.data.planId, active: true }).lean();
+      if (!plan) {
+        return response.status(400).json({ success: false, message: "That subscription plan is no longer available. Refresh the plans and choose an active plan." });
+      }
+      planDetails = {
+        plan: plan.name,
+        planId: plan._id,
+        billingInterval: plan.billingInterval,
+        planPrice: plan.price,
+      };
+    }
     const pending = await SubscriptionRequest.findOne({ email: user.email, status: { $in: ["Pending", "Processing"] } });
     if (pending) {
       return response.json({ success: true, data: publicPurchaseRequest(pending), message: "Your subscription request is already awaiting review." });
     }
     const purchaseRequest = await SubscriptionRequest.create({
       ...parsed.data,
+      ...planDetails,
       email: user.email,
       activeRequestEmail: user.email,
       requestedAt: today(),

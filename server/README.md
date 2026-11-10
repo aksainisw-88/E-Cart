@@ -59,7 +59,7 @@ Set the customer's `VITE_API_URL` at client build time to that customer's API UR
 
 After subscription activation, the customer admin can enter a MongoDB Atlas SRV URI in Admin > Settings > Customer database. The URI is tested before use and stored encrypted in the shared control-plane database with AES-256-GCM; it is never returned to the browser. The URI's host must be an Atlas `*.mongodb.net` host and the target database must be empty. Switching databases copies no store data; it creates only the signed-in admin account in the target database to preserve that admin's existing credentials and license binding. The previous database is left unchanged. This setting requires `CUSTOMER_DATABASE_ENCRYPTION_KEY` on the API deployment.
 
-Admins without an active license can submit a subscription purchase request from Admin > Settings. Requests are stored in the shared control-plane database and appear in the Super Admin panel. Approval lets the Super Admin set the price and payment received, creates the subscription, and returns the registration number and license key once for secure delivery to the customer. This is a manual request-and-approval flow; it does not collect online payments.
+Admins without an active license can select an active monthly or yearly plan and submit a subscription request from Admin > Settings. Plans are managed in the Super Admin panel and stored in the shared control-plane database. Requests retain the selected plan, billing interval, and listed-price snapshot; approval lets the Super Admin confirm or edit the amount and payment received. The API creates the subscription for the selected billing interval and returns the registration number and license key once for secure delivery to the customer. This is a manual request-and-approval flow; it does not collect online payments.
 
 To provision another customer, create/deploy its API with its own initial `MONGO_URI`, unique `CUSTOMER_DATABASE_ENCRYPTION_KEY`, and the shared `SUPER_ADMIN_MONGO_URI`, then create its store admin on that API:
 
@@ -71,7 +71,7 @@ In the Super Admin panel, create the subscription using that exact admin email a
 
 ## Super-admin subscriptions
 
-The Super Admin panel uses the API but stores platform accounts and subscriptions in the dedicated MongoDB database configured by `SUPER_ADMIN_MONGO_URI`. Set `SUPER_ADMIN_PANEL_URL` to the panel's exact origin so the API allows credentialed requests. On startup, the API creates the `superadmins` and `subscriptions` collections and indexes if needed. Create the platform account from the server directory:
+The Super Admin panel uses the API but stores platform accounts, plans, requests, subscriptions, and customer database configurations in the dedicated MongoDB database configured by `SUPER_ADMIN_MONGO_URI`. Set `SUPER_ADMIN_PANEL_URL` to the panel's exact origin so the API allows credentialed requests. On startup, the API creates the required control-plane collections and indexes if needed. Create the platform account from the server directory:
 
 ```powershell
 npm run create-super-admin -- platform@example.com StrongPassword "Platform Admin"

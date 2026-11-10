@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 import { Bell, CheckCircle2, CreditCard, Database, LockKeyhole, RotateCcw, Save, ShoppingCart, UserRound } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
+const subscriptionPrice = (amount) => new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+}).format(Number(amount) || 0);
 const preferenceKey = "e-mart-admin-preferences";
 const defaultPreferences = { emailNotifications: true, orderAlerts: true, compactTables: false };
 const readPreferences = () => {
@@ -53,7 +58,10 @@ const AdminSettings = () => {
   const [databaseMessage, setDatabaseMessage] = useState("");
   const [databaseError, setDatabaseError] = useState("");
   const [purchaseRequest, setPurchaseRequest] = useState(null);
-  const [purchaseForm, setPurchaseForm] = useState({ business: "", phone: "", plan: "Annual", notes: "" });
+  const [plans, setPlans] = useState([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [purchaseForm, setPurchaseForm] = useState({ business: "", phone: "", notes: "" });
   const [purchaseBusy, setPurchaseBusy] = useState(false);
   const [purchaseMessage, setPurchaseMessage] = useState("");
   const [purchaseError, setPurchaseError] = useState("");
@@ -72,12 +80,21 @@ const AdminSettings = () => {
       .then((data) => {
         setSubscription(data);
         if (!data?.active) {
-          return fetch(`${API_URL}/api/subscription/request`, { credentials: "include" })
-            .then(async (response) => {
-              const result = await response.json();
-              if (!response.ok) throw new Error(result.message || "Unable to load subscription request.");
-              setPurchaseRequest(result.data);
-            });
+          setPlansLoading(true);
+          return Promise.all([
+            fetch(`${API_URL}/api/subscription/request`, { credentials: "include" }),
+            fetch(`${API_URL}/api/subscription/plans`, { credentials: "include" }),
+          ]).then(async ([requestResponse, plansResponse]) => {
+            const [requestResult, plansResult] = await Promise.all([requestResponse.json(), plansResponse.json()]);
+            if (!requestResponse.ok) throw new Error(requestResult.message || "Unable to load subscription request.");
+            if (!plansResponse.ok) throw new Error(plansResult.message || "Unable to load subscription plans.");
+            setPurchaseRequest(requestResult.data);
+            setPlans(plansResult.data);
+            setSelectedPlanId((current) => current || plansResult.data[0]?.id || "");
+            setPurchaseError("");
+          }).catch((requestError) => {
+            setPurchaseError(requestError.message);
+          }).finally(() => setPlansLoading(false));
         }
         fetch(`${API_URL}/api/customer-database/status`, { credentials: "include" })
           .then(async (response) => {
@@ -162,7 +179,7 @@ const AdminSettings = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ ...purchaseForm, name: profile.name }),
+        body: JSON.stringify({ ...purchaseForm, name: profile.name, planId: selectedPlanId }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Unable to submit your subscription request.");
@@ -346,7 +363,7 @@ const AdminSettings = () => {
         {purchaseRequest?.status === "Pending" || purchaseRequest?.status === "Processing" ? (
           <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
             <p className="font-semibold">Request {purchaseRequest.status === "Pending" ? "submitted" : "being processed"}</p>
-            <p className="mt-1">Your {purchaseRequest.plan} subscription request was received on {purchaseRequest.requestedAt}. The platform administrator will review it and issue your registration number and license key.</p>
+            <p className="mt-1">Your {purchaseRequest.plan} ({purchaseRequest.billingInterval || "yearly"}) subscription request was received on {purchaseRequest.requestedAt}. The platform administrator will review it and issue your registration number and license key.</p>
           </div>
         ) : (
           <form onSubmit={submitPurchaseRequest} className="mt-5 space-y-4">
@@ -355,11 +372,25 @@ const AdminSettings = () => {
               <label className="text-sm font-medium text-slate-700">Business / store name<input required minLength="2" maxLength="120" value={purchaseForm.business} onChange={(event) => setPurchaseForm((current) => ({ ...current, business: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" placeholder="Your store name" /></label>
               <label className="text-sm font-medium text-slate-700">Admin email<input type="email" readOnly value={profile.email} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 outline-none" /></label>
               <label className="text-sm font-medium text-slate-700">Phone number<input maxLength="30" value={purchaseForm.phone} onChange={(event) => setPurchaseForm((current) => ({ ...current, phone: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" placeholder="Contact phone" /></label>
-              <label className="text-sm font-medium text-slate-700 sm:col-span-2">Subscription plan<select value={purchaseForm.plan} onChange={(event) => setPurchaseForm((current) => ({ ...current, plan: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-primary"><option value="Annual">Annual</option></select></label>
             </div>
+            <fieldset>
+              <legend className="text-sm font-medium text-slate-700">Choose a subscription plan</legend>
+              {plansLoading ? <p className="mt-3 text-sm text-slate-500">Loading available plans...</p> : plans.length === 0 ? (
+                <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">There are no active plans available right now. Please contact the platform administrator.</p>
+              ) : (
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {plans.map((plan) => (
+                    <button key={plan.id} type="button" aria-pressed={selectedPlanId === plan.id} onClick={() => setSelectedPlanId(plan.id)} className={`rounded-xl border p-4 text-left transition ${selectedPlanId === plan.id ? "border-primary bg-indigo-50/50 ring-1 ring-primary" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                      <span className="flex items-start justify-between gap-3"><span><strong className="text-slate-900">{plan.name}</strong>{plan.featured && <span className="ml-2 rounded-full bg-indigo-100 px-2 py-1 text-[10px] font-semibold text-indigo-700">Featured</span>}</span><span className="text-right font-semibold text-slate-900">{subscriptionPrice(plan.price)}<small className="block font-normal text-slate-500">per {plan.billingInterval === "monthly" ? "month" : "year"}</small></span></span>
+                      {plan.description && <span className="mt-2 block text-sm leading-5 text-slate-600">{plan.description}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </fieldset>
             <label className="block text-sm font-medium text-slate-700">Message (optional)<textarea maxLength="500" rows="3" value={purchaseForm.notes} onChange={(event) => setPurchaseForm((current) => ({ ...current, notes: event.target.value }))} className="mt-2 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-primary" placeholder="Add any details for the platform administrator." /></label>
-            <p className="text-xs text-slate-500">This submits a purchase request only. No payment is charged here. The platform administrator will confirm pricing and approve your license.</p>
-            <button type="submit" disabled={purchaseBusy || !profile.name || !profile.email} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white disabled:opacity-60"><ShoppingCart className="h-4 w-4" />{purchaseBusy ? "Submitting..." : "Request subscription"}</button>
+            <p className="text-xs text-slate-500">This submits a purchase request only. No payment is charged here. The platform administrator will confirm the listed price and approve your license.</p>
+            <button type="submit" disabled={purchaseBusy || plansLoading || !plans.length || !selectedPlanId || !profile.name || !profile.email} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white disabled:opacity-60"><ShoppingCart className="h-4 w-4" />{purchaseBusy ? "Submitting..." : "Request subscription"}</button>
           </form>
         )}
         {(purchaseMessage || purchaseError) && <p role={purchaseError ? "alert" : "status"} className={`mt-4 rounded-lg p-3 text-sm ${purchaseError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{purchaseError || purchaseMessage}</p>}

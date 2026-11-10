@@ -4,6 +4,15 @@ const crypto = require("crypto");
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+const addBillingPeriod = (dateString, billingInterval = "yearly") => {
+  const date = new Date(`${dateString}T00:00:00.000Z`);
+  const monthOffset = billingInterval === "monthly" ? 1 : 12;
+  const target = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + monthOffset, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(date.getUTCDate(), lastDay));
+  return target.toISOString().slice(0, 10);
+};
+
 const getSubscriptionForUser = async (user) => {
   let ownerId = user.role === "admin" ? user._id || user.id : user.subscriptionOwner;
   if (!ownerId && user.role !== "admin") {
@@ -47,4 +56,4 @@ const getSubscriptionForUser = async (user) => {
   };
 };
 
-module.exports = { getSubscriptionForUser, today };
+module.exports = { addBillingPeriod, getSubscriptionForUser, today };

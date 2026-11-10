@@ -50,6 +50,7 @@ const iconMap = {
   LayoutDashboard,
   Building2,
   Inbox,
+  CreditCard,
   KeyRound,
   WalletCards,
 };
@@ -82,15 +83,19 @@ const apiRequest = async (path, options = {}) => {
   return result;
 };
 
-const nextYear = (date = new Date()) => {
-  const next = new Date(date);
-  next.setFullYear(next.getFullYear() + 1);
-  return next.toISOString().slice(0, 10);
+const nextBillingPeriod = (date, billingInterval = "yearly") => {
+  const start = new Date(`${date}T00:00:00.000Z`);
+  const monthOffset = billingInterval === "monthly" ? 1 : 12;
+  const target = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + monthOffset, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(start.getUTCDate(), lastDay));
+  return target.toISOString().slice(0, 10);
 };
 
 function App() {
   const [clients, setClients] = useState([]);
   const [requests, setRequests] = useState([]);
+  const [plans, setPlans] = useState([]);
   const [activePage, setActivePage] = useState("overview");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All status");
@@ -120,6 +125,11 @@ function App() {
     setRequests(result.data);
   };
 
+  const refreshPlans = async () => {
+    const result = await apiRequest("/api/super-admin/plans");
+    setPlans(result.data);
+  };
+
   useEffect(() => {
     let active = true;
     apiRequest("/api/super-admin/me")
@@ -128,7 +138,7 @@ function App() {
         setSuperAdmin(result.user);
         setAuthState("authorized");
         try {
-          await Promise.all([refreshSubscriptions(), refreshRequests()]);
+          await Promise.all([refreshSubscriptions(), refreshRequests(), refreshPlans()]);
         } catch (error) {
           if (active) notify(error.message);
         }
@@ -182,7 +192,7 @@ function App() {
       setLoginPassword("");
       setAuthState("authorized");
       try {
-        await Promise.all([refreshSubscriptions(), refreshRequests()]);
+        await Promise.all([refreshSubscriptions(), refreshRequests(), refreshPlans()]);
       } catch (error) {
         notify(error.message);
       }
@@ -242,7 +252,7 @@ function App() {
 
   const decideRequest = async (request, status) => {
     if (status === "Approved") {
-      setDialog({ type: "approve", request, amount: "" });
+      setDialog({ type: "approve", request, amount: request.planPrice ?? "" });
       return;
     }
     try {
@@ -252,6 +262,34 @@ function App() {
       });
       await refreshRequests();
       notify(result.message);
+    } catch (error) {
+      notify(error.message);
+    }
+  };
+
+  const savePlan = async (planId, values) => {
+    try {
+      await apiRequest(planId ? `/api/super-admin/plans/${planId}` : "/api/super-admin/plans", {
+        method: planId ? "PATCH" : "POST",
+        body: JSON.stringify(values),
+      });
+      await refreshPlans();
+      notify(planId ? "Subscription plan updated." : "Subscription plan created.");
+      return true;
+    } catch (error) {
+      notify(error.message);
+      return false;
+    }
+  };
+
+  const togglePlan = async (plan) => {
+    try {
+      await apiRequest(`/api/super-admin/plans/${plan.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ active: !plan.active }),
+      });
+      await refreshPlans();
+      notify(`Plan ${plan.active ? "deactivated" : "activated"}.`);
     } catch (error) {
       notify(error.message);
     }
@@ -390,6 +428,9 @@ function App() {
           )}
           {activePage === "requests" && (
             <RequestsPage requests={requests} decideRequest={decideRequest} />
+          )}
+          {activePage === "plans" && (
+            <PlansPage plans={plans} savePlan={savePlan} togglePlan={togglePlan} />
           )}
           {activePage === "subscriptions" && (
             <SubscriptionsPage clients={clients} openClient={setSelectedClient} onRenew={(client) => setDialog({ type: "renew", client })} />
@@ -588,12 +629,80 @@ function RequestsPage({ requests, decideRequest }) {
         {filtered.length === 0 ? <EmptyState title="No requests in this view" text="New registration requests will appear here." /> : <div className="request-cards">
           {filtered.map((request) => (
             <article className="request-card" key={request.id}>
-              <div className="request-card-main"><div className={`avatar request-avatar ${avatarColor(request.business)}`}>{request.business.slice(0, 1)}</div><div className="request-copy"><div className="request-title-line"><h3>{request.business}</h3><StatusBadge status={request.status} /></div><p>{request.name} <span>·</span> {request.plan} plan</p><div className="request-meta"><span><CalendarDays size={14} /> Received {shortDate(request.requestedAt)}</span><span><CreditCard size={14} /> Subscription request</span></div><p className="request-notes">{request.notes || "No additional details provided."}</p></div></div>
+              <div className="request-card-main"><div className={`avatar request-avatar ${avatarColor(request.business)}`}>{request.business.slice(0, 1)}</div><div className="request-copy"><div className="request-title-line"><h3>{request.business}</h3><StatusBadge status={request.status} /></div><p>{request.name} <span>·</span> {request.plan} · {request.billingInterval || "yearly"}</p><div className="request-meta"><span><CalendarDays size={14} /> Received {shortDate(request.requestedAt)}</span><span><CreditCard size={14} /> {request.planPrice == null ? "Price to be set" : `Listed ${currency(request.planPrice)}`}</span></div><p className="request-notes">{request.notes || "No additional details provided."}</p></div></div>
               <div className="request-contact"><span><small>EMAIL</small>{request.email}</span><span><small>PHONE</small>{request.phone}</span></div>
               {request.status === "Pending" ? <div className="request-actions"><button className="button button-secondary button-small" onClick={() => decideRequest(request, "Rejected")}><XCircle size={15} /> Reject</button><button className="button button-success button-small" onClick={() => decideRequest(request, "Approved")}><Check size={15} /> Approve & issue license</button></div> : <div className="request-resolved"><CheckCircle2 size={16} /> Request {request.status.toLowerCase()}</div>}
             </article>
           ))}
         </div>}
+      </section>
+    </>
+  );
+}
+
+function PlansPage({ plans, savePlan, togglePlan }) {
+  const emptyForm = { name: "", description: "", billingInterval: "yearly", price: "", active: true, featured: false };
+  const [form, setForm] = useState(emptyForm);
+  const [editingPlanId, setEditingPlanId] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const editPlan = (plan) => {
+    setEditingPlanId(plan.id);
+    setForm({
+      name: plan.name,
+      description: plan.description || "",
+      billingInterval: plan.billingInterval,
+      price: String(plan.price),
+      active: plan.active,
+      featured: plan.featured,
+    });
+  };
+  const cancelEdit = () => {
+    setEditingPlanId("");
+    setForm(emptyForm);
+  };
+  const submit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    const saved = await savePlan(editingPlanId, { ...form, price: Number(form.price) });
+    setSaving(false);
+    if (saved) cancelEdit();
+  };
+
+  return (
+    <>
+      <PageHeading eyebrow="SUBSCRIPTION CATALOG" title="Plans" description="Create and manage the plans customer admins can request." actions={<span className="heading-note"><CreditCard size={15} /> {plans.length} plans</span>} />
+      <section className="panel plan-editor">
+        <div className="panel-header"><div><h2>{editingPlanId ? "Edit plan" : "Create a plan"}</h2><p>Prices are shown to customers and can be confirmed or edited when approving a request.</p></div></div>
+        <form className="form-grid plan-form" onSubmit={submit}>
+          <label>Plan name<input required minLength="2" maxLength="80" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="e.g. Growth" /></label>
+          <label>Billing interval<select required value={form.billingInterval} onChange={(event) => setForm((current) => ({ ...current, billingInterval: event.target.value }))}><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label>
+          <label>Price (INR)<input required type="number" min="0" step="1" value={form.price} onChange={(event) => setForm((current) => ({ ...current, price: event.target.value }))} placeholder="e.g. 2500" /></label>
+          <label className="plan-description-field">Description<textarea maxLength="500" rows="2" value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Describe what's included in this plan." /></label>
+          <label className="plan-checkbox"><input type="checkbox" checked={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.checked }))} /> Available to customers</label>
+          <label className="plan-checkbox"><input type="checkbox" checked={form.featured} onChange={(event) => setForm((current) => ({ ...current, featured: event.target.checked }))} /> Mark as featured</label>
+          <div className="plan-form-actions">
+            {editingPlanId && <button type="button" className="button button-secondary" onClick={cancelEdit}>Cancel</button>}
+            <button type="submit" className="button button-primary" disabled={saving}><Plus size={15} />{saving ? "Saving..." : editingPlanId ? "Save changes" : "Create plan"}</button>
+          </div>
+        </form>
+      </section>
+      <section className="panel data-panel plan-list-panel">
+        <div className="list-toolbar"><div><h2>Plan catalog <span className="table-count">{plans.length}</span></h2><p>Inactive plans stay saved but are hidden from new customer requests.</p></div></div>
+        {plans.length === 0 ? <EmptyState title="No plans yet" text="Create a plan above to make it available in customer admin settings." /> : (
+          <div className="plan-list">
+            {plans.map((plan) => (
+              <article className={`plan-item ${!plan.active ? "plan-item-inactive" : ""}`} key={plan.id}>
+                <div className="plan-item-content">
+                  <div className="plan-item-title"><h3>{plan.name}</h3>{plan.featured && <span className="plan-featured">Featured</span>}<StatusBadge status={plan.active ? "Active" : "Inactive"} /></div>
+                  <p>{plan.description || "No description provided."}</p>
+                  <strong>{currency(plan.price)} <small>/ {plan.billingInterval === "monthly" ? "month" : "year"}</small></strong>
+                </div>
+                <div className="plan-item-actions"><button className="button button-secondary button-small" onClick={() => editPlan(plan)}>Edit</button><button className="button button-secondary button-small" onClick={() => togglePlan(plan)}>{plan.active ? "Deactivate" : "Activate"}</button></div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
     </>
   );
@@ -674,6 +783,7 @@ function Dialog({ dialog, close, approveRequest, renewLicense, createRequest }) 
         <form className="modal-card" role="dialog" aria-modal="true" onSubmit={(event) => { event.preventDefault(); approveRequest(dialog.request, amount, paidNow); }}>
           <div className="modal-header"><div><span className="eyebrow">APPROVE SUBSCRIPTION</span><h2>Set price and issue license</h2><p>Approve {dialog.request.business} and issue a real license for {dialog.request.email}.</p></div><button type="button" className="icon-button" onClick={close} aria-label="Close"><X size={19} /></button></div>
           <div className="approval-summary"><div className={`avatar ${avatarColor(dialog.request.business)}`}>{dialog.request.business.slice(0, 1)}</div><div><strong>{dialog.request.business}</strong><span>{dialog.request.name} · {dialog.request.email}</span></div></div>
+          <p className="approval-plan">Selected plan: <strong>{dialog.request.plan}</strong> · {dialog.request.billingInterval || "yearly"}{dialog.request.planPrice != null && <> · Listed price {currency(dialog.request.planPrice)}</>}</p>
           <label className="modal-label">Final subscription amount<input required type="number" min="0" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
           <label className="modal-label">Amount paid now<input required type="number" min="0" max={amount || undefined} value={paidNow} onChange={(event) => setPaidNow(event.target.value)} /></label>
           <div className="credential-notice"><KeyRound size={17} /><span>A new registration number and license key will be generated. The key is shown once after approval; copy it and send it securely to the customer admin.</span></div>
@@ -682,10 +792,10 @@ function Dialog({ dialog, close, approveRequest, renewLicense, createRequest }) 
       ) : (
         <div className="modal-card" role="dialog" aria-modal="true">
           <div className="modal-header"><div><span className="eyebrow">SUBSCRIPTION</span><h2>Renew license</h2><p>Extend platform access for {dialog.client.business}.</p></div><button className="icon-button" onClick={close} aria-label="Close"><X size={19} /></button></div>
-          <div className="renewal-dates"><div><small>Current expiry</small><strong>{shortDate(dialog.client.validTill)}</strong></div><ArrowRight size={17} /><div><small>New expiry</small><strong>{shortDate(nextYear(dialog.client.validTill && new Date(`${dialog.client.validTill}T00:00:00`) > new Date() ? new Date(`${dialog.client.validTill}T00:00:00`) : new Date()))}</strong></div></div>
+          <div className="renewal-dates"><div><small>Current expiry</small><strong>{shortDate(dialog.client.validTill)}</strong></div><ArrowRight size={17} /><div><small>New expiry</small><strong>{shortDate(nextBillingPeriod(dialog.client.validTill && new Date(`${dialog.client.validTill}T00:00:00`) > new Date() ? dialog.client.validTill : new Date().toISOString().slice(0, 10), dialog.client.billingInterval))}</strong></div></div>
           <label className="modal-label">Renewal amount<input type="number" min="0" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
           <label className="modal-label">Amount paid now<input type="number" min="0" value={paidNow} onChange={(event) => setPaidNow(event.target.value)} /></label>
-          <div className="credential-notice"><Clock3 size={17} /><span>Renewal is stored in the database and extends access for one year.</span></div>
+          <div className="credential-notice"><Clock3 size={17} /><span>Renewal is stored in the database and extends access for one {dialog.client.billingInterval === "monthly" ? "month" : "year"}.</span></div>
           <div className="modal-footer"><button className="button button-secondary" onClick={close}>Cancel</button><button className="button button-primary" onClick={() => renewLicense(dialog.client, amount, paidNow)}><Check size={16} /> Confirm renewal</button></div>
         </div>
       )}
