@@ -32,6 +32,7 @@ import AdminInventory from "./pages/AdminInventory";
 import AdminReturns from "./pages/AdminReturns";
 import ResetPassword from "./pages/ResetPassword";
 import AdminLogin from "./pages/AdminLogin";
+import AdminRegister from "./pages/AdminRegister";
 import AdminTransactionReturns from "./pages/AdminTransactionReturns";
 
 const RequireCustomerAuth = ({ children }) => {
@@ -87,6 +88,7 @@ function App() {
         <Route path="/contact" element={<ContactUs />} />
         <Route path="/offers" element={<Offers />} />
         <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/register" element={<AdminRegister />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboardOverview />} />
           <Route path="reports" element={<AdminReports />} />

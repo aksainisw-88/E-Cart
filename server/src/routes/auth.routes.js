@@ -6,6 +6,7 @@ const { z } = require("zod");
 
 const User = require("../models/User");
 const SignupOtp = require("../models/SignupOtp");
+const AdminSignupOtp = require("../models/AdminSignupOtp");
 const PasswordReset = require("../models/PasswordReset");
 const { requireAuth } = require("../middleware/auth");
 const { getSubscriptionForUser } = require("../utils/subscription");
@@ -26,6 +27,10 @@ const registrationSchema = credentialsSchema.extend({
   if (data.customerType === "B2B" && data.businessName.length < 2) {
     context.addIssue({ code: "custom", path: ["businessName"], message: "Enter your business name." });
   }
+});
+const adminRegistrationSchema = credentialsSchema.extend({
+  name: z.string().trim().min(2).max(80),
+  otp: z.string().regex(/^\d{6}$/),
 });
 const signupOtpSchema = z.object({ email: z.string().email() });
 const forgotPasswordSchema = z.object({ email: z.string().email() });
@@ -159,6 +164,74 @@ router.post("/register", async (request, response, next) => {
     setAuthCookie(response, user, request.app.locals.env);
     return response.status(201).json({ success: true, user: publicUser(user) });
   } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/admin-signup-otp", async (request, response, next) => {
+  try {
+    const data = parseBody(signupOtpSchema, request, response);
+    if (!data) return;
+    const email = data.email.toLowerCase();
+    if (await User.exists({ email })) {
+      return response.status(409).json({ success: false, message: "An account with this email already exists." });
+    }
+    const current = await AdminSignupOtp.findOne({ email });
+    if (current && Date.now() - current.createdAt.getTime() < 60_000) {
+      return response.status(429).json({ success: false, message: "Please wait before requesting another code." });
+    }
+
+    const otp = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+    const env = request.app.locals.env;
+    const sent = await sendSignupCode(email, otp, env);
+    await AdminSignupOtp.findOneAndUpdate(
+      { email },
+      { otpHash: hashOtp(email, otp, env.JWT_SECRET), attempts: 0, expiresAt: new Date(Date.now() + 10 * 60_000) },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+    return response.json({ success: true, message: "Admin verification code sent.", ...(sent ? {} : { developmentOtp: otp }) });
+  } catch (error) {
+    if (error.message === "Email delivery is not configured.") {
+      return response.status(503).json({ success: false, message: "Signup email delivery is not configured. Contact the store administrator." });
+    }
+    return next(error);
+  }
+});
+
+router.post("/register/admin", async (request, response, next) => {
+  try {
+    const data = parseBody(adminRegistrationSchema, request, response);
+    if (!data) return;
+
+    const email = data.email.toLowerCase();
+    if (await User.exists({ email })) {
+      return response.status(409).json({ success: false, message: "An account with this email already exists." });
+    }
+    const challenge = await AdminSignupOtp.findOne({ email });
+    if (!challenge || challenge.expiresAt <= new Date()) {
+      return response.status(400).json({ success: false, message: "Your verification code has expired. Request a new code." });
+    }
+    if (challenge.attempts >= 5) {
+      await challenge.deleteOne();
+      return response.status(429).json({ success: false, message: "Too many incorrect codes. Request a new code." });
+    }
+    const submittedHash = Buffer.from(hashOtp(email, data.otp, request.app.locals.env.JWT_SECRET), "hex");
+    const storedHash = Buffer.from(challenge.otpHash, "hex");
+    if (submittedHash.length !== storedHash.length || !crypto.timingSafeEqual(submittedHash, storedHash)) {
+      challenge.attempts += 1;
+      await challenge.save();
+      return response.status(400).json({ success: false, message: "The verification code is incorrect." });
+    }
+
+    const password = await bcrypt.hash(data.password, 12);
+    const user = await User.create({ name: data.name, email, password, role: "admin" });
+    await challenge.deleteOne();
+    setAuthCookie(response, user, request.app.locals.env);
+    return response.status(201).json({ success: true, user: publicUser(user), message: "Admin account created. Choose a subscription plan in Settings to request a license." });
+  } catch (error) {
+    if (error.code === 11000) {
+      return response.status(409).json({ success: false, message: "An account with this email already exists." });
+    }
     return next(error);
   }
 });

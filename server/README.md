@@ -62,6 +62,8 @@ After subscription activation, the customer admin can enter a MongoDB Atlas SRV 
 
 Admins without an active license can select an active monthly or yearly plan and submit a subscription request from Admin > Settings. Plans are managed in the Super Admin panel and stored in the shared control-plane database. Requests retain the selected plan, billing interval, and listed-price snapshot; approval lets the Super Admin confirm or edit the amount and payment received. The API creates the subscription for the selected billing interval and returns the registration number and license key once for secure delivery to the customer. This is a manual request-and-approval flow; it does not collect online payments.
 
+Store admins can create an account from `/admin/register` after email OTP verification; customer accounts continue to use `/customer/register`. Admin signup creates an `admin` role on the current customer API/database. Admin API operations remain blocked until that account activates a valid subscription. Production signup requires working SMTP configuration.
+
 To provision another customer, create/deploy its API with its own initial `MONGO_URI`, unique `CUSTOMER_DATABASE_ENCRYPTION_KEY`, and the shared `SUPER_ADMIN_MONGO_URI`, then create its store admin on that API:
 
 ```powershell

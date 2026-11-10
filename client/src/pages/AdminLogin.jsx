@@ -106,6 +106,7 @@ const AdminLogin = () => {
             </form>
 
             <p className="mt-7 border-t border-slate-100 pt-5 text-center text-sm text-slate-500">Shopping with us? <Link to="/customer/login" className="font-semibold text-primary hover:text-primary-dark">Customer sign in</Link></p>
+            <p className="mt-3 text-center text-sm text-slate-500">New to store admin? <Link to="/admin/register" className="font-semibold text-primary hover:text-primary-dark">Create admin account</Link></p>
           </div>
         </div>
       </section>
