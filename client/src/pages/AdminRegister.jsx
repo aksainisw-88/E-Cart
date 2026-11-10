@@ -1,20 +1,37 @@
 import { useState } from "react";
-import { ArrowRight, KeyRound, ShieldCheck } from "lucide-react";
+import { ArrowRight, KeyRound, ShieldCheck, Store } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useStore } from "../context/storeContext";
+import { businessTypes } from "../data/businessTypes";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
+const inputClass = "mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm outline-none focus:border-primary";
 
 const AdminRegister = () => {
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "", otp: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    otp: "",
+    storeName: "",
+    businessType: "general",
+    tagline: "",
+    storeDescription: "",
+    storePhone: "",
+    storeEmail: "",
+    storeAddress: "",
+    city: "",
+    deliveryPincode: "",
+    deliveryFee: "49",
+    freeDeliveryAbove: "999",
+    theme: "teal",
+  });
   const [otpSent, setOtpSent] = useState(false);
   const [developmentOtp, setDevelopmentOtp] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const store = useStore();
-
   const updateField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
     if (field === "email") {
@@ -69,11 +86,23 @@ const AdminRegister = () => {
           email: form.email,
           password: form.password,
           otp: form.otp,
+          storeName: form.storeName,
+          businessType: form.businessType,
+          tagline: form.tagline,
+          storeDescription: form.storeDescription,
+          storePhone: form.storePhone,
+          storeEmail: form.storeEmail,
+          storeAddress: form.storeAddress,
+          city: form.city,
+          deliveryPincode: form.deliveryPincode,
+          deliveryFee: form.deliveryFee,
+          freeDeliveryAbove: form.freeDeliveryAbove,
+          theme: form.theme,
         }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Unable to create the admin account.");
-      navigate("/admin", { replace: true });
+      navigate("/admin/settings", { replace: true });
     } catch (requestError) {
       setError(requestError instanceof TypeError ? "Unable to reach the server. Please try again." : requestError.message);
     } finally {
@@ -91,47 +120,94 @@ const AdminRegister = () => {
           <div className="absolute -right-20 top-24 h-64 w-64 rounded-full border border-white/10" />
           <div className="absolute -right-10 top-[8.5rem] h-44 w-44 rounded-full border border-white/10" />
           <div className="relative flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-white/10 text-xl font-bold ring-1 ring-white/20">
-              {store.logoUrl ? <img src={store.logoUrl} alt="" className="h-full w-full object-contain" /> : "+"}
-            </span>
-            <span><strong className="block text-base">{store.name}</strong><small className="text-xs text-white/60">Admin console</small></span>
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-xl font-bold ring-1 ring-white/20"><Store className="h-6 w-6" /></span>
+            <span><strong className="block text-base">E-Cart</strong><small className="text-xs text-white/60">Store setup</small></span>
           </div>
           <div className="relative max-w-md py-12">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-200/20"><ShieldCheck className="h-6 w-6" /></span>
-            <h1 className="mt-6 text-3xl font-semibold leading-tight">Set up your store admin account.</h1>
-            <p className="mt-3 text-sm leading-6 text-white/65">Verify your email to manage your store workspace and request a subscription license.</p>
+            <h1 className="mt-6 text-3xl font-semibold leading-tight">Create your store and admin account.</h1>
+            <p className="mt-3 text-sm leading-6 text-white/65">Add your business details, verify your email, then request a subscription license from Settings.</p>
           </div>
-          <p className="relative text-xs text-white/45">Email verification required</p>
+          <p className="relative text-xs text-white/45">Store details are saved to this customer API's database.</p>
         </div>
 
         <div className="px-6 py-8 sm:px-10 sm:py-12 lg:px-12 lg:py-14">
           <div className="flex items-center justify-between gap-3 lg:justify-end">
             <Link to="/" className="flex items-center gap-2 text-sm font-semibold text-slate-700 lg:hidden">
-              <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-primary text-lg font-bold text-white">{store.logoUrl ? <img src={store.logoUrl} alt="" className="h-full w-full object-contain" /> : "+"}</span>
-              <span className="max-w-40 truncate">{store.name}</span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-white"><Store className="h-5 w-5" /></span>
+              <span className="max-w-40 truncate">E-Cart</span>
             </Link>
             <Link to="/" className="text-xs font-semibold text-slate-400 transition hover:text-primary">Back to store</Link>
           </div>
 
-          <div className="mx-auto mt-8 max-w-sm">
+          <div className="mx-auto mt-8 max-w-xl">
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-primary"><KeyRound className="h-5 w-5" /></span>
-            <p className="mt-5 text-xs font-bold uppercase tracking-[0.16em] text-primary">Store admin access</p>
-            <h2 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">Create admin account</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">Use an email you can verify. You can request a license after signing up.</p>
+            <p className="mt-5 text-xs font-bold uppercase tracking-[0.16em] text-primary">Store onboarding</p>
+            <h2 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">Create your store</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500">Enter your business and owner details. You can update these settings and upload your logo after signup.</p>
 
-            <form onSubmit={submit} className="mt-6 space-y-4">
-              <label className="block text-sm font-medium text-slate-700">Full name
-                <input required minLength={2} maxLength={80} autoComplete="name" value={form.name} onChange={updateField("name")} className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm outline-none focus:border-primary" placeholder="Your name" />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">Work email
-                <input required type="email" autoComplete="email" value={form.email} onChange={updateField("email")} className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm outline-none focus:border-primary" placeholder="name@store.com" />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">Password
-                <input required type="password" minLength={8} maxLength={128} autoComplete="new-password" value={form.password} onChange={updateField("password")} className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm outline-none focus:border-primary" placeholder="At least 8 characters" />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">Confirm password
-                <input required type="password" minLength={8} maxLength={128} autoComplete="new-password" value={form.confirmPassword} onChange={updateField("confirmPassword")} className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm outline-none focus:border-primary" placeholder="Re-enter your password" />
-              </label>
+            <form onSubmit={submit} className="mt-6 space-y-6">
+              <section className="space-y-4 rounded-2xl border border-slate-200 p-4 sm:p-5">
+                <div><h3 className="font-semibold text-slate-900">Business details</h3><p className="mt-1 text-xs text-slate-500">These details will be used for your storefront.</p></div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block text-sm font-medium text-slate-700 sm:col-span-2">Store name
+                    <input required minLength={2} maxLength={100} autoComplete="organization" value={form.storeName} onChange={updateField("storeName")} className={inputClass} placeholder="Your store name" />
+                  </label>
+                  <label className="block text-sm font-medium text-slate-700 sm:col-span-2">Business type
+                    <select value={form.businessType} onChange={updateField("businessType")} className={inputClass}>
+                      {businessTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-sm font-medium text-slate-700">Store phone
+                    <input required type="tel" maxLength={30} autoComplete="tel" value={form.storePhone} onChange={updateField("storePhone")} className={inputClass} placeholder="Business phone" />
+                  </label>
+                  <label className="block text-sm font-medium text-slate-700">Store email
+                    <input required type="email" maxLength={254} autoComplete="organization" value={form.storeEmail} onChange={updateField("storeEmail")} className={inputClass} placeholder="contact@yourstore.com" />
+                  </label>
+                  <label className="block text-sm font-medium text-slate-700 sm:col-span-2">Store address
+                    <input required minLength={3} maxLength={200} autoComplete="street-address" value={form.storeAddress} onChange={updateField("storeAddress")} className={inputClass} placeholder="Street address" />
+                  </label>
+                  <label className="block text-sm font-medium text-slate-700">City
+                    <input required minLength={2} maxLength={80} autoComplete="address-level2" value={form.city} onChange={updateField("city")} className={inputClass} placeholder="City" />
+                  </label>
+                  <label className="block text-sm font-medium text-slate-700">Delivery pincode
+                    <input inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="postal-code" value={form.deliveryPincode} onChange={(event) => setForm((current) => ({ ...current, deliveryPincode: event.target.value.replace(/\D/g, "").slice(0, 6) }))} className={inputClass} placeholder="Optional" />
+                  </label>
+                  <label className="block text-sm font-medium text-slate-700">Delivery fee
+                    <input type="number" min="0" max="100000" step="0.01" value={form.deliveryFee} onChange={updateField("deliveryFee")} className={inputClass} />
+                  </label>
+                  <label className="block text-sm font-medium text-slate-700">Free delivery above
+                    <input type="number" min="0" max="10000000" step="0.01" value={form.freeDeliveryAbove} onChange={updateField("freeDeliveryAbove")} className={inputClass} />
+                  </label>
+                  <label className="block text-sm font-medium text-slate-700 sm:col-span-2">Tagline (optional)
+                    <input maxLength={160} value={form.tagline} onChange={updateField("tagline")} className={inputClass} placeholder="A short message about your store" />
+                  </label>
+                  <label className="block text-sm font-medium text-slate-700 sm:col-span-2">Store description (optional)
+                    <textarea maxLength={500} rows={3} value={form.storeDescription} onChange={updateField("storeDescription")} className="mt-2 w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-primary" placeholder="Tell customers what your store offers" />
+                  </label>
+                  <label className="block text-sm font-medium text-slate-700 sm:col-span-2">Store theme
+                    <select value={form.theme} onChange={updateField("theme")} className={inputClass}>
+                      <option value="teal">Teal</option><option value="blue">Blue</option><option value="emerald">Emerald</option><option value="amber">Amber</option>
+                    </select>
+                  </label>
+                </div>
+              </section>
+
+              <section className="space-y-4 rounded-2xl border border-slate-200 p-4 sm:p-5">
+                <div><h3 className="font-semibold text-slate-900">Admin account</h3><p className="mt-1 text-xs text-slate-500">Verify this email to secure your owner account.</p></div>
+                <label className="block text-sm font-medium text-slate-700">Owner full name
+                  <input required minLength={2} maxLength={80} autoComplete="name" value={form.name} onChange={updateField("name")} className={inputClass} placeholder="Your name" />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">Admin email
+                  <input required type="email" autoComplete="email" value={form.email} onChange={updateField("email")} className={inputClass} placeholder="name@store.com" />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">Password
+                  <input required type="password" minLength={8} maxLength={128} autoComplete="new-password" value={form.password} onChange={updateField("password")} className={inputClass} placeholder="At least 8 characters" />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">Confirm password
+                  <input required type="password" minLength={8} maxLength={128} autoComplete="new-password" value={form.confirmPassword} onChange={updateField("confirmPassword")} className={inputClass} placeholder="Re-enter your password" />
+                </label>
+              </section>
               {otpSent && <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
                 <label htmlFor="admin-signup-otp" className="block text-sm font-semibold text-slate-800">Email verification code</label>
                 <p className="mt-1 text-xs text-slate-600">Enter the six-digit code sent to {form.email}. It expires in 10 minutes.</p>
@@ -142,7 +218,7 @@ const AdminRegister = () => {
               {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
               {message && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p>}
               <button type="submit" disabled={loading} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60">
-                {loading ? "Please wait..." : otpSent ? "Verify and create account" : "Send verification code"}<ArrowRight className="h-4 w-4" />
+                {loading ? "Please wait..." : otpSent ? "Verify and create store" : "Send verification code"}<ArrowRight className="h-4 w-4" />
               </button>
             </form>
 

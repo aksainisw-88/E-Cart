@@ -8,6 +8,7 @@ const User = require("../models/User");
 const SignupOtp = require("../models/SignupOtp");
 const AdminSignupOtp = require("../models/AdminSignupOtp");
 const PasswordReset = require("../models/PasswordReset");
+const StoreSettings = require("../models/StoreSettings");
 const { requireAuth } = require("../middleware/auth");
 const { getSubscriptionForUser } = require("../utils/subscription");
 const { isEmailConfigured, sendPasswordResetLink, sendSignupCode } = require("../utils/email");
@@ -31,10 +32,34 @@ const registrationSchema = credentialsSchema.extend({
 const adminRegistrationSchema = credentialsSchema.extend({
   name: z.string().trim().min(2).max(80),
   otp: z.string().regex(/^\d{6}$/),
+  storeName: z.string().trim().min(2).max(100),
+  businessType: z.enum(["pharmacy", "garments", "footwear", "supermarket", "grocery", "electronics", "beauty", "home_living", "furniture", "jewelry", "toys", "books_stationery", "sports", "pet_supplies", "general"]),
+  tagline: z.string().trim().max(160).optional().default(""),
+  storeDescription: z.string().trim().max(500).optional().default(""),
+  storePhone: z.string().trim().min(5).max(30),
+  storeEmail: z.string().email(),
+  storeAddress: z.string().trim().min(3).max(200),
+  city: z.string().trim().min(2).max(80),
+  deliveryPincode: z.string().trim().regex(/^$|^\d{6}$/).optional().default(""),
+  deliveryFee: z.coerce.number().min(0).max(100000).default(49),
+  freeDeliveryAbove: z.coerce.number().min(0).max(10000000).default(999),
+  theme: z.enum(["teal", "blue", "emerald", "amber"]).default("teal"),
 });
 const signupOtpSchema = z.object({ email: z.string().email() });
 const forgotPasswordSchema = z.object({ email: z.string().email() });
 const resetPasswordSchema = z.object({ token: z.string().regex(/^[a-f0-9]{64}$/), password: z.string().min(8).max(128) });
+
+const ensureNewStoreCanRegister = async () => {
+  if (await User.exists({ role: "admin" }) || await StoreSettings.exists({ key: "default" })) {
+    return false;
+  }
+  return true;
+};
+
+const existingStoreResponse = (response) => response.status(409).json({
+  success: false,
+  message: "This API deployment already has a store or admin account. A separate business needs its own customer API deployment and database.",
+});
 
 const hashOtp = (email, otp, secret) => crypto.createHmac("sha256", secret).update(`${email}:${otp}`).digest("hex");
 const hashResetToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
@@ -173,12 +198,7 @@ router.post("/admin-signup-otp", async (request, response, next) => {
     const data = parseBody(signupOtpSchema, request, response);
     if (!data) return;
     const email = data.email.toLowerCase();
-    if (await User.exists({ role: "admin" })) {
-      return response.status(409).json({
-        success: false,
-        message: "This API deployment is already linked to a store. A separate business needs its own customer API deployment and database.",
-      });
-    }
+    if (!await ensureNewStoreCanRegister()) return existingStoreResponse(response);
     if (await User.exists({ email })) {
       return response.status(409).json({ success: false, message: "An account with this email already exists." });
     }
@@ -210,12 +230,7 @@ router.post("/register/admin", async (request, response, next) => {
     if (!data) return;
 
     const email = data.email.toLowerCase();
-    if (await User.exists({ role: "admin" })) {
-      return response.status(409).json({
-        success: false,
-        message: "This API deployment is already linked to a store. A separate business needs its own customer API deployment and database.",
-      });
-    }
+    if (!await ensureNewStoreCanRegister()) return existingStoreResponse(response);
     if (await User.exists({ email })) {
       return response.status(409).json({ success: false, message: "An account with this email already exists." });
     }
@@ -237,12 +252,37 @@ router.post("/register/admin", async (request, response, next) => {
 
     const password = await bcrypt.hash(data.password, 12);
     const user = await User.create({ name: data.name, email, password, role: "admin" });
+    try {
+      await StoreSettings.create({
+        key: "default",
+        businessType: data.businessType,
+        name: data.storeName,
+        tagline: data.tagline,
+        description: data.storeDescription,
+        phone: data.storePhone,
+        email: data.storeEmail.toLowerCase(),
+        address: data.storeAddress,
+        city: data.city,
+        deliveryPincode: data.deliveryPincode,
+        deliveryFee: data.deliveryFee,
+        freeDeliveryAbove: data.freeDeliveryAbove,
+        theme: data.theme,
+      });
+    } catch (error) {
+      await User.deleteOne({ _id: user._id });
+      throw error;
+    }
     await challenge.deleteOne();
     setAuthCookie(response, user, request.app.locals.env);
-    return response.status(201).json({ success: true, user: publicUser(user), message: "Admin account created. Choose a subscription plan in Settings to request a license." });
+    return response.status(201).json({ success: true, user: publicUser(user), message: "Store and admin account created. Choose a subscription plan in Settings to request a license." });
   } catch (error) {
     if (error.code === 11000) {
-      return response.status(409).json({ success: false, message: "An account with this email already exists." });
+      return response.status(409).json({
+        success: false,
+        message: error.keyPattern?.email
+          ? "An account with this email already exists."
+          : "A store was created on this API at the same time. Sign in or contact the platform administrator.",
+      });
     }
     return next(error);
   }

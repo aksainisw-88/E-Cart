@@ -16,6 +16,7 @@ const storeSettingsSchema = new mongoose.Schema({
   phone: { type: String, default: "1800-123-4567" },
   email: { type: String, default: "care@mymedicalstore.com" },
   address: { type: String, default: "New Delhi, India" },
+  city: { type: String, trim: true, default: "New Delhi" },
   deliveryFee: { type: Number, default: 49, min: 0 },
   freeDeliveryAbove: { type: Number, default: 999, min: 0 },
   deliveryPincode: { type: String, trim: true, default: "" },

@@ -30,7 +30,7 @@ const ensureDefaultLocation = async () => {
     phone: settings?.phone || "",
     email: settings?.email || "",
     address: settings?.address || "New Delhi, India",
-    city: "New Delhi",
+    city: settings?.city || "New Delhi",
     pincode: settings?.deliveryPincode || "",
     active: true,
   };
