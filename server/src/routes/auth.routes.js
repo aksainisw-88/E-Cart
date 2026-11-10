@@ -33,6 +33,14 @@ const resetPasswordSchema = z.object({ token: z.string().regex(/^[a-f0-9]{64}$/)
 
 const hashOtp = (email, otp, secret) => crypto.createHmac("sha256", secret).update(`${email}:${otp}`).digest("hex");
 const hashResetToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
+const getSubscriptionForAuthentication = async (user) => {
+  try {
+    return await getSubscriptionForUser(user);
+  } catch (error) {
+    console.error("Unable to load subscription status during authentication:", error);
+    return null;
+  }
+};
 
 const publicUser = (user) => ({
   id: user._id,
@@ -95,7 +103,7 @@ const createLoginHandler = (allowedRoles) => async (request, response, next) => 
     setAuthCookie(response, user, request.app.locals.env);
     const serializedUser = publicUser(user);
     if (["admin", "manager", "user"].includes(user.role)) {
-      serializedUser.subscription = await getSubscriptionForUser(user);
+      serializedUser.subscription = await getSubscriptionForAuthentication(user);
     }
     return response.json({ success: true, user: serializedUser });
   } catch (error) {
@@ -242,7 +250,7 @@ router.get("/me", requireAuth, async (request, response, next) => {
     }
     const serializedUser = publicUser(user);
     if (["admin", "manager", "user"].includes(user.role)) {
-      serializedUser.subscription = await getSubscriptionForUser(user);
+      serializedUser.subscription = await getSubscriptionForAuthentication(user);
     }
     return response.json({ success: true, user: serializedUser });
   } catch (error) {
