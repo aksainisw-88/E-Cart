@@ -274,11 +274,13 @@ router.post("/register/admin", async (request, response, next) => {
   let deploymentId;
   const tenant = getCurrentTenant();
   const signupLockKey = getCurrentTenantId() || "legacy";
+  let signupLockAcquired = false;
   try {
     if (adminRegistrationInProgress.has(signupLockKey)) {
       return response.status(409).json({ success: false, message: "Another store signup is being processed. Please retry shortly." });
     }
     adminRegistrationInProgress.add(signupLockKey);
+    signupLockAcquired = true;
     const data = parseBody(adminRegistrationSchema, request, response);
     if (!data) return;
 
@@ -475,7 +477,7 @@ router.post("/register/admin", async (request, response, next) => {
     }
     return next(error);
   } finally {
-    adminRegistrationInProgress.delete(signupLockKey);
+    if (signupLockAcquired) adminRegistrationInProgress.delete(signupLockKey);
   }
 });
 

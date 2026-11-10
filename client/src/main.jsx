@@ -11,6 +11,7 @@ import { tenantHeaders } from "./utils/tenant.js";
 
 const apiOrigin = new URL(import.meta.env.VITE_API_URL || window.location.origin).origin;
 const browserFetch = window.fetch.bind(window);
+// Existing API calls use fetch directly, so attach the selected tenant only to requests sent to this API.
 window.fetch = (input, options = {}) => {
   const url = input instanceof Request ? input.url : String(input);
   if (new URL(url, window.location.origin).origin !== apiOrigin) return browserFetch(input, options);

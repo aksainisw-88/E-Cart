@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 const Tenant = require("../models/Tenant");
-const { assertTenantDatabaseEmpty } = require("./tenantDatabase");
+const { assertTenantDatabaseEmpty, runWithTenant } = require("./tenantDatabase");
 
 const createTenantForSubscription = async (subscription, enabled) => {
   if (!enabled) return null;
@@ -18,6 +18,7 @@ const createTenantForSubscription = async (subscription, enabled) => {
   try {
     subscription.tenantId = tenantId;
     await subscription.save();
+    await runWithTenant(tenant, async () => {});
   } catch (error) {
     await tenant.deleteOne();
     throw error;

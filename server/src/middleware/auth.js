@@ -40,7 +40,10 @@ const requireOptionalAuth = (request, response, next) => {
 
   try {
     request.user = jwt.verify(token, request.app.locals.env.JWT_SECRET);
-    if (getCurrentTenantId() !== (request.user.tenantId || "")) return next();
+    if (getCurrentTenantId() !== (request.user.tenantId || "")) {
+      request.user = undefined;
+      return next();
+    }
     return next();
   } catch {
     return next();
