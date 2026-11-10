@@ -3,6 +3,7 @@ const express = require("express");
 const { z } = require("zod");
 
 const Subscription = require("../models/Subscription");
+const SubscriptionRequest = require("../models/SubscriptionRequest");
 const User = require("../models/User");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { requireSuperAdminDatabase } = require("../config/superAdminDatabase");
@@ -14,6 +15,25 @@ const activationSchema = z.object({
   registrationNumber: z.string().trim().min(5).max(40),
   licenseKey: z.string().trim().min(8).max(80),
 });
+const purchaseRequestSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  business: z.string().trim().min(2).max(120),
+  phone: z.string().trim().max(30).default(""),
+  plan: z.string().trim().min(1).max(40).default("Annual"),
+  notes: z.string().trim().max(500).default(""),
+});
+const publicPurchaseRequest = (purchaseRequest) => ({
+  id: purchaseRequest._id.toString(),
+  name: purchaseRequest.name,
+  business: purchaseRequest.business,
+  email: purchaseRequest.email,
+  phone: purchaseRequest.phone,
+  plan: purchaseRequest.plan,
+  notes: purchaseRequest.notes,
+  status: purchaseRequest.status,
+  requestedAt: purchaseRequest.requestedAt,
+  reviewedAt: purchaseRequest.reviewedAt,
+});
 
 router.get("/status", requireAuth, async (request, response, next) => {
   try {
@@ -23,6 +43,58 @@ router.get("/status", requireAuth, async (request, response, next) => {
     }
     return response.json({ success: true, data: await getSubscriptionForUser(user) });
   } catch (error) {
+    return next(error);
+  }
+});
+
+router.get("/request", requireAuth, requireRole("admin"), async (request, response, next) => {
+  try {
+    const user = await User.findById(request.user.id).select("name email role status").lean();
+    if (!user || user.status === "Blocked") {
+      return response.status(403).json({ success: false, message: "An active customer admin account is required." });
+    }
+    const purchaseRequest = await SubscriptionRequest.findOne({ email: user.email }).sort({ createdAt: -1 }).lean();
+    return response.json({ success: true, data: purchaseRequest ? publicPurchaseRequest(purchaseRequest) : null });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/request", requireAuth, requireRole("admin"), async (request, response, next) => {
+  let adminEmail = "";
+  try {
+    const parsed = purchaseRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return response.status(400).json({ success: false, message: parsed.error.issues[0]?.message || "Check the purchase request details." });
+    }
+    const user = await User.findById(request.user.id).select("name email role status").lean();
+    if (!user || user.status === "Blocked") {
+      return response.status(403).json({ success: false, message: "An active customer admin account is required." });
+    }
+    adminEmail = user.email;
+    if (await Subscription.exists({ email: user.email })) {
+      return response.status(409).json({ success: false, message: "A subscription already exists for this admin email. Contact the platform administrator for renewal or license support." });
+    }
+    const pending = await SubscriptionRequest.findOne({ email: user.email, status: { $in: ["Pending", "Processing"] } });
+    if (pending) {
+      return response.json({ success: true, data: publicPurchaseRequest(pending), message: "Your subscription request is already awaiting review." });
+    }
+    const purchaseRequest = await SubscriptionRequest.create({
+      ...parsed.data,
+      email: user.email,
+      activeRequestEmail: user.email,
+      requestedAt: today(),
+    });
+    return response.status(201).json({
+      success: true,
+      data: publicPurchaseRequest(purchaseRequest),
+      message: "Subscription request sent. The platform administrator will review it and issue your license.",
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      const pending = await SubscriptionRequest.findOne({ email: adminEmail, status: { $in: ["Pending", "Processing"] } });
+      if (pending) return response.json({ success: true, data: publicPurchaseRequest(pending), message: "Your subscription request is already awaiting review." });
+    }
     return next(error);
   }
 });

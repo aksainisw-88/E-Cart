@@ -90,7 +90,7 @@ const nextYear = (date = new Date()) => {
 
 function App() {
   const [clients, setClients] = useState([]);
-  const [requests] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [activePage, setActivePage] = useState("overview");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All status");
@@ -115,6 +115,11 @@ function App() {
     }
   };
 
+  const refreshRequests = async () => {
+    const result = await apiRequest("/api/super-admin/requests");
+    setRequests(result.data);
+  };
+
   useEffect(() => {
     let active = true;
     apiRequest("/api/super-admin/me")
@@ -123,7 +128,7 @@ function App() {
         setSuperAdmin(result.user);
         setAuthState("authorized");
         try {
-          await refreshSubscriptions();
+          await Promise.all([refreshSubscriptions(), refreshRequests()]);
         } catch (error) {
           if (active) notify(error.message);
         }
@@ -177,7 +182,7 @@ function App() {
       setLoginPassword("");
       setAuthState("authorized");
       try {
-        await refreshSubscriptions();
+        await Promise.all([refreshSubscriptions(), refreshRequests()]);
       } catch (error) {
         notify(error.message);
       }
@@ -209,19 +214,24 @@ function App() {
 
   const approveRequest = async (request, amount, paid = 0) => {
     try {
-      const result = await apiRequest("/api/super-admin/subscriptions", {
-        method: "POST",
-        body: JSON.stringify({
-          name: request.name,
-          business: request.business,
-          email: request.email,
-          phone: request.phone,
-          amount: Number(amount),
-          paid: Number(paid),
-          plan: request.plan || "Annual",
-        }),
-      });
-      await refreshSubscriptions();
+      const result = request.id
+        ? await apiRequest(`/api/super-admin/requests/${request.id}/approve`, {
+          method: "POST",
+          body: JSON.stringify({ amount: Number(amount), paidNow: Number(paid) }),
+        })
+        : await apiRequest("/api/super-admin/subscriptions", {
+          method: "POST",
+          body: JSON.stringify({
+            name: request.name,
+            business: request.business,
+            email: request.email,
+            phone: request.phone,
+            amount: Number(amount),
+            paid: Number(paid),
+            plan: request.plan || "Annual",
+          }),
+        });
+      await Promise.all([refreshSubscriptions(), refreshRequests()]);
       setDialog(null);
       setSelectedClient(result.data);
       notify(result.message);
@@ -230,7 +240,22 @@ function App() {
     }
   };
 
-  const decideRequest = () => {};
+  const decideRequest = async (request, status) => {
+    if (status === "Approved") {
+      setDialog({ type: "approve", request, amount: "" });
+      return;
+    }
+    try {
+      const result = await apiRequest(`/api/super-admin/requests/${request.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      await refreshRequests();
+      notify(result.message);
+    } catch (error) {
+      notify(error.message);
+    }
+  };
 
   const renewLicense = async (client, amount, paidNow) => {
     try {
@@ -447,8 +472,8 @@ function Overview({ clients, pendingRequests, activeCount, collected, pending, e
           <RevenueChart clients={clients} />
         </section>
         <section className="panel requests-panel">
-          <div className="panel-header"><div><h2>Registration requests</h2><p>Request intake is not configured</p></div><button className="text-link" onClick={() => switchPage("clients")}>View clients <ArrowRight size={14} /></button></div>
-          {pendingRequests.length === 0 ? <EmptyState title="No request records" text="Create a client directly from the Clients page to issue a subscription." /> : (
+          <div className="panel-header"><div><h2>Subscription requests</h2><p>Customer admins waiting for license approval</p></div><button className="text-link" onClick={() => switchPage("requests")}>View requests <ArrowRight size={14} /></button></div>
+          {pendingRequests.length === 0 ? <EmptyState title="No pending requests" text="New customer subscription requests will appear here." /> : (
             <div className="mini-request-list">
               {pendingRequests.slice(0, 3).map((request) => (
                 <div className="mini-request" key={request.id}>
@@ -557,15 +582,15 @@ function RequestsPage({ requests, decideRequest }) {
   const filtered = requests.filter((request) => filter === "All" || request.status === filter);
   return (
     <>
-      <PageHeading eyebrow="ONBOARDING" title="Registration requests" description="Registration requests are not configured. Create a subscription from Clients." actions={<span className="pending-summary"><span />{requests.filter((request) => request.status === "Pending").length} awaiting review</span>} />
+      <PageHeading eyebrow="ONBOARDING" title="Subscription requests" description="Review customer subscription requests and issue a license when approved." actions={<span className="pending-summary"><span />{requests.filter((request) => request.status === "Pending").length} awaiting review</span>} />
       <section className="panel data-panel">
-        <div className="list-toolbar"><div><h2>All requests <span className="table-count">{filtered.length}</span></h2><p>Use Clients to create and issue a real subscription.</p></div><div className="toolbar-actions"><label className="filter-select"><Filter size={15} /><select value={filter} onChange={(event) => setFilter(event.target.value)}><option>Pending</option><option>Approved</option><option>Rejected</option><option>All</option></select><ChevronDown size={14} /></label></div></div>
+        <div className="list-toolbar"><div><h2>All requests <span className="table-count">{filtered.length}</span></h2><p>Approving a request creates a subscription and generates a one-time license key.</p></div><div className="toolbar-actions"><label className="filter-select"><Filter size={15} /><select value={filter} onChange={(event) => setFilter(event.target.value)}><option>Pending</option><option>Processing</option><option>Approved</option><option>Rejected</option><option>All</option></select><ChevronDown size={14} /></label></div></div>
         {filtered.length === 0 ? <EmptyState title="No requests in this view" text="New registration requests will appear here." /> : <div className="request-cards">
           {filtered.map((request) => (
             <article className="request-card" key={request.id}>
-              <div className="request-card-main"><div className={`avatar request-avatar ${avatarColor(request.business)}`}>{request.business.slice(0, 1)}</div><div className="request-copy"><div className="request-title-line"><h3>{request.business}</h3><StatusBadge status={request.status} /></div><p>{request.name} <span>·</span> {request.category}</p><div className="request-meta"><span><CalendarDays size={14} /> Received {shortDate(request.requestedAt)}</span><span><CreditCard size={14} /> Proposed {currency(request.proposedAmount)}</span></div><p className="request-notes">{request.notes}</p></div></div>
+              <div className="request-card-main"><div className={`avatar request-avatar ${avatarColor(request.business)}`}>{request.business.slice(0, 1)}</div><div className="request-copy"><div className="request-title-line"><h3>{request.business}</h3><StatusBadge status={request.status} /></div><p>{request.name} <span>·</span> {request.plan} plan</p><div className="request-meta"><span><CalendarDays size={14} /> Received {shortDate(request.requestedAt)}</span><span><CreditCard size={14} /> Subscription request</span></div><p className="request-notes">{request.notes || "No additional details provided."}</p></div></div>
               <div className="request-contact"><span><small>EMAIL</small>{request.email}</span><span><small>PHONE</small>{request.phone}</span></div>
-              {request.status === "Pending" ? <div className="request-actions"><button className="button button-secondary button-small" onClick={() => decideRequest(request, "Rejected")}><XCircle size={15} /> Reject</button><button className="button button-success button-small" onClick={() => decideRequest(request, "Approved")}><Check size={15} /> Approve request</button></div> : <div className="request-resolved"><CheckCircle2 size={16} /> Request {request.status.toLowerCase()}</div>}
+              {request.status === "Pending" ? <div className="request-actions"><button className="button button-secondary button-small" onClick={() => decideRequest(request, "Rejected")}><XCircle size={15} /> Reject</button><button className="button button-success button-small" onClick={() => decideRequest(request, "Approved")}><Check size={15} /> Approve & issue license</button></div> : <div className="request-resolved"><CheckCircle2 size={16} /> Request {request.status.toLowerCase()}</div>}
             </article>
           ))}
         </div>}
@@ -646,13 +671,14 @@ function Dialog({ dialog, close, approveRequest, renewLicense, createRequest }) 
           <div className="modal-footer"><button type="button" className="button button-secondary" onClick={close}>Cancel</button><button className="button button-primary" type="submit"><Plus size={16} /> Create subscription</button></div>
         </form>
       ) : dialog.type === "approve" ? (
-        <div className="modal-card" role="dialog" aria-modal="true">
-          <div className="modal-header"><div><span className="eyebrow">APPROVE REGISTRATION</span><h2>Finalize platform pricing</h2><p>Approve {dialog.request.business} and issue a sample license.</p></div><button className="icon-button" onClick={close} aria-label="Close"><X size={19} /></button></div>
+        <form className="modal-card" role="dialog" aria-modal="true" onSubmit={(event) => { event.preventDefault(); approveRequest(dialog.request, amount, paidNow); }}>
+          <div className="modal-header"><div><span className="eyebrow">APPROVE SUBSCRIPTION</span><h2>Set price and issue license</h2><p>Approve {dialog.request.business} and issue a real license for {dialog.request.email}.</p></div><button type="button" className="icon-button" onClick={close} aria-label="Close"><X size={19} /></button></div>
           <div className="approval-summary"><div className={`avatar ${avatarColor(dialog.request.business)}`}>{dialog.request.business.slice(0, 1)}</div><div><strong>{dialog.request.business}</strong><span>{dialog.request.name} · {dialog.request.email}</span></div></div>
-          <label className="modal-label">Final platform amount<input type="number" min="0" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
-          <div className="credential-notice"><KeyRound size={17} /><span>Sample registration credentials will be created on approval. In production, issue and deliver these from a secured server.</span></div>
-          <div className="modal-footer"><button className="button button-secondary" onClick={close}>Cancel</button><button className="button button-success" onClick={() => approveRequest(dialog.request, amount)}><Check size={16} /> Approve & issue license</button></div>
-        </div>
+          <label className="modal-label">Final subscription amount<input required type="number" min="0" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
+          <label className="modal-label">Amount paid now<input required type="number" min="0" max={amount || undefined} value={paidNow} onChange={(event) => setPaidNow(event.target.value)} /></label>
+          <div className="credential-notice"><KeyRound size={17} /><span>A new registration number and license key will be generated. The key is shown once after approval; copy it and send it securely to the customer admin.</span></div>
+          <div className="modal-footer"><button type="button" className="button button-secondary" onClick={close}>Cancel</button><button className="button button-success" type="submit"><Check size={16} /> Approve & issue license</button></div>
+        </form>
       ) : (
         <div className="modal-card" role="dialog" aria-modal="true">
           <div className="modal-header"><div><span className="eyebrow">SUBSCRIPTION</span><h2>Renew license</h2><p>Extend platform access for {dialog.client.business}.</p></div><button className="icon-button" onClick={close} aria-label="Close"><X size={19} /></button></div>

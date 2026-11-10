@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const { z } = require("zod");
 
 const Subscription = require("../models/Subscription");
+const SubscriptionRequest = require("../models/SubscriptionRequest");
 const SuperAdmin = require("../models/SuperAdmin");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { requireSuperAdminDatabase } = require("../config/superAdminDatabase");
@@ -60,6 +61,18 @@ const publicSubscription = (subscription) => {
     history: subscription.history,
   };
 };
+const publicSubscriptionRequest = (purchaseRequest) => ({
+  id: purchaseRequest._id.toString(),
+  name: purchaseRequest.name,
+  business: purchaseRequest.business,
+  email: purchaseRequest.email,
+  phone: purchaseRequest.phone,
+  plan: purchaseRequest.plan,
+  notes: purchaseRequest.notes,
+  status: purchaseRequest.status,
+  requestedAt: purchaseRequest.requestedAt,
+  reviewedAt: purchaseRequest.reviewedAt,
+});
 
 const makeLicenseKey = () => {
   const randomPart = () => crypto.randomBytes(3).toString("hex").toUpperCase();
@@ -112,6 +125,121 @@ router.get("/me", requireAuth, requireRole("super_admin"), async (request, respo
 });
 
 router.use(requireAuth, requireRole("super_admin"));
+
+router.get("/requests", async (request, response, next) => {
+  try {
+    const requests = await SubscriptionRequest.find().sort({ createdAt: -1 }).lean();
+    return response.json({ success: true, data: requests.map(publicSubscriptionRequest) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch("/requests/:id/status", async (request, response, next) => {
+  try {
+    const parsed = z.object({ status: z.literal("Rejected") }).safeParse(request.body);
+    if (!parsed.success) return response.status(400).json({ success: false, message: "Requests can only be rejected from this action." });
+    const purchaseRequest = await SubscriptionRequest.findOneAndUpdate(
+      { _id: request.params.id, status: "Pending" },
+      {
+        $set: { status: "Rejected", reviewedAt: today(), reviewedBy: request.user.id },
+        $unset: { activeRequestEmail: "" },
+      },
+      { new: true, runValidators: true },
+    );
+    if (!purchaseRequest) {
+      return response.status(409).json({ success: false, message: "This request is no longer pending. Refresh the requests list." });
+    }
+    return response.json({ success: true, data: publicSubscriptionRequest(purchaseRequest.toObject()), message: "Subscription request rejected." });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/requests/:id/approve", async (request, response, next) => {
+  const parsed = z.object({
+    amount: z.coerce.number().min(0),
+    paidNow: z.coerce.number().min(0),
+  }).superRefine((value, context) => {
+    if (value.paidNow > value.amount) {
+      context.addIssue({ code: "custom", path: ["paidNow"], message: "Paid amount cannot exceed the subscription amount." });
+    }
+  }).safeParse(request.body);
+  if (!parsed.success) {
+    return response.status(400).json({ success: false, message: parsed.error.issues[0]?.message || "Check the subscription amount." });
+  }
+
+  let purchaseRequest;
+  let subscriptionCreated = false;
+  try {
+    purchaseRequest = await SubscriptionRequest.findOneAndUpdate(
+      { _id: request.params.id, status: "Pending" },
+      { $set: { status: "Processing" } },
+      { new: true, runValidators: true },
+    );
+    if (!purchaseRequest) {
+      return response.status(409).json({ success: false, message: "This request is no longer pending. Refresh the requests list." });
+    }
+
+    if (await Subscription.exists({ email: purchaseRequest.email })) {
+      await SubscriptionRequest.updateOne(
+        { _id: purchaseRequest._id, status: "Processing" },
+        { $set: { status: "Pending" } },
+      );
+      return response.status(409).json({ success: false, message: "A subscription already exists for this admin email. Renew or manage the existing license instead." });
+    }
+
+    const currentDate = today();
+    const validTill = new Date(`${currentDate}T00:00:00.000Z`);
+    validTill.setUTCFullYear(validTill.getUTCFullYear() + 1);
+    const validTillDate = validTill.toISOString().slice(0, 10);
+    const credentials = makeCredentials();
+    const { amount, paidNow } = parsed.data;
+    const paymentStatus = paidNow >= amount ? "Paid" : paidNow > 0 ? "Partial" : "Unpaid";
+    const subscription = await Subscription.create({
+      name: purchaseRequest.name,
+      business: purchaseRequest.business,
+      email: purchaseRequest.email,
+      phone: purchaseRequest.phone,
+      plan: purchaseRequest.plan,
+      amount,
+      paid: paidNow,
+      ...credentials,
+      licenseKeyHash: crypto.createHash("sha256").update(credentials.licenseKey).digest("hex"),
+      registeredAt: currentDate,
+      activatedAt: currentDate,
+      validFrom: currentDate,
+      validTill: validTillDate,
+      paymentStatus,
+      history: [{ date: currentDate, amount: paidNow, type: "Initial license", status: paymentStatus }],
+    });
+    subscriptionCreated = true;
+
+    await SubscriptionRequest.updateOne(
+      { _id: purchaseRequest._id, status: "Processing" },
+      {
+        $set: { status: "Approved", reviewedAt: currentDate, reviewedBy: request.user.id, subscription: subscription._id },
+        $unset: { activeRequestEmail: "" },
+      },
+    );
+    return response.status(201).json({
+      success: true,
+      data: { ...publicSubscription(subscription), licenseKey: credentials.licenseKey },
+      message: "Request approved and subscription issued. Copy the license key now; it will not be shown again.",
+    });
+  } catch (error) {
+    if (purchaseRequest && !subscriptionCreated) {
+      await SubscriptionRequest.updateOne(
+        { _id: purchaseRequest._id, status: "Processing" },
+        { $set: { status: "Pending" } },
+      );
+    }
+    if (error.code === 11000) {
+      return response.status(409).json({ success: false, message: "A subscription is already registered for this admin email." });
+    }
+    return next(error);
+  }
+});
 
 router.get("/subscriptions", async (request, response, next) => {
   try {

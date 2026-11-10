@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bell, CheckCircle2, CreditCard, Database, LockKeyhole, RotateCcw, Save, UserRound } from "lucide-react";
+import { Bell, CheckCircle2, CreditCard, Database, LockKeyhole, RotateCcw, Save, ShoppingCart, UserRound } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const preferenceKey = "e-mart-admin-preferences";
@@ -52,6 +52,11 @@ const AdminSettings = () => {
   const [databaseBusy, setDatabaseBusy] = useState(false);
   const [databaseMessage, setDatabaseMessage] = useState("");
   const [databaseError, setDatabaseError] = useState("");
+  const [purchaseRequest, setPurchaseRequest] = useState(null);
+  const [purchaseForm, setPurchaseForm] = useState({ business: "", phone: "", plan: "Annual", notes: "" });
+  const [purchaseBusy, setPurchaseBusy] = useState(false);
+  const [purchaseMessage, setPurchaseMessage] = useState("");
+  const [purchaseError, setPurchaseError] = useState("");
 
   useEffect(() => {
     fetch(`${API_URL}/api/auth/me`, { credentials: "include" })
@@ -66,7 +71,14 @@ const AdminSettings = () => {
       .then(async (response) => { const result = await response.json(); if (!response.ok) throw new Error(result.message || "Unable to load subscription status."); return result.data; })
       .then((data) => {
         setSubscription(data);
-        if (!data?.active) return;
+        if (!data?.active) {
+          return fetch(`${API_URL}/api/subscription/request`, { credentials: "include" })
+            .then(async (response) => {
+              const result = await response.json();
+              if (!response.ok) throw new Error(result.message || "Unable to load subscription request.");
+              setPurchaseRequest(result.data);
+            });
+        }
         fetch(`${API_URL}/api/customer-database/status`, { credentials: "include" })
           .then(async (response) => {
             const result = await response.json();
@@ -137,6 +149,29 @@ const AdminSettings = () => {
       setDatabaseError(requestError.message);
     } finally {
       setDatabaseBusy(false);
+    }
+  };
+
+  const submitPurchaseRequest = async (event) => {
+    event.preventDefault();
+    setPurchaseBusy(true);
+    setPurchaseError("");
+    setPurchaseMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/subscription/request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ...purchaseForm, name: profile.name }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to submit your subscription request.");
+      setPurchaseRequest(result.data);
+      setPurchaseMessage(result.message || "Subscription request sent for review.");
+    } catch (requestError) {
+      setPurchaseError(requestError.message);
+    } finally {
+      setPurchaseBusy(false);
     }
   };
 
@@ -302,9 +337,33 @@ const AdminSettings = () => {
             </div>
           </form>
         )}
-        {subscription && !subscription.active && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">License status: {subscription.status}. Admin operations stay locked until an active license with valid dates is entered.</p>}
+        {subscription !== undefined && !subscription?.active && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">License status: {subscription?.status || "Not activated"}. Admin operations stay locked until an active license with valid dates is entered.</p>}
         {(licenseMessage || licenseError) && <p role={licenseError ? "alert" : "status"} className={`mt-4 rounded-lg p-3 text-sm ${licenseError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{licenseError || licenseMessage}</p>}
       </section>
+
+      {subscription !== undefined && !subscription?.active && <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6 sm:p-8">
+        <div className="flex items-center gap-3 border-b border-slate-100 pb-5"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700"><ShoppingCart className="h-5 w-5" /></span><div><h2 className="font-semibold text-slate-900">Buy a subscription</h2><p className="mt-1 text-xs text-slate-500">Request a subscription and license from the E-Cart platform administrator.</p></div></div>
+        {purchaseRequest?.status === "Pending" || purchaseRequest?.status === "Processing" ? (
+          <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-semibold">Request {purchaseRequest.status === "Pending" ? "submitted" : "being processed"}</p>
+            <p className="mt-1">Your {purchaseRequest.plan} subscription request was received on {purchaseRequest.requestedAt}. The platform administrator will review it and issue your registration number and license key.</p>
+          </div>
+        ) : (
+          <form onSubmit={submitPurchaseRequest} className="mt-5 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-medium text-slate-700">Contact name<input required minLength="2" maxLength="80" readOnly={!profile.name} value={profile.name} onChange={updateProfile("name")} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary read-only:bg-slate-50" /></label>
+              <label className="text-sm font-medium text-slate-700">Business / store name<input required minLength="2" maxLength="120" value={purchaseForm.business} onChange={(event) => setPurchaseForm((current) => ({ ...current, business: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" placeholder="Your store name" /></label>
+              <label className="text-sm font-medium text-slate-700">Admin email<input type="email" readOnly value={profile.email} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 outline-none" /></label>
+              <label className="text-sm font-medium text-slate-700">Phone number<input maxLength="30" value={purchaseForm.phone} onChange={(event) => setPurchaseForm((current) => ({ ...current, phone: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-primary" placeholder="Contact phone" /></label>
+              <label className="text-sm font-medium text-slate-700 sm:col-span-2">Subscription plan<select value={purchaseForm.plan} onChange={(event) => setPurchaseForm((current) => ({ ...current, plan: event.target.value }))} className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-primary"><option value="Annual">Annual</option></select></label>
+            </div>
+            <label className="block text-sm font-medium text-slate-700">Message (optional)<textarea maxLength="500" rows="3" value={purchaseForm.notes} onChange={(event) => setPurchaseForm((current) => ({ ...current, notes: event.target.value }))} className="mt-2 w-full rounded-lg border border-slate-200 p-3 outline-none focus:border-primary" placeholder="Add any details for the platform administrator." /></label>
+            <p className="text-xs text-slate-500">This submits a purchase request only. No payment is charged here. The platform administrator will confirm pricing and approve your license.</p>
+            <button type="submit" disabled={purchaseBusy || !profile.name || !profile.email} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white disabled:opacity-60"><ShoppingCart className="h-4 w-4" />{purchaseBusy ? "Submitting..." : "Request subscription"}</button>
+          </form>
+        )}
+        {(purchaseMessage || purchaseError) && <p role={purchaseError ? "alert" : "status"} className={`mt-4 rounded-lg p-3 text-sm ${purchaseError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{purchaseError || purchaseMessage}</p>}
+      </section>}
 
       {subscription?.active && <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6 sm:p-8">
         <div className="flex items-center gap-3 border-b border-slate-100 pb-5"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700"><Database className="h-5 w-5" /></span><div><h2 className="font-semibold text-slate-900">Customer database</h2><p className="mt-1 text-xs text-slate-500">Connect this customer API to a new MongoDB Atlas database.</p></div></div>
