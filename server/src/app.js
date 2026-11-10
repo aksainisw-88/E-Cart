@@ -39,7 +39,12 @@ const app = express();
 app.locals.env = env;
 
 app.use(helmet());
-const allowedOrigins = [env.CLIENT_URL, env.CUSTOMER_PANEL_URL, env.SUPER_ADMIN_PANEL_URL]
+const allowedOrigins = [
+  env.CLIENT_URL,
+  env.CUSTOMER_PANEL_URL,
+  "https://e-cart-client-gamma.vercel.app",
+  env.SUPER_ADMIN_PANEL_URL,
+]
   .filter(Boolean)
   .map((url) => new URL(url).origin);
 app.use(cors({
