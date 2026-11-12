@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { StoreContext } from "./storeContext";
+import { getTenantId } from "../utils/tenant";
 const API_URL = import.meta.env.VITE_API_URL || "";
 const themes = {
   teal: ["#00796b", "#00695c"],
@@ -9,7 +11,8 @@ const themes = {
 };
 
 export const StoreProvider = ({ children }) => {
-  const [store, setStore] = useState({ businessType: "pharmacy", heroSlidesConfigured: false, name: "My Medical Store", tagline: "Your Health, Our Priority", theme: "teal", logo: "", deliveryFee: 49, freeDeliveryAbove: 999 });
+  const [store, setStore] = useState({ businessType: "pharmacy", heroSlidesConfigured: false, name: "E-Cart", tagline: "Your Health, Our Priority", theme: "teal", logo: "", deliveryFee: 49, freeDeliveryAbove: 999 });
+  const location = useLocation();
 
   const loadStore = () => {
     fetch(`${API_URL}/api/catalog/store?updated=${Date.now()}`, { cache: "no-store" })
@@ -26,10 +29,11 @@ export const StoreProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    if (location.pathname === "/admin/register" && !getTenantId()) return undefined;
     loadStore();
     window.addEventListener("store-settings-updated", loadStore);
     return () => window.removeEventListener("store-settings-updated", loadStore);
-  }, []);
+  }, [location.pathname]);
 
   useEffect(() => {
     const [primary, dark] = themes[store.theme] || themes.teal;
@@ -38,8 +42,10 @@ export const StoreProvider = ({ children }) => {
   }, [store.theme]);
 
   useEffect(() => {
-    document.title = store.name || "E-Cart";
-  }, [store.name]);
+    document.title = ["/admin/register", "/admin/store-setup"].includes(location.pathname)
+      ? "E-Cart"
+      : store.name || "E-Cart";
+  }, [location.pathname, store.name]);
 
   const value = { ...store, logoUrl: store.logo ? `${API_URL}${store.logo}` : "", refreshStore: loadStore };
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, ChevronDown, LogOut, Menu, Moon, Search, Sun, X } from "lucide-react";
+import { Bell, ChevronDown, LogOut, Menu, Moon, Search, Store, Sun, X } from "lucide-react";
 import { Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import {
@@ -31,6 +31,7 @@ const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const store = useStore();
+  const isStoreSetup = location.pathname === "/admin/store-setup";
   const logout = async () => { await fetch(apiUrl("/api/auth/logout"), { method: "POST", credentials: "include" }); navigate("/admin/login", { replace: true }); };
   const toggleDarkMode = () => setDarkMode((current) => { const next = !current; localStorage.setItem("e-mart-admin-dark", String(next)); return next; });
 
@@ -246,10 +247,10 @@ const AdminLayout = () => {
         <div className="admin-brand-header flex h-20 items-center justify-between border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-white px-5">
           <NavLink to="/admin" className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary to-primary-dark text-xl font-bold text-white shadow-md shadow-primary/20">
-              {store.logoUrl ? <img src={store.logoUrl} alt="" className="h-full w-full object-contain" /> : "+"}
+              {!isStoreSetup && store.logoUrl ? <img src={store.logoUrl} alt="" className="h-full w-full object-contain" /> : <Store className="h-5 w-5" />}
             </span>
             <span>
-              <strong className="block max-w-[150px] truncate text-sm text-slate-900">{store.name}</strong>
+              <strong className="block max-w-[150px] truncate text-sm text-slate-900">{isStoreSetup ? "E-Cart" : store.name}</strong>
               <small className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Admin console</small>
             </span>
           </NavLink>
