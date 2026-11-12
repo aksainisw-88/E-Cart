@@ -3,6 +3,7 @@ const { connection } = require("../config/superAdminDatabase");
 
 const pendingTenantRegistrationSchema = new mongoose.Schema({
   tenantId: { type: String, required: true, unique: true, trim: true, lowercase: true },
+  leadId: { type: String, trim: true, default: "" },
   slug: { type: String, trim: true, lowercase: true, default: undefined },
   databaseName: { type: String, required: true, unique: true, trim: true },
   businessName: { type: String, required: true, trim: true, maxlength: 120 },

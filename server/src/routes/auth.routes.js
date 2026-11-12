@@ -18,6 +18,7 @@ const PasswordReset = require("../models/PasswordReset");
 const Subscription = require("../models/Subscription");
 const StoreSettings = require("../models/StoreSettings");
 const Tenant = require("../models/Tenant");
+const Lead = require("../models/Lead");
 const { getActiveMongoUri, switchCustomerDatabase } = require("../config/database");
 const { clearUri, getSavedUri, saveUri } = require("../utils/customerDatabaseConfig");
 const { parseAtlasUri } = require("../utils/atlasUri");
@@ -76,6 +77,7 @@ const adminAccountSchema = z.object({
   phone: z.string().trim().min(5).max(30),
   password: z.string().min(8).max(128),
   otp: z.string().regex(/^\d{6}$/),
+  invitationToken: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
 });
 const adminStoreSetupSchema = z.object({
   storeName: z.string().trim().min(2).max(100),
@@ -91,7 +93,10 @@ const adminStoreSetupSchema = z.object({
   freeDeliveryAbove: z.coerce.number().min(0).max(10000000).default(999),
   theme: z.enum(["teal", "blue", "emerald", "amber"]).default("teal"),
 });
-const signupOtpSchema = z.object({ email: z.string().email() });
+const signupOtpSchema = z.object({
+  email: z.string().trim().email(),
+  invitationToken: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
+});
 const forgotPasswordSchema = z.object({ email: z.string().trim().email() });
 const resetPasswordSchema = z.object({ token: z.string().regex(/^[a-f0-9]{64}$/), password: z.string().min(8).max(128) });
 
@@ -109,6 +114,7 @@ const existingStoreResponse = (response) => response.status(409).json({
 
 const hashOtp = (email, otp, secret) => crypto.createHmac("sha256", secret).update(`${email}:${otp}`).digest("hex");
 const hashResetToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
+const hashInvitationToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
 const adminRegistrationInProgress = new Set();
 const signupLogoDirectory = path.join(__dirname, "../../uploads/store");
 fs.mkdirSync(signupLogoDirectory, { recursive: true });
@@ -285,6 +291,20 @@ router.post("/admin-signup-otp", async (request, response, next) => {
     const email = data.email.toLowerCase();
     const tenant = getCurrentTenant();
     const sharedSignup = !tenant && request.app.locals.env.TENANT_MONGO_URI;
+    if (data.invitationToken && !sharedSignup) {
+      return response.status(403).json({ success: false, message: "This invitation can only be used for shared-platform signup." });
+    }
+    let invitation;
+    if (data.invitationToken) {
+      invitation = await Lead.findOne({
+        invitationTokenHash: hashInvitationToken(data.invitationToken),
+        invitationExpiresAt: { $gt: new Date() },
+        status: "Interested",
+      }).select("+invitationTokenHash");
+      if (!invitation || invitation.email !== email) {
+        return response.status(403).json({ success: false, message: "This signup invitation is invalid, expired, or for a different email address." });
+      }
+    }
     if (sharedSignup && TenantSignupOtp.db.readyState !== 1) {
       return response.status(503).json({ success: false, message: "The platform registration service is unavailable. Try again later." });
     }
@@ -350,6 +370,17 @@ router.post("/register/admin-account", async (request, response, next) => {
     const data = parseBody(adminAccountSchema, request, response);
     if (!data) return;
     const email = data.email.toLowerCase();
+    let invitation;
+    if (data.invitationToken) {
+      invitation = await Lead.findOne({
+        invitationTokenHash: hashInvitationToken(data.invitationToken),
+        invitationExpiresAt: { $gt: new Date() },
+        status: "Interested",
+      }).select("+invitationTokenHash");
+      if (!invitation || invitation.email !== email) {
+        return response.status(403).json({ success: false, message: "This signup invitation is invalid, expired, or for a different email address." });
+      }
+    }
     if (await User.exists({ email })
       || await PendingTenantRegistration.exists({ adminEmail: email })
       || await Tenant.exists({ adminEmail: email })
@@ -377,6 +408,7 @@ router.post("/register/admin-account", async (request, response, next) => {
     await assertTenantDatabaseEmpty(databaseName);
     registration = await PendingTenantRegistration.create({
       tenantId,
+      leadId: invitation?._id.toString() || "",
       databaseName,
       businessName: `${data.name}'s Store`,
       adminName: data.name,
@@ -483,6 +515,24 @@ router.post("/admin-store-setup", requireAuth, parseSignupLogo, async (request, 
     registration.storeLogo = uploadedLogo;
     registration.theme = parsed.data.theme;
     await registration.save();
+    if (registration.leadId) {
+      const lead = await Lead.findById(registration.leadId);
+      if (!lead || lead.status !== "Interested" || lead.email !== registration.adminEmail) {
+        throw new Error("The originating lead record could not be updated after store setup.");
+      }
+      lead.status = "Converted";
+      lead.tenantId = registration.tenantId;
+      lead.storeSlug = registration.slug || "";
+      lead.invitationTokenHash = "";
+      lead.invitationExpiresAt = null;
+      lead.history.push({
+        type: "Conversion",
+        status: "Converted",
+        details: `Signup and store setup completed for ${registration.businessName}.`,
+        createdBy: "Signup workflow",
+      });
+      await lead.save();
+    }
     return response.status(201).json({ success: true, data: settings, message: "Store setup complete. Continue to subscription registration." });
   } catch (error) {
     if (settingsCreated) await StoreSettings.deleteOne({ key: "default" });

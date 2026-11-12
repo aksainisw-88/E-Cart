@@ -17,6 +17,7 @@ import {
   CircleHelp,
   Clock3,
   Copy,
+  ContactRound,
   CreditCard,
   Download,
   Ellipsis,
@@ -45,6 +46,7 @@ import {
 } from "lucide-react";
 import { navItems } from "./data.js";
 import ClientDetailsModule from "./ClientDetailsModule.jsx";
+import LeadsPage from "./LeadsPage.jsx";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -57,6 +59,7 @@ const iconMap = {
   WalletCards,
   Store,
   Users,
+  ContactRound,
 };
 
 const currency = (amount) =>
@@ -101,6 +104,8 @@ function App() {
   const [requests, setRequests] = useState([]);
   const [plans, setPlans] = useState([]);
   const [businessSegments, setBusinessSegments] = useState([]);
+  const [leads, setLeads] = useState([]);
+  const [loadingLeads, setLoadingLeads] = useState(false);
   const [activePage, setActivePage] = useState("overview");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All status");
@@ -140,6 +145,16 @@ function App() {
     setBusinessSegments(result.data);
   };
 
+  const refreshLeads = async () => {
+    setLoadingLeads(true);
+    try {
+      const result = await apiRequest("/api/leads");
+      setLeads(result.data);
+    } finally {
+      setLoadingLeads(false);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     apiRequest("/api/super-admin/me")
@@ -148,7 +163,7 @@ function App() {
         setSuperAdmin(result.user);
         setAuthState("authorized");
         try {
-          await Promise.all([refreshSubscriptions(), refreshRequests(), refreshPlans(), refreshBusinessSegments()]);
+          await Promise.all([refreshSubscriptions(), refreshRequests(), refreshPlans(), refreshBusinessSegments(), refreshLeads()]);
         } catch (error) {
           if (active) notify(error.message);
         }
@@ -190,6 +205,33 @@ function App() {
 
   const notify = (message) => setToast(message);
 
+  const updateLead = async (lead, values) => {
+    try {
+      const result = await apiRequest(`/api/leads/${lead.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(values),
+      });
+      setLeads((current) => current.map((item) => item.id === lead.id ? result.data : item));
+      notify("Lead details updated.");
+      return result.data;
+    } catch (error) {
+      notify(error.message);
+      return null;
+    }
+  };
+
+  const inviteLead = async (lead) => {
+    try {
+      const result = await apiRequest(`/api/leads/${lead.id}/convert`, { method: "POST" });
+      setLeads((current) => current.map((item) => item.id === lead.id ? result.data : item));
+      notify(result.message);
+      return result;
+    } catch (error) {
+      notify(error.message);
+      return null;
+    }
+  };
+
   const signIn = async (event) => {
     event.preventDefault();
     setAuthError("");
@@ -202,7 +244,7 @@ function App() {
       setLoginPassword("");
       setAuthState("authorized");
       try {
-        await Promise.all([refreshSubscriptions(), refreshRequests(), refreshPlans(), refreshBusinessSegments()]);
+        await Promise.all([refreshSubscriptions(), refreshRequests(), refreshPlans(), refreshBusinessSegments(), refreshLeads()]);
       } catch (error) {
         notify(error.message);
       }
@@ -500,6 +542,9 @@ function App() {
               onView={openClient}
               onEdit={(client) => setDialog({ type: "edit-client", client })}
             />
+          )}
+          {activePage === "leads" && (
+            <LeadsPage leads={leads} loading={loadingLeads} onSave={updateLead} onInvite={inviteLead} />
           )}
           {activePage === "business-segments" && (
             <BusinessSegmentsPage segments={businessSegments} saveSegment={saveBusinessSegment} toggleSegment={toggleBusinessSegment} />

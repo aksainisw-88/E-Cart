@@ -14,6 +14,7 @@ const { requireAuth, requireAnyRole, requireRole, requireAnyMenuPermission } = r
 const { requireDatabaseReady } = require("./config/database");
 const { tenantDatabaseMiddleware } = require("./utils/tenantDatabase");
 const superAdminRoutes = require("./routes/superAdmin.routes");
+const leadRoutes = require("./routes/lead.routes");
 const subscriptionRoutes = require("./routes/subscription.routes");
 const customerDatabaseRoutes = require("./routes/customerDatabase.routes");
 const healthRoutes = require("./routes/health.routes");
@@ -75,6 +76,7 @@ app.get("/", (request, response) => {
 });
 
 app.use("/api/health", healthRoutes);
+app.use("/api/leads", leadRoutes);
 app.use(requireDatabaseReady);
 app.use(tenantDatabaseMiddleware);
 app.use("/api/webhooks/razorpay", require("./routes/razorpayWebhook.routes"));

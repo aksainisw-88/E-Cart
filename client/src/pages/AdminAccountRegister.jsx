@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, ShieldCheck, Store } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -7,12 +7,45 @@ const inputClass = "mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white
 
 const AdminAccountRegister = () => {
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", confirmPassword: "", otp: "" });
+  const [invitationToken] = useState(() => new URLSearchParams(window.location.search).get("invite") || "");
+  const [invitationState, setInvitationState] = useState(invitationToken ? "checking" : "none");
   const [otpSent, setOtpSent] = useState(false);
   const [developmentOtp, setDevelopmentOtp] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!invitationToken) return undefined;
+    window.history.replaceState(window.history.state, "", window.location.pathname);
+    let active = true;
+    fetch(`${API_URL}/api/leads/invitations/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: invitationToken }),
+    })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "This signup invitation is invalid or expired.");
+        if (active) {
+          setForm((current) => ({
+            ...current,
+            name: result.data.contactPerson || current.name,
+            email: result.data.email || current.email,
+            phone: result.data.mobile || current.phone,
+          }));
+          setInvitationState("valid");
+        }
+      })
+      .catch((invitationError) => {
+        if (active) {
+          setInvitationState("invalid");
+          setError(invitationError instanceof TypeError ? "Unable to verify the signup invitation. Please try again." : invitationError.message);
+        }
+      });
+    return () => { active = false; };
+  }, [invitationToken]);
 
   const update = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value, ...(field === "email" ? { otp: "" } : {}) }));
@@ -30,7 +63,7 @@ const AdminAccountRegister = () => {
       const response = await fetch(`${API_URL}/api/auth/admin-signup-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email.trim() }),
+        body: JSON.stringify({ email: form.email.trim(), ...(invitationToken ? { invitationToken } : {}) }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Unable to send a verification code.");
@@ -68,6 +101,7 @@ const AdminAccountRegister = () => {
           phone: form.phone,
           password: form.password,
           otp: form.otp,
+          ...(invitationToken ? { invitationToken } : {}),
         }),
       });
       const result = await response.json();
@@ -103,13 +137,15 @@ const AdminAccountRegister = () => {
           <div className="mx-auto mt-8 max-w-xl">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Step 1 of 3</p>
             <h2 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">Create your admin account</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">Verify your email, then continue to store setup.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-500">{invitationToken ? "Complete the account and store setup for your E-Cart signup invitation." : "Verify your email, then continue to store setup."}</p>
+            {invitationState === "checking" && <p className="mt-3 rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-600">Verifying signup invitation...</p>}
+            {invitationState === "valid" && <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Invitation verified. This signup will be linked to your inquiry.</p>}
             <form onSubmit={submit} className="mt-6 space-y-4">
               <label className="block text-sm font-medium text-slate-700">Full name
                 <input required minLength={2} maxLength={80} autoComplete="name" value={form.name} onChange={update("name")} className={inputClass} />
               </label>
               <label className="block text-sm font-medium text-slate-700">Email address
-                <input required type="email" autoComplete="email" value={form.email} onChange={update("email")} className={inputClass} />
+                <input required type="email" autoComplete="email" readOnly={Boolean(invitationToken)} value={form.email} onChange={update("email")} className={`${inputClass} ${invitationToken ? "bg-slate-100 text-slate-500" : ""}`} />
               </label>
               <label className="block text-sm font-medium text-slate-700">Phone number
                 <input required type="tel" minLength={5} maxLength={30} autoComplete="tel" value={form.phone} onChange={update("phone")} className={inputClass} />
@@ -129,7 +165,7 @@ const AdminAccountRegister = () => {
               </div>}
               {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
               {message && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p>}
-              <button type="submit" disabled={busy} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60">
+              <button type="submit" disabled={busy || invitationState === "checking" || invitationState === "invalid"} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-dark disabled:cursor-wait disabled:opacity-60">
                 {busy ? "Please wait..." : otpSent ? "Verify and continue" : "Send verification code"}<ArrowRight className="h-4 w-4" />
               </button>
             </form>

@@ -77,4 +77,21 @@ const sendPasswordResetLink = async (email, resetUrl, env) => {
   return true;
 };
 
-module.exports = { isEmailConfigured, sendPasswordResetLink, sendSignupCode, sendInventoryResetCode, sendStoreResetCode };
+const sendLeadSignupInvitation = async (email, invitationUrl, env) => {
+  const from = env.SMTP_FROM || env.SMTP_USER;
+  if (!isEmailConfigured(env)) {
+    if (env.NODE_ENV !== "production") return false;
+    throw new Error("Email delivery is not configured.");
+  }
+
+  await createTransporter(env).sendMail({
+    from,
+    to: email,
+    subject: "Complete your E-Cart business registration",
+    text: `E-Cart Infotech has invited you to complete your business registration. Use this secure link within 7 days: ${invitationUrl}. After completing your account and store setup, Super Admin will review your subscription request before issuing a license.`,
+    html: `<p>E-Cart Infotech has invited you to complete your business registration.</p><p><a href="${invitationUrl}">Continue secure signup</a></p><p>This link expires in 7 days. Your subscription and license will remain subject to Super Admin review.</p>`,
+  });
+  return true;
+};
+
+module.exports = { isEmailConfigured, sendLeadSignupInvitation, sendPasswordResetLink, sendSignupCode, sendInventoryResetCode, sendStoreResetCode };
