@@ -680,7 +680,7 @@ function ClientTable({ clients, openClient, compact = false }) {
               <td><StatusBadge status={client.status} /></td>
               <td className="date-cell">{client.validTill ? shortDate(client.validTill) : "—"}</td>
               <td><div className="payment-cell"><span>{currency(client.paid)} <small>of {currency(client.amount)}</small></span><PaymentBadge status={client.paymentStatus} /></div></td>
-              <td><button className="row-more" aria-label={`View ${client.business}`} onClick={(event) => { event.stopPropagation(); openClient(client); }}><MoreHorizontal size={19} /></button></td>
+              <td><button className="client-details-button" aria-label={`View details for ${client.business}`} onClick={(event) => { event.stopPropagation(); openClient(client); }}><Eye size={15} /><span>View details</span></button></td>
             </tr>
           ))}
         </tbody>
