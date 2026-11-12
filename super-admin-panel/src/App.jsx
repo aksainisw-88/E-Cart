@@ -496,10 +496,10 @@ function App() {
             <p>Manage every client and license from one place.</p>
             <button onClick={() => switchPage("subscriptions")}>View subscriptions <ArrowRight size={14} /></button>
           </div>
-          <button className="profile-button" onClick={signOut}>
+          <button className="profile-button" onClick={signOut} aria-label={`Sign out as ${superAdmin?.name || "Super Admin"}`}>
             <div className="avatar avatar-purple">{superAdmin?.name?.slice(0, 2).toUpperCase() || "SA"}</div>
-            <span><strong>{superAdmin?.name || "Super Admin"}</strong><small>Super Administrator · Sign out</small></span>
-            <LogOut size={18} />
+            <span className="profile-identity"><strong>{superAdmin?.name || "Super Admin"}</strong><small>Super Administrator</small></span>
+            <span className="profile-logout">Sign out <LogOut size={15} /></span>
           </button>
         </div>
       </aside>

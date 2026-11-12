@@ -20,7 +20,7 @@ button { cursor: pointer; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #4667e844; outline-offset: 2px; }
 .app-shell { min-height: 100vh; }
 
-.sidebar { position: fixed; inset: 0 auto 0 0; z-index: 20; display: flex; flex-direction: column; width: 248px; padding: 23px 16px 15px; background: #fff; border-right: 1px solid var(--line); }
+.sidebar { position: fixed; inset: 0 auto 0 0; z-index: 20; display: flex; flex-direction: column; width: 248px; padding: 23px 16px 15px; overflow-y: auto; overscroll-behavior: contain; scrollbar-color: #d7dce8 transparent; scrollbar-width: thin; background: #fff; border-right: 1px solid var(--line); }
 .brand-lockup { display: flex; align-items: center; gap: 10px; height: 39px; padding: 0 8px; }
 .brand-symbol { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 11px; color: #fff; background: linear-gradient(145deg, #6d82f7, #4058d5); box-shadow: 0 5px 12px #5268e838; font: 800 24px "Manrope", sans-serif; }
 .brand-symbol span { transform: translateY(-1px); }
@@ -41,14 +41,17 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .nav-item-active, .nav-item-active:hover { color: #4963df; background: #eef1ff; }
 .nav-item-active::before { position: absolute; top: 10px; bottom: 10px; left: -16px; width: 3px; border-radius: 0 4px 4px 0; background: #536de8; content: ""; }
 .nav-count { display: grid; min-width: 19px; height: 19px; margin-left: auto; padding: 0 5px; place-items: center; color: #8d5b14; background: #fff0d9; border-radius: 6px; font-size: 10px; }
-.sidebar-bottom { margin-top: auto; }
+.sidebar-bottom { position: sticky; bottom: -15px; z-index: 1; flex: 0 0 auto; margin-top: auto; padding-bottom: 15px; background: #fff; }
 .upgrade-card { padding: 14px; border: 1px solid #e8ebfd; border-radius: 11px; background: linear-gradient(145deg, #f8f8ff, #f3f5ff); }
 .upgrade-icon { display: grid; width: 28px; height: 28px; margin-bottom: 10px; place-items: center; color: #6177e9; background: #e9edff; border-radius: 8px; }
 .upgrade-card > strong { color: #273450; font-size: 11px; }
 .upgrade-card p { margin: 6px 0 11px; color: #8b94a8; font-size: 10px; line-height: 1.6; }
 .upgrade-card button { display: flex; align-items: center; gap: 5px; padding: 0; color: #5269dc; background: none; border: 0; font-size: 10px; font-weight: 700; }
-.profile-button { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 14px; padding: 11px 3px 1px; background: none; border: 0; border-top: 1px solid var(--line); text-align: left; }
-.profile-button > svg { color: #9ba3b4; }
+.profile-button { display: flex; align-items: center; gap: 9px; width: 100%; margin-top: 14px; padding: 11px 3px 1px; background: none; border: 0; border-top: 1px solid var(--line); text-align: left; }
+.profile-identity { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+.profile-identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-logout { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; padding: 6px 7px; color: #65708a; border: 1px solid #e8ebf2; border-radius: 7px; background: #fff; font-size: 10px; font-weight: 700; }
+.profile-button:hover .profile-logout { color: #435bcf; border-color: #cdd5fa; background: #fafbff; }
 .avatar { display: grid; flex: 0 0 auto; width: 34px; height: 34px; place-items: center; border-radius: 10px; font-size: 12px; font-weight: 700; }
 .avatar-purple { color: #6951b8; background: #eee8ff; }
 .avatar-blue { color: #3867b0; background: #e5f0ff; }
@@ -482,6 +485,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .login-card input:focus { border-color: #536be1; }
 .login-card .button { width: 100%; height: 40px; margin-top: 23px; font-size: 12px; }
 .login-error { margin-top: 16px !important; padding: 10px 12px; color: #a33636 !important; border-radius: 8px; background: #fff0ef; }
+@media (min-width: 851px) {
+  .app-shell { zoom: 1.12; }
+}
 .lead-total { display: flex; align-items: center; gap: 8px; padding: 9px 12px; color: #5568ce; border: 1px solid #e4e8fb; border-radius: 9px; background: #f5f6ff; font-size: 11px; font-weight: 700; }
 .lead-panel { display: grid; min-height: 620px; grid-template-columns: minmax(270px, .75fr) minmax(0, 1.65fr); overflow: hidden; }
 .lead-list-column { min-width: 0; border-right: 1px solid var(--line); }
