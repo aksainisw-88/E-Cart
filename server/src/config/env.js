@@ -5,6 +5,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(5000),
   CLIENT_URL: z.string().url().default("http://localhost:5173"),
   CUSTOMER_PANEL_URL: z.string().url().default("https://e-cart-client-gamma.vercel.app"),
+  COMPANY_WEBSITE_URL: z.string().url().default("https://company-website-ruby-ten.vercel.app"),
   SUPER_ADMIN_PANEL_URL: z.string().url().optional(),
   MONGO_URI: z.string().optional(),
   SUPER_ADMIN_MONGO_URI: z.string().optional(),

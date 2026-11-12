@@ -44,6 +44,7 @@ app.use(helmet());
 const allowedOrigins = [
   env.CLIENT_URL,
   env.CUSTOMER_PANEL_URL,
+  env.COMPANY_WEBSITE_URL,
   "https://e-cart-client-gamma.vercel.app",
   env.SUPER_ADMIN_PANEL_URL,
 ]
