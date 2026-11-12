@@ -56,6 +56,7 @@ const iconMap = {
   KeyRound,
   WalletCards,
   Store,
+  Users,
 };
 
 const currency = (amount) =>
