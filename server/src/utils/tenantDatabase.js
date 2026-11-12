@@ -79,14 +79,16 @@ const getCurrentTenantId = () => tenantContext.getStore()?.tenantId || "";
 
 const resolveTenant = async (tenantId) => {
   if (!tenantId) return null;
-  const tenant = await Tenant.findOne({ tenantId: tenantId.toLowerCase() }).lean();
+  const identifier = tenantId.toLowerCase();
+  const lookup = { $or: [{ tenantId: identifier }, { slug: identifier }] };
+  const tenant = await Tenant.findOne(lookup).lean();
   if (tenant) return tenant;
   const pendingRegistration = await PendingTenantRegistration.findOne({
-    tenantId: tenantId.toLowerCase(),
+    ...lookup,
     status: "Pending",
   }).lean();
   if (pendingRegistration) return pendingRegistration;
-  const suspendedTenant = await Tenant.exists({ tenantId: tenantId.toLowerCase() });
+  const suspendedTenant = await Tenant.exists(lookup);
   if (suspendedTenant) {
     const error = new Error("This store is suspended. Contact the platform administrator.");
     error.statusCode = 403;
@@ -129,11 +131,12 @@ const tenantDatabaseMiddleware = (request, response, next) => {
       tokenTenantId = "";
     }
   }
-  const requestedTenantId = request.get("x-tenant-id") || tokenTenantId;
-  if (tokenTenantId && request.get("x-tenant-id") && tokenTenantId !== request.get("x-tenant-id").toLowerCase()) {
-    return response.status(403).json({ success: false, message: "The selected store does not match this session." });
-  }
-  if (!requestedTenantId) return next();
+  const selectedIdentifiers = [
+    request.get("x-tenant-id")?.trim().toLowerCase(),
+    request.get("x-tenant-slug")?.trim().toLowerCase(),
+  ].filter(Boolean);
+  const requestedIdentifiers = selectedIdentifiers.length ? selectedIdentifiers : [tokenTenantId].filter(Boolean);
+  if (!requestedIdentifiers.length) return next();
   if (!tenantRootConnection || tenantRootConnection.readyState !== 1) {
     return response.status(503).json({
       success: false,
@@ -141,8 +144,15 @@ const tenantDatabaseMiddleware = (request, response, next) => {
     });
   }
 
-  resolveTenant(requestedTenantId)
-    .then((tenant) => {
+  Promise.all([...new Set(requestedIdentifiers)].map(resolveTenant))
+    .then((tenants) => {
+      const tenantIds = new Set(tenants.filter(Boolean).map(({ tenantId }) => tenantId));
+      if (tenants.some((tenant) => !tenant) || tenantIds.size > 1) {
+        const error = new Error("The selected store does not match this session or is unavailable.");
+        error.statusCode = tenants.some((tenant) => !tenant) ? 404 : 403;
+        throw error;
+      }
+      const tenant = tenants[0];
       if (!tenant) return next();
       const restrictionError = restrictPendingTenant(tenant, request);
       if (restrictionError) return next(restrictionError);

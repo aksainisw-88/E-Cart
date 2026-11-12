@@ -151,6 +151,7 @@ app.use("/api/store", requireAuth, requireRole("admin"), requireAnyMenuPermissio
   if (request.path.startsWith("/hero-slides")) return ["/admin/hero-slider"];
   if (request.path.startsWith("/delivery-settings")) return ["/admin/store/delivery"];
   if (request.path.startsWith("/payment-integrations")) return ["/admin/settings"];
+  if (request.path === "/share-link") return ["/admin/store"];
   if (request.method === "GET" && request.path === "/") return ["/admin/store", "/admin/testimonials", "/admin/hero-slider", "/admin/settings"];
   return ["/admin/store"];
 }), storeRoutes);

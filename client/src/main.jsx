@@ -7,7 +7,7 @@ import { AuthProvider } from "./context/AuthContext.jsx";
 import { CartProvider } from "./context/CartContext.jsx";
 import { StoreProvider } from "./context/StoreContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
-import { tenantHeaders } from "./utils/tenant.js";
+import { getTenantRouteBase, tenantHeaders } from "./utils/tenant.js";
 
 const apiOrigin = new URL(import.meta.env.VITE_API_URL || window.location.origin).origin;
 const browserFetch = window.fetch.bind(window);
@@ -21,7 +21,7 @@ window.fetch = (input, options = {}) => {
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={getTenantRouteBase()}>
       <AuthProvider>
         <StoreProvider>
           <WishlistProvider>

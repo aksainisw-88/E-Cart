@@ -3,6 +3,7 @@ const { connection } = require("../config/superAdminDatabase");
 
 const pendingTenantRegistrationSchema = new mongoose.Schema({
   tenantId: { type: String, required: true, unique: true, trim: true, lowercase: true },
+  slug: { type: String, trim: true, lowercase: true, default: undefined },
   databaseName: { type: String, required: true, unique: true, trim: true },
   businessName: { type: String, required: true, trim: true, maxlength: 120 },
   businessType: { type: String, trim: true, default: "" },
@@ -19,5 +20,6 @@ const pendingTenantRegistrationSchema = new mongoose.Schema({
 }, { timestamps: true, collection: "pendingtenantregistrations" });
 
 pendingTenantRegistrationSchema.index({ adminEmail: 1 }, { unique: true });
+pendingTenantRegistrationSchema.index({ slug: 1 }, { unique: true, sparse: true });
 
 module.exports = connection.model("PendingTenantRegistration", pendingTenantRegistrationSchema);

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Bell, CheckCircle2, CreditCard, Database, LockKeyhole, RotateCcw, Save, ShoppingCart, UserRound } from "lucide-react";
+import { useLocation } from "react-router-dom";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const subscriptionPrice = (amount) => new Intl.NumberFormat("en-IN", {
@@ -26,7 +27,8 @@ const paymentProviders = [
 const emptyIntegrations = Object.fromEntries(paymentProviders.map(({ key }) => [key, { enabled: false, mode: "test", merchantId: "", terminalId: "", deviceId: "", apiKey: "", apiSecret: "", webhookSecret: "", apiKeyConfigured: false, apiSecretConfigured: false, webhookSecretConfigured: false }]));
 
 const AdminSettings = () => {
-  const isSubscriptionRegistration = window.location.pathname === "/admin/subscription-registration";
+  const location = useLocation();
+  const isSubscriptionRegistration = location.pathname === "/admin/subscription-registration";
   const [profile, setProfile] = useState({ id: "", name: "", email: "", role: "" });
   const [preferences, setPreferences] = useState(readPreferences);
   const [integrations, setIntegrations] = useState(emptyIntegrations);

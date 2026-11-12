@@ -5,6 +5,11 @@ const multer = require("multer");
 const path = require("path");
 const { z } = require("zod");
 const StoreSettings = require("../models/StoreSettings");
+const Subscription = require("../models/Subscription");
+const Tenant = require("../models/Tenant");
+const { getCurrentTenant } = require("../utils/tenantDatabase");
+const { assignTenantSlug } = require("../utils/tenantSlug");
+const { today } = require("../utils/subscription");
 
 const router = express.Router();
 const logoDirectory = path.join(__dirname, "../../uploads/store");
@@ -31,6 +36,44 @@ const maskIntegrations = (integrations = {}) => Object.fromEntries(Object.keys(p
 }));
 
 router.get("/", async (request, response, next) => { try { const settings = await StoreSettings.findOne({ key: "default" }).select("-paymentIntegrations").lean(); response.json({ success: true, data: settings || defaults }); } catch (error) { next(error); } });
+router.get("/share-link", async (request, response, next) => {
+  try {
+    const currentTenant = getCurrentTenant();
+    if (!currentTenant) {
+      return response.status(409).json({ success: false, message: "Store sharing requires a registered shared-platform tenant." });
+    }
+
+    const [tenant, settings] = await Promise.all([
+      Tenant.findOne({ tenantId: currentTenant.tenantId }),
+      StoreSettings.findOne({ key: "default" }).select("name").lean(),
+    ]);
+    if (!tenant || !settings) {
+      return response.status(409).json({ success: false, message: "Complete store setup before sharing your store." });
+    }
+    const slug = await assignTenantSlug(tenant, Tenant, settings.name || tenant.businessName);
+    const subscription = await Subscription.findOne({ tenantId: tenant.tenantId, email: tenant.adminEmail })
+      .select("status validFrom validTill")
+      .lean();
+    const currentDate = today();
+    const active = tenant.status === "Active"
+      && subscription?.status === "Active"
+      && subscription.validFrom <= currentDate
+      && subscription.validTill >= currentDate;
+
+    return response.json({
+      success: true,
+      data: {
+        storeName: settings.name,
+        slug,
+        active,
+        status: active ? "Active" : tenant.status === "Suspended" ? "Suspended" : subscription?.validTill < currentDate ? "Expired" : "Inactive",
+        validTill: subscription?.validTill || "",
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
 router.put("/testimonials", async (request, response, next) => { try { const data = testimonialsSchema.parse(request.body); const settings = await StoreSettings.findOneAndUpdate({ key: "default" }, { key: "default", testimonials: data.testimonials }, { new: true, upsert: true, setDefaultsOnInsert: true }).lean(); response.json({ success: true, data: settings.testimonials }); } catch (error) { next(error); } });
 router.put("/hero-slides", logoUpload.fields([{ name: "image0", maxCount: 1 }, { name: "image1", maxCount: 1 }, { name: "image2", maxCount: 1 }]), async (request, response, next) => {
   try {

@@ -25,6 +25,7 @@ const { today } = require("../utils/subscription");
 const { requireAuth } = require("../middleware/auth");
 const { getSubscriptionForUser } = require("../utils/subscription");
 const { assertTenantDatabaseEmpty, getCurrentTenant, getCurrentTenantId, runWithTenant } = require("../utils/tenantDatabase");
+const { assignTenantSlug } = require("../utils/tenantSlug");
 const {
   createClientCredential,
   deleteClientCredential,
@@ -453,6 +454,7 @@ router.post("/admin-store-setup", requireAuth, parseSignupLogo, async (request, 
       removeSignupLogo(request.file);
       return response.status(400).json({ success: false, message: "This business type is no longer available. Select an active type and try again." });
     }
+    await assignTenantSlug(registration, PendingTenantRegistration, parsed.data.storeName);
     const settings = await StoreSettings.create({
       key: "default",
       businessType: businessSegment.baseProfile,

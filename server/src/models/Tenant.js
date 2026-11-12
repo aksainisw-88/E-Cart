@@ -3,6 +3,7 @@ const { connection } = require("../config/superAdminDatabase");
 
 const tenantSchema = new mongoose.Schema({
   tenantId: { type: String, required: true, unique: true, trim: true, lowercase: true },
+  slug: { type: String, trim: true, lowercase: true, default: undefined },
   databaseName: { type: String, required: true, unique: true, trim: true },
   businessName: { type: String, required: true, trim: true, maxlength: 120 },
   businessType: { type: String, trim: true, default: "" },
@@ -12,5 +13,6 @@ const tenantSchema = new mongoose.Schema({
 }, { timestamps: true, collection: "tenants" });
 
 tenantSchema.index({ adminEmail: 1, tenantId: 1 }, { unique: true });
+tenantSchema.index({ slug: 1 }, { unique: true, sparse: true });
 
 module.exports = connection.model("Tenant", tenantSchema);

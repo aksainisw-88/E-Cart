@@ -19,6 +19,7 @@ import {
   ClipboardList,
   Percent,
   FileMinus2,
+  Share2,
 } from "lucide-react";
 
 export const adminNavigation = [
@@ -54,6 +55,7 @@ export const adminNavigation = [
   { label: "Payments received", to: "/admin/payments", icon: CreditCard, roles: ["admin", "manager", "user"] },
   { label: "Store management", to: "/admin/store", icon: Store, roles: ["admin"], children: [
     { label: "Store settings", to: "/admin/store", icon: Settings, roles: ["admin"] },
+    { label: "Share store", to: "/admin/store/share", icon: Share2, permission: "/admin/store", roles: ["admin"] },
     { label: "Store locations", to: "/admin/stores", icon: Store, roles: ["admin"] },
     { label: "Testimonials", to: "/admin/testimonials", icon: MessageSquareQuote, roles: ["admin"] },
     { label: "Hero slider", to: "/admin/hero-slider", icon: ImagePlus, roles: ["admin"] },

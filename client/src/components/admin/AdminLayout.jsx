@@ -10,9 +10,10 @@ import { useStore } from "../../context/storeContext";
 import { apiUrl } from "../../utils/api";
 
 const AdminLayout = () => {
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState(() => {
-    const path = window.location.pathname;
+    const path = location.pathname;
     if (path === "/admin/reports" || path.startsWith("/admin/reports/") || path === "/admin/sales-transactions") return "/admin/reports";
     if (["/admin/sales-return", "/admin/replacements", "/admin/purchase-return"].includes(path)) return "/admin/transaction-returns";
     if (path.startsWith("/admin/store/") || ["/admin/store", "/admin/stores", "/admin/testimonials", "/admin/hero-slider"].includes(path)) return "/admin/store";
@@ -29,9 +30,9 @@ const AdminLayout = () => {
   const adminSearchRef = useRef(null);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("e-mart-admin-dark") === "true");
   const navigate = useNavigate();
-  const location = useLocation();
   const store = useStore();
   const isStoreSetup = location.pathname === "/admin/store-setup";
+  const requestedAdminPath = useRef(`${location.pathname}${location.search}`);
   const logout = async () => { await fetch(apiUrl("/api/auth/logout"), { method: "POST", credentials: "include" }); navigate("/admin/login", { replace: true }); };
   const toggleDarkMode = () => setDarkMode((current) => { const next = !current; localStorage.setItem("e-mart-admin-dark", String(next)); return next; });
 
@@ -50,7 +51,6 @@ const AdminLayout = () => {
 
   useEffect(() => {
     let active = true;
-    const requestedAdminPath = `${window.location.pathname}${window.location.search}`;
 
     fetch(apiUrl("/api/auth/me"), { credentials: "include" })
       .then(async (response) => {
@@ -61,7 +61,7 @@ const AdminLayout = () => {
       .then(({ user, onboardingComplete }) => {
         if (!active) return;
         if (!["admin", "manager", "user"].includes(user.role)) {
-          navigate("/admin/login", { replace: true, state: { from: requestedAdminPath } });
+          navigate("/admin/login", { replace: true, state: { from: requestedAdminPath.current } });
           return;
         }
         setAdminUser(user);
@@ -70,12 +70,12 @@ const AdminLayout = () => {
           navigate("/admin/store-setup", { replace: true });
         } else if (!user.subscription?.active) {
           navigate("/admin/subscription-registration", { replace: true });
-        } else if (window.location.pathname === "/admin/store-setup") {
+        } else if (requestedAdminPath.current.split("?")[0] === "/admin/store-setup") {
           navigate("/admin", { replace: true });
         }
       })
       .catch(() => {
-        if (active) navigate("/admin/login", { replace: true, state: { from: requestedAdminPath } });
+        if (active) navigate("/admin/login", { replace: true, state: { from: requestedAdminPath.current } });
       });
 
     return () => { active = false; };

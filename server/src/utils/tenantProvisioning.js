@@ -19,6 +19,7 @@ const createTenantForSubscription = async (subscription, enabled, registeredTena
   if (!pendingRegistration) await assertTenantDatabaseEmpty(databaseName);
   const tenant = await Tenant.create({
     tenantId: resolvedTenantId,
+    ...(pendingRegistration?.slug ? { slug: pendingRegistration.slug } : {}),
     databaseName,
     businessName: pendingRegistration?.businessName || subscription.business,
     businessType: pendingRegistration?.businessType || "",

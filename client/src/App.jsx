@@ -35,6 +35,8 @@ import AdminLogin from "./pages/AdminLogin";
 import AdminRegister from "./pages/AdminRegister";
 import AdminTransactionReturns from "./pages/AdminTransactionReturns";
 import AdminStoreSetup from "./pages/AdminStoreSetup";
+import AdminShareStore from "./pages/AdminShareStore";
+import TenantPathEntry from "./components/TenantPathEntry";
 
 const RequireCustomerAuth = ({ children }) => {
   const location = useLocation();
@@ -91,6 +93,7 @@ function App() {
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/reset-password" element={<ResetPassword />} />
         <Route path="/admin/register" element={<AdminRegister />} />
+        <Route path="/admin/:tenantSlug" element={<TenantPathEntry redirectTo="/admin" />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="store-setup" element={<AdminStoreSetup />} />
           <Route path="subscription-registration" element={<AdminSection section="settings" />} />
@@ -116,6 +119,7 @@ function App() {
           <Route path="vendors" element={<AdminSection section="vendors" />} />
           <Route path="payments" element={<AdminSection section="payments" />} />
           <Route path="store" element={<AdminSection section="store" />} />
+          <Route path="store/share" element={<AdminShareStore />} />
           <Route path="stores" element={<AdminStores />} />
           <Route path="testimonials" element={<AdminTestimonials />} />
           <Route path="hero-slider" element={<AdminHeroSlider />} />
