@@ -91,7 +91,7 @@ const AdminSettings = () => {
   }, []);
 
   useEffect(() => {
-    if (sharedPlatform !== false || !subscription?.active) return undefined;
+    if (isSubscriptionRegistration || sharedPlatform !== false || !subscription?.active) return undefined;
     let active = true;
     fetch(`${API_URL}/api/customer-database/status`, { credentials: "include" })
       .then(async (response) => {
@@ -102,7 +102,7 @@ const AdminSettings = () => {
       .then((data) => { if (active) setDatabaseStatus(data); })
       .catch((requestError) => { if (active) setDatabaseError(requestError.message); });
     return () => { active = false; };
-  }, [sharedPlatform, subscription?.active]);
+  }, [isSubscriptionRegistration, sharedPlatform, subscription?.active]);
 
   useEffect(() => {
     fetch(`${API_URL}/api/auth/me`, { credentials: "include" })
@@ -438,7 +438,7 @@ const AdminSettings = () => {
         {(purchaseMessage || purchaseError) && <p role={purchaseError ? "alert" : "status"} className={`mt-4 rounded-lg p-3 text-sm ${purchaseError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{purchaseError || purchaseMessage}</p>}
       </section>}
 
-      {subscription?.active && sharedPlatform === false && <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6 sm:p-8">
+      {subscription?.active && !isSubscriptionRegistration && sharedPlatform === false && <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6 sm:p-8">
         <div className="flex items-center gap-3 border-b border-slate-100 pb-5"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700"><Database className="h-5 w-5" /></span><div><h2 className="font-semibold text-slate-900">Customer database</h2><p className="mt-1 text-xs text-slate-500">Connect this customer API to a new MongoDB Atlas database.</p></div></div>
         <div className="mt-5 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
           <p>Connection: <strong className={databaseStatus?.connected ? "text-emerald-700" : "text-amber-700"}>{databaseStatus === undefined ? "Checking..." : databaseStatus.connected ? databaseStatus.configuredInSettings ? "Connected (custom database)" : "Connected (API default database)" : "Unavailable"}</strong>{databaseStatus?.databaseName && <span> · Database: <strong>{databaseStatus.databaseName}</strong></span>}</p>
@@ -455,9 +455,9 @@ const AdminSettings = () => {
         </form>
         {(databaseMessage || databaseError) && <p role={databaseError ? "alert" : "status"} className={`mt-4 rounded-lg p-3 text-sm ${databaseError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{databaseError || databaseMessage}</p>}
       </section>}
-      {subscription?.active && sharedPlatform === null && <p role="alert" className="mt-6 rounded-lg bg-amber-50 p-4 text-sm text-amber-800">Could not determine whether this deployment uses shared tenant databases. Database connection settings are hidden for safety. {platformModeError}</p>}
+      {subscription?.active && !isSubscriptionRegistration && sharedPlatform === null && <p role="alert" className="mt-6 rounded-lg bg-amber-50 p-4 text-sm text-amber-800">Could not determine whether this deployment uses shared tenant databases. Database connection settings are hidden for safety. {platformModeError}</p>}
 
-      {subscription?.active && <form onSubmit={saveSettings} className="mt-8 space-y-6">
+      {subscription?.active && !isSubscriptionRegistration && <form onSubmit={saveSettings} className="mt-8 space-y-6">
         <section className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8">
           <div className="flex items-center gap-3 border-b border-slate-100 pb-5"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-50 text-primary"><UserRound className="h-5 w-5" /></span><div><h2 className="font-semibold text-slate-900">Profile</h2><p className="mt-1 text-xs text-slate-500">This information identifies you in the admin console.</p></div></div>
           <div className="mt-6 grid gap-5 sm:grid-cols-2">
