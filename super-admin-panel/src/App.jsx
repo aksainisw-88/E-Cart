@@ -44,6 +44,7 @@ import {
   Inbox,
 } from "lucide-react";
 import { navItems } from "./data.js";
+import ClientDetailsModule from "./ClientDetailsModule.jsx";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -463,7 +464,7 @@ function App() {
       <main className="main-area">
         <header className="topbar">
           <button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open navigation"><Menu size={20} /></button>
-          <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{activePage === "client-details" ? "Client details" : navItems.find((item) => item.id === activePage)?.label}</strong></div>
+          <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{activePage === "client-details" ? "Client Details" : navItems.find((item) => item.id === activePage)?.label}</strong></div>
           <div className="topbar-actions">
             <div className="system-status"><span /> API connected</div>
             <button className="icon-button notification-button" aria-label="Notifications" onClick={() => notify(`${pendingRequests.length} registration requests need review.`)}>
@@ -491,6 +492,13 @@ function App() {
           )}
           {activePage === "clients" && (
             <ClientsPage clients={visibleClients} query={query} setQuery={setQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} openClient={openClient} onAdd={() => setDialog({ type: "new-request" })} />
+          )}
+          {activePage === "client-records" && (
+            <ClientDetailsModule
+              clients={clients}
+              onView={openClient}
+              onEdit={(client) => setDialog({ type: "edit-client", client })}
+            />
           )}
           {activePage === "business-segments" && (
             <BusinessSegmentsPage segments={businessSegments} saveSegment={saveBusinessSegment} toggleSegment={toggleBusinessSegment} />
