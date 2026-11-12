@@ -25,6 +25,7 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const businessTypes = ["E-Commerce", "Pharmacy", "Supermart / Grocery", "Garments", "Other"];
+const marqueeItems = ["E-Commerce", "Pharmacy", "Grocery", "Garments", "Inventory", "Billing", "Orders", "Reports", "Delivery"];
 
 const products = [
   {
@@ -284,9 +285,15 @@ function App() {
               <span><ShieldCheck size={16} /> Designed for your business</span>
               <span><Clock3 size={16} /> Supported by our team</span>
             </div>
+            <ul className="hero-pills">
+              {["E-Commerce", "Pharmacy", "Grocery", "Garments"].map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
           </div>
 
           <div className="hero-stage" aria-label="Store overview illustration">
+            <div className="hero-glow" aria-hidden="true" />
             <div className="dashboard">
               <div className="dash-top">
                 <div className="dash-brand">
@@ -348,6 +355,14 @@ function App() {
             </div>
           </div>
         </section>
+
+        <div className="marquee" aria-hidden="true">
+          <div className="marquee-track">
+            {[...marqueeItems, ...marqueeItems].map((item, index) => (
+              <span key={`${item}-${index}`}>{item}</span>
+            ))}
+          </div>
+        </div>
 
         <section className="stats-bar" aria-label="Company highlights">
           {stats.map((item) => (
