@@ -1,22 +1,33 @@
 const crypto = require("crypto");
 const Tenant = require("../models/Tenant");
+const PendingTenantRegistration = require("../models/PendingTenantRegistration");
 const { assertTenantDatabaseEmpty, runWithTenant } = require("./tenantDatabase");
 
-const createTenantForSubscription = async (subscription, enabled) => {
+const createTenantForSubscription = async (subscription, enabled, registeredTenantId = "") => {
   if (!enabled) return null;
+  const pendingRegistration = registeredTenantId
+    ? await PendingTenantRegistration.findOne({ tenantId: registeredTenantId, adminEmail: subscription.email })
+    : null;
+  if (registeredTenantId && !pendingRegistration) {
+    const error = new Error("The pending tenant registration linked to this request could not be found.");
+    error.statusCode = 409;
+    throw error;
+  }
   const tenantId = crypto.randomBytes(12).toString("hex");
-  const databaseName = `ecart_${tenantId}`;
-  await assertTenantDatabaseEmpty(databaseName);
+  const resolvedTenantId = pendingRegistration?.tenantId || tenantId;
+  const databaseName = pendingRegistration?.databaseName || `ecart_${tenantId}`;
+  if (!pendingRegistration) await assertTenantDatabaseEmpty(databaseName);
   const tenant = await Tenant.create({
-    tenantId,
+    tenantId: resolvedTenantId,
     databaseName,
-    businessName: subscription.business,
+    businessName: pendingRegistration?.businessName || subscription.business,
+    businessType: pendingRegistration?.businessType || "",
     adminEmail: subscription.email,
     subscription: subscription._id,
-    status: "Active",
+    status: pendingRegistration ? "PendingActivation" : "Active",
   });
   try {
-    subscription.tenantId = tenantId;
+    subscription.tenantId = resolvedTenantId;
     await subscription.save();
     await runWithTenant(tenant, async () => {});
   } catch (error) {

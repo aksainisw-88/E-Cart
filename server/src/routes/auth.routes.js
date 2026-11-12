@@ -3,22 +3,28 @@ const crypto = require("crypto");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
+const fs = require("fs");
+const multer = require("multer");
+const path = require("path");
 const { z } = require("zod");
 
 const User = require("../models/User");
 const BusinessSegment = require("../models/BusinessSegment");
 const SignupOtp = require("../models/SignupOtp");
 const AdminSignupOtp = require("../models/AdminSignupOtp");
+const TenantSignupOtp = require("../models/TenantSignupOtp");
+const PendingTenantRegistration = require("../models/PendingTenantRegistration");
 const PasswordReset = require("../models/PasswordReset");
 const Subscription = require("../models/Subscription");
 const StoreSettings = require("../models/StoreSettings");
+const Tenant = require("../models/Tenant");
 const { getActiveMongoUri, switchCustomerDatabase } = require("../config/database");
 const { clearUri, getSavedUri, saveUri } = require("../utils/customerDatabaseConfig");
 const { parseAtlasUri } = require("../utils/atlasUri");
 const { today } = require("../utils/subscription");
 const { requireAuth } = require("../middleware/auth");
 const { getSubscriptionForUser } = require("../utils/subscription");
-const { getCurrentTenant, getCurrentTenantId } = require("../utils/tenantDatabase");
+const { assertTenantDatabaseEmpty, getCurrentTenant, getCurrentTenantId, runWithTenant } = require("../utils/tenantDatabase");
 const {
   createClientCredential,
   deleteClientCredential,
@@ -63,6 +69,27 @@ const adminRegistrationSchema = credentialsSchema.extend({
   licenseKey: z.string().trim().min(8).max(80),
   customerDatabaseUri: z.string().trim().min(20).max(2048).optional(),
 });
+const adminAccountSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  email: z.string().trim().email(),
+  phone: z.string().trim().min(5).max(30),
+  password: z.string().min(8).max(128),
+  otp: z.string().regex(/^\d{6}$/),
+});
+const adminStoreSetupSchema = z.object({
+  storeName: z.string().trim().min(2).max(100),
+  businessSegmentId: z.string().trim().min(5).max(64),
+  tagline: z.string().trim().max(160).default(""),
+  storeDescription: z.string().trim().max(500).default(""),
+  storePhone: z.string().trim().min(5).max(30),
+  storeEmail: z.string().trim().email(),
+  storeAddress: z.string().trim().min(3).max(200),
+  city: z.string().trim().min(2).max(80),
+  deliveryPincode: z.string().trim().regex(/^$|^\d{6}$/).default(""),
+  deliveryFee: z.coerce.number().min(0).max(100000).default(49),
+  freeDeliveryAbove: z.coerce.number().min(0).max(10000000).default(999),
+  theme: z.enum(["teal", "blue", "emerald", "amber"]).default("teal"),
+});
 const signupOtpSchema = z.object({ email: z.string().email() });
 const forgotPasswordSchema = z.object({ email: z.string().trim().email() });
 const resetPasswordSchema = z.object({ token: z.string().regex(/^[a-f0-9]{64}$/), password: z.string().min(8).max(128) });
@@ -82,6 +109,36 @@ const existingStoreResponse = (response) => response.status(409).json({
 const hashOtp = (email, otp, secret) => crypto.createHmac("sha256", secret).update(`${email}:${otp}`).digest("hex");
 const hashResetToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
 const adminRegistrationInProgress = new Set();
+const signupLogoDirectory = path.join(__dirname, "../../uploads/store");
+fs.mkdirSync(signupLogoDirectory, { recursive: true });
+const signupLogoUpload = multer({
+  storage: multer.diskStorage({
+    destination: signupLogoDirectory,
+    filename: (request, file, callback) => callback(null, `${crypto.randomUUID()}${path.extname(file.originalname).toLowerCase()}`),
+  }),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (request, file, callback) => {
+    if (!/^image\/(jpeg|png|webp)$/.test(file.mimetype)) {
+      const error = new Error("Store logo must be a JPEG, PNG, or WebP image.");
+      error.statusCode = 400;
+      return callback(error);
+    }
+    return callback(null, true);
+  },
+});
+const removeSignupLogo = (file) => {
+  if (!file) return;
+  fs.unlink(file.path, (error) => {
+    if (error) console.error("Unable to remove the failed signup logo upload:", error);
+  });
+};
+const parseSignupLogo = (request, response, next) => signupLogoUpload.single("logo")(request, response, (error) => {
+  if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+    error.statusCode = 400;
+    error.message = "Store logo must be 2 MB or smaller.";
+  }
+  return next(error);
+});
 const getSubscriptionForAuthentication = async (user) => {
   try {
     return await getSubscriptionForUser(user);
@@ -226,19 +283,26 @@ router.post("/admin-signup-otp", async (request, response, next) => {
     if (!data) return;
     const email = data.email.toLowerCase();
     const tenant = getCurrentTenant();
+    const sharedSignup = !tenant && request.app.locals.env.TENANT_MONGO_URI;
+    if (sharedSignup && TenantSignupOtp.db.readyState !== 1) {
+      return response.status(503).json({ success: false, message: "The platform registration service is unavailable. Try again later." });
+    }
     if (tenant) {
       if (tenant.adminEmail !== email) {
         return response.status(403).json({ success: false, message: "This license was issued to a different admin email." });
       }
-    } else if (request.app.locals.env.TENANT_MONGO_URI) {
-      return response.status(400).json({ success: false, message: "Enter the tenant ID issued by Super Admin to register on the shared platform." });
+    } else if (sharedSignup) {
+      if (await PendingTenantRegistration.exists({ adminEmail: email }) || await Tenant.exists({ adminEmail: email }) || await Subscription.exists({ email })) {
+        return response.status(409).json({ success: false, message: "An account or registration with this email already exists." });
+      }
     } else if (!await ensureNewStoreCanRegister()) {
       return existingStoreResponse(response);
     }
     if (await User.exists({ email })) {
       return response.status(409).json({ success: false, message: "An account with this email already exists." });
     }
-    const current = await AdminSignupOtp.findOne({ email });
+    const OtpModel = sharedSignup ? TenantSignupOtp : AdminSignupOtp;
+    const current = await OtpModel.findOne({ email });
     if (current && Date.now() - current.createdAt.getTime() < 60_000) {
       return response.status(429).json({ success: false, message: "Please wait before requesting another code." });
     }
@@ -246,7 +310,7 @@ router.post("/admin-signup-otp", async (request, response, next) => {
     const otp = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
     const env = request.app.locals.env;
     const sent = await sendSignupCode(email, otp, env);
-    await AdminSignupOtp.findOneAndUpdate(
+    await OtpModel.findOneAndUpdate(
       { email },
       { otpHash: hashOtp(email, otp, env.JWT_SECRET), attempts: 0, expiresAt: new Date(Date.now() + 10 * 60_000) },
       { upsert: true, new: true, setDefaultsOnInsert: true },
@@ -256,6 +320,171 @@ router.post("/admin-signup-otp", async (request, response, next) => {
     if (error.message === "Email delivery is not configured.") {
       return response.status(503).json({ success: false, message: "Signup email delivery is not configured. Contact the store administrator." });
     }
+    return next(error);
+  }
+});
+
+router.get("/onboarding-config", (request, response) => {
+  response.json({ success: true, sharedPlatform: Boolean(request.app.locals.env.TENANT_MONGO_URI) });
+});
+
+router.post("/register/admin-account", async (request, response, next) => {
+  const signupLockKey = typeof request.body?.email === "string" ? request.body.email.trim().toLowerCase() : "";
+  let registration;
+  let user;
+  let credentialCreated = false;
+  let authCookieSet = false;
+  try {
+    if (!request.app.locals.env.TENANT_MONGO_URI) {
+      return response.status(404).json({ success: false, message: "The staged signup workflow is not enabled on this API." });
+    }
+    if (TenantSignupOtp.db.readyState !== 1) {
+      return response.status(503).json({ success: false, message: "The platform registration service is unavailable. Try again later." });
+    }
+    if (!signupLockKey) return response.status(400).json({ success: false, message: "Enter a valid email address." });
+    if (adminRegistrationInProgress.has(signupLockKey)) {
+      return response.status(409).json({ success: false, message: "Signup is already being processed. Please retry shortly." });
+    }
+    adminRegistrationInProgress.add(signupLockKey);
+    const data = parseBody(adminAccountSchema, request, response);
+    if (!data) return;
+    const email = data.email.toLowerCase();
+    if (await User.exists({ email })
+      || await PendingTenantRegistration.exists({ adminEmail: email })
+      || await Tenant.exists({ adminEmail: email })
+      || await Subscription.exists({ email })) {
+      return response.status(409).json({ success: false, message: "An account or registration with this email already exists." });
+    }
+    const challenge = await TenantSignupOtp.findOne({ email });
+    if (!challenge || challenge.expiresAt <= new Date()) {
+      return response.status(400).json({ success: false, message: "Your verification code has expired. Request a new code." });
+    }
+    if (challenge.attempts >= 5) {
+      await challenge.deleteOne();
+      return response.status(429).json({ success: false, message: "Too many incorrect codes. Request a new code." });
+    }
+    const submittedHash = Buffer.from(hashOtp(email, data.otp, request.app.locals.env.JWT_SECRET), "hex");
+    const storedHash = Buffer.from(challenge.otpHash, "hex");
+    if (submittedHash.length !== storedHash.length || !crypto.timingSafeEqual(submittedHash, storedHash)) {
+      challenge.attempts += 1;
+      await challenge.save();
+      return response.status(400).json({ success: false, message: "The verification code is incorrect." });
+    }
+
+    const tenantId = crypto.randomBytes(12).toString("hex");
+    const databaseName = `ecart_${tenantId}`;
+    await assertTenantDatabaseEmpty(databaseName);
+    registration = await PendingTenantRegistration.create({
+      tenantId,
+      databaseName,
+      businessName: `${data.name}'s Store`,
+      adminName: data.name,
+      adminEmail: email,
+      ownerPhone: data.phone,
+      phone: data.phone,
+    });
+    const password = await bcrypt.hash(data.password, 12);
+    await runWithTenant(registration, async () => {
+      user = await User.create({ name: data.name, email, phone: data.phone, password, role: "admin" });
+      await createClientCredential(email, password, request.app.locals.env, tenantId);
+      credentialCreated = true;
+      setAuthCookie(response, user, request.app.locals.env);
+      authCookieSet = true;
+    });
+    await challenge.deleteOne();
+    return response.status(201).json({
+      success: true,
+      user: publicUser(user),
+      tenantId,
+      message: "Admin account created. Continue to store setup.",
+    });
+  } catch (error) {
+    if (authCookieSet) response.clearCookie("accessToken", {
+      httpOnly: true,
+      sameSite: request.app.locals.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: request.app.locals.env.NODE_ENV === "production",
+    });
+    const cleanup = [];
+    if (credentialCreated) cleanup.push(deleteClientCredential(signupLockKey, request.app.locals.env, registration?.tenantId));
+    if (user && registration) cleanup.push(runWithTenant(registration, () => User.deleteOne({ _id: user._id })));
+    if (registration) cleanup.push(registration.deleteOne());
+    if (cleanup.length) await Promise.all(cleanup);
+    if (error.code === 11000) {
+      return response.status(409).json({ success: false, message: "An account or registration with this email already exists." });
+    }
+    return next(error);
+  } finally {
+    if (signupLockKey) adminRegistrationInProgress.delete(signupLockKey);
+  }
+});
+
+router.post("/admin-store-setup", requireAuth, parseSignupLogo, async (request, response, next) => {
+  const uploadedLogo = request.file ? `/uploads/store/${request.file.filename}` : "";
+  let settingsCreated = false;
+  try {
+    if (!request.app.locals.env.TENANT_MONGO_URI || request.user.role !== "admin") {
+      removeSignupLogo(request.file);
+      return response.status(403).json({ success: false, message: "An admin account on the shared platform is required." });
+    }
+    const tenantRegistration = getCurrentTenant();
+    const registration = await PendingTenantRegistration.findOne({
+      tenantId: getCurrentTenantId(),
+      adminEmail: tenantRegistration?.adminEmail,
+      status: "Pending",
+    });
+    if (!registration) {
+      removeSignupLogo(request.file);
+      return response.status(409).json({ success: false, message: "This signup is not awaiting store setup." });
+    }
+    if (await StoreSettings.exists({ key: "default" })) {
+      removeSignupLogo(request.file);
+      return response.status(409).json({ success: false, message: "Store setup has already been completed." });
+    }
+    const parsed = adminStoreSetupSchema.safeParse(request.body);
+    if (!parsed.success) {
+      removeSignupLogo(request.file);
+      return response.status(400).json({ success: false, message: parsed.error.issues[0]?.message || "Check the store details." });
+    }
+    const businessSegment = await BusinessSegment.findOne({
+      segmentId: parsed.data.businessSegmentId.toUpperCase(),
+      enabled: true,
+    }).lean();
+    if (!businessSegment) {
+      removeSignupLogo(request.file);
+      return response.status(400).json({ success: false, message: "This business type is no longer available. Select an active type and try again." });
+    }
+    const settings = await StoreSettings.create({
+      key: "default",
+      businessType: businessSegment.baseProfile,
+      businessSegmentId: businessSegment.segmentId,
+      businessSegmentCode: businessSegment.code,
+      name: parsed.data.storeName,
+      tagline: parsed.data.tagline,
+      description: parsed.data.storeDescription,
+      logo: uploadedLogo,
+      phone: parsed.data.storePhone,
+      email: parsed.data.storeEmail,
+      address: parsed.data.storeAddress,
+      city: parsed.data.city,
+      deliveryPincode: parsed.data.deliveryPincode,
+      deliveryFee: parsed.data.deliveryFee,
+      freeDeliveryAbove: parsed.data.freeDeliveryAbove,
+      theme: parsed.data.theme,
+    });
+    settingsCreated = true;
+    registration.businessName = parsed.data.storeName;
+    registration.businessType = businessSegment.name;
+    registration.phone = parsed.data.storePhone;
+    registration.storeEmail = parsed.data.storeEmail;
+    registration.address = parsed.data.storeAddress;
+    registration.city = parsed.data.city;
+    registration.storeLogo = uploadedLogo;
+    registration.theme = parsed.data.theme;
+    await registration.save();
+    return response.status(201).json({ success: true, data: settings, message: "Store setup complete. Continue to subscription registration." });
+  } catch (error) {
+    if (settingsCreated) await StoreSettings.deleteOne({ key: "default" });
+    removeSignupLogo(request.file);
     return next(error);
   }
 });
@@ -661,7 +890,8 @@ router.get("/me", requireAuth, async (request, response, next) => {
     if (["admin", "manager", "user"].includes(user.role)) {
       serializedUser.subscription = await getSubscriptionForAuthentication(user);
     }
-    return response.json({ success: true, user: serializedUser });
+    const onboardingComplete = user.role !== "admin" || Boolean(await StoreSettings.exists({ key: "default" }));
+    return response.json({ success: true, user: serializedUser, onboardingComplete });
   } catch (error) {
     return next(error);
   }

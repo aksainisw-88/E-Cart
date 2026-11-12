@@ -64,5 +64,6 @@ export const adminNavigation = [
 ];
 
 export const adminSecondaryNavigation = [
+  { label: "Subscription registration", to: "/admin/subscription-registration", icon: CreditCard, roles: ["admin"] },
   { label: "Settings", to: "/admin/settings", icon: Settings, roles: ["admin"] },
 ];

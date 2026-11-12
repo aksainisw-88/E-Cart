@@ -8,7 +8,7 @@ const tenantSchema = new mongoose.Schema({
   businessType: { type: String, trim: true, default: "" },
   adminEmail: { type: String, required: true, lowercase: true, trim: true },
   subscription: { type: mongoose.Schema.Types.ObjectId, ref: "Subscription", required: true, unique: true },
-  status: { type: String, enum: ["Active", "Suspended"], default: "Active" },
+  status: { type: String, enum: ["PendingActivation", "Active", "Suspended"], default: "Active" },
 }, { timestamps: true, collection: "tenants" });
 
 tenantSchema.index({ adminEmail: 1, tenantId: 1 }, { unique: true });

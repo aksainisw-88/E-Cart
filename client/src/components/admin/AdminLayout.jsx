@@ -57,7 +57,7 @@ const AdminLayout = () => {
         if (!response.ok) throw new Error(result.message);
         return result;
       })
-      .then(({ user }) => {
+      .then(({ user, onboardingComplete }) => {
         if (!active) return;
         if (!["admin", "manager", "user"].includes(user.role)) {
           navigate("/admin/login", { replace: true, state: { from: requestedAdminPath } });
@@ -65,8 +65,12 @@ const AdminLayout = () => {
         }
         setAdminUser(user);
         setAuthState("authorized");
-        if (!user.subscription?.active) {
-          navigate("/admin/settings", { replace: true });
+        if (!onboardingComplete) {
+          navigate("/admin/store-setup", { replace: true });
+        } else if (!user.subscription?.active) {
+          navigate("/admin/subscription-registration", { replace: true });
+        } else if (window.location.pathname === "/admin/store-setup") {
+          navigate("/admin", { replace: true });
         }
       })
       .catch(() => {
@@ -77,7 +81,7 @@ const AdminLayout = () => {
   }, [navigate]);
 
   useEffect(() => {
-    if (!adminUser) return;
+    if (!adminUser?.subscription?.active) return;
     let active = true;
     let initialized = false;
     let knownOrderIds = new Set();
@@ -144,8 +148,10 @@ const AdminLayout = () => {
     return requiredPermissions.some((permission) => adminUser.menuPermissions.includes(permission));
   };
   const hasMenuAccess = (item) => hasOwnMenuAccess(item) || Boolean(item.children?.some(hasOwnMenuAccess));
-  const visibleNavigation = adminNavigation.filter(hasMenuAccess);
-  const visibleSecondaryNavigation = adminSecondaryNavigation.filter(hasMenuAccess);
+  const visibleNavigation = adminUser.subscription?.active ? adminNavigation.filter(hasMenuAccess) : [];
+  const visibleSecondaryNavigation = adminSecondaryNavigation.filter((item) => (
+    hasMenuAccess(item) && (adminUser.subscription?.active || item.to === "/admin/subscription-registration")
+  ));
   const navigationItems = adminNavigation.flatMap((item) => [item, ...(item.children || [])]);
   const availableMenus = [...navigationItems, ...adminSecondaryNavigation];
   const currentMenu = availableMenus
@@ -157,7 +163,7 @@ const AdminLayout = () => {
   const searchResults = adminSearch.trim()
     ? searchableMenus.filter((item) => `${item.label} ${item.to}`.toLowerCase().includes(adminSearch.trim().toLowerCase())).slice(0, 6)
     : [];
-  if (!canAccessCurrentRoute && visibleNavigation.length > 0) {
+  if (!canAccessCurrentRoute && visibleNavigation.length > 0 && location.pathname !== "/admin/store-setup") {
     const fallback = visibleNavigation[0].children?.find(hasOwnMenuAccess) || visibleNavigation[0];
     return <Navigate to={fallback.to} replace />;
   }

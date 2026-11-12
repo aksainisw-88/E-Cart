@@ -6,10 +6,14 @@ const Subscription = require("../models/Subscription");
 const SubscriptionPlan = require("../models/SubscriptionPlan");
 const SubscriptionRequest = require("../models/SubscriptionRequest");
 const User = require("../models/User");
+const StoreSettings = require("../models/StoreSettings");
+const PendingTenantRegistration = require("../models/PendingTenantRegistration");
+const Tenant = require("../models/Tenant");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { requireSuperAdminDatabase } = require("../config/superAdminDatabase");
 const { getSubscriptionForUser, today } = require("../utils/subscription");
 const { getClientDeploymentId } = require("../utils/clientCredentials");
+const { getCurrentTenantId } = require("../utils/tenantDatabase");
 
 const router = express.Router();
 router.use(requireSuperAdminDatabase);
@@ -38,7 +42,14 @@ const publicPurchaseRequest = (purchaseRequest) => ({
   name: purchaseRequest.name,
   business: purchaseRequest.business,
   email: purchaseRequest.email,
+  ownerPhone: purchaseRequest.ownerPhone,
   phone: purchaseRequest.phone,
+  storeEmail: purchaseRequest.storeEmail,
+  businessType: purchaseRequest.businessType,
+  address: purchaseRequest.address,
+  city: purchaseRequest.city,
+  storeLogo: purchaseRequest.storeLogo,
+  theme: purchaseRequest.theme,
   plan: purchaseRequest.plan,
   planId: purchaseRequest.planId?.toString() || "",
   billingInterval: purchaseRequest.billingInterval,
@@ -74,12 +85,17 @@ router.get("/plans", requireAuth, requireRole("admin"), async (request, response
 
 router.get("/request", requireAuth, requireRole("admin"), async (request, response, next) => {
   try {
-    const user = await User.findById(request.user.id).select("name email role status").lean();
+    const user = await User.findById(request.user.id).select("name email phone role status").lean();
     if (!user || user.status === "Blocked") {
       return response.status(403).json({ success: false, message: "An active customer admin account is required." });
     }
     const purchaseRequest = await SubscriptionRequest.findOne({ email: user.email }).sort({ createdAt: -1 }).lean();
-    return response.json({ success: true, data: purchaseRequest ? publicPurchaseRequest(purchaseRequest) : null });
+    const store = await StoreSettings.findOne({ key: "default" }).select("name phone").lean();
+    return response.json({
+      success: true,
+      data: purchaseRequest ? publicPurchaseRequest(purchaseRequest) : null,
+      store: store ? { name: store.name, phone: store.phone } : null,
+    });
   } catch (error) {
     return next(error);
   }
@@ -92,13 +108,21 @@ router.post("/request", requireAuth, requireRole("admin"), async (request, respo
     if (!parsed.success) {
       return response.status(400).json({ success: false, message: parsed.error.issues[0]?.message || "Check the purchase request details." });
     }
-    const user = await User.findById(request.user.id).select("name email role status").lean();
+    const user = await User.findById(request.user.id).select("name email phone role status").lean();
     if (!user || user.status === "Blocked") {
       return response.status(403).json({ success: false, message: "An active customer admin account is required." });
     }
     adminEmail = user.email;
     if (await Subscription.exists({ email: user.email })) {
       return response.status(409).json({ success: false, message: "A subscription already exists for this admin email. Contact the platform administrator for renewal or license support." });
+    }
+    const tenantId = getCurrentTenantId();
+    const pendingTenant = tenantId
+      ? await PendingTenantRegistration.findOne({ tenantId, adminEmail: user.email, status: "Pending" })
+      : null;
+    const store = tenantId ? await StoreSettings.findOne({ key: "default" }).lean() : null;
+    if (tenantId && (!pendingTenant || !store)) {
+      return response.status(400).json({ success: false, message: "Complete store setup before requesting subscription approval." });
     }
     let planDetails = {
       plan: parsed.data.plan,
@@ -125,6 +149,18 @@ router.post("/request", requireAuth, requireRole("admin"), async (request, respo
     const purchaseRequest = await SubscriptionRequest.create({
       ...parsed.data,
       ...planDetails,
+      ...(tenantId ? {
+        business: store.name,
+        phone: store.phone,
+        tenantId,
+        ownerPhone: user.phone,
+        storeEmail: store.email,
+        businessType: pendingTenant.businessType,
+        address: store.address,
+        city: store.city,
+        storeLogo: store.logo,
+        theme: store.theme,
+      } : {}),
       email: user.email,
       activeRequestEmail: user.email,
       requestedAt: today(),
@@ -162,6 +198,9 @@ router.post("/activate", requireAuth, requireRole("admin"), async (request, resp
     if (!subscription || !validKey) {
       return response.status(403).json({ success: false, message: "Registration number or license key does not match this admin email." });
     }
+    if (subscription.tenantId && subscription.tenantId !== getCurrentTenantId()) {
+      return response.status(403).json({ success: false, message: "This license is not assigned to the selected store." });
+    }
 
     const currentDate = today();
     if (subscription.status !== "Active") {
@@ -190,6 +229,16 @@ router.post("/activate", requireAuth, requireRole("admin"), async (request, resp
     user.subscriptionRegistrationNumber = claimedSubscription.registrationNumber;
     user.subscriptionKeyHash = claimedSubscription.licenseKeyHash;
     await user.save();
+    if (claimedSubscription.tenantId) {
+      const tenant = await Tenant.findOne({ tenantId: claimedSubscription.tenantId });
+      if (!tenant || tenant.status === "Suspended") {
+        return response.status(409).json({ success: false, message: "The tenant is not awaiting license activation. Contact the platform administrator." });
+      }
+      if (tenant.status === "PendingActivation") {
+        tenant.status = "Active";
+        await tenant.save();
+      }
+    }
     return response.json({
       success: true,
       message: "Subscription verified. Admin access is active.",

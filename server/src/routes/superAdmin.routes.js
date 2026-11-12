@@ -14,6 +14,7 @@ const { requireAuth, requireRole } = require("../middleware/auth");
 const { requireSuperAdminDatabase } = require("../config/superAdminDatabase");
 const { addBillingPeriod, today } = require("../utils/subscription");
 const Tenant = require("../models/Tenant");
+const PendingTenantRegistration = require("../models/PendingTenantRegistration");
 
 const router = express.Router();
 router.use(requireSuperAdminDatabase);
@@ -133,7 +134,14 @@ const publicSubscriptionRequest = (purchaseRequest) => ({
   name: purchaseRequest.name,
   business: purchaseRequest.business,
   email: purchaseRequest.email,
+  ownerPhone: purchaseRequest.ownerPhone,
   phone: purchaseRequest.phone,
+  storeEmail: purchaseRequest.storeEmail,
+  businessType: purchaseRequest.businessType,
+  address: purchaseRequest.address,
+  city: purchaseRequest.city,
+  storeLogo: purchaseRequest.storeLogo,
+  theme: purchaseRequest.theme,
   plan: purchaseRequest.plan,
   planId: purchaseRequest.planId?.toString() || "",
   billingInterval: purchaseRequest.billingInterval || "yearly",
@@ -360,7 +368,7 @@ router.post("/requests/:id/approve", async (request, response, next) => {
       history: [{ date: currentDate, amount: paidNow, type: "Initial license", status: paymentStatus }],
     });
     subscriptionCreated = true;
-    const tenant = await createTenantForSubscription(subscription, request.app.locals.env.TENANT_MONGO_URI);
+    const tenant = await createTenantForSubscription(subscription, request.app.locals.env.TENANT_MONGO_URI, purchaseRequest.tenantId);
 
     await SubscriptionRequest.updateOne(
       { _id: purchaseRequest._id, status: "Processing" },
@@ -369,6 +377,9 @@ router.post("/requests/:id/approve", async (request, response, next) => {
         $unset: { activeRequestEmail: "" },
       },
     );
+    if (tenant && purchaseRequest.tenantId) {
+      await PendingTenantRegistration.deleteOne({ tenantId: purchaseRequest.tenantId });
+    }
     return response.status(201).json({
       success: true,
       data: { ...publicSubscription(subscription), tenantId: tenant?.tenantId || "", licenseKey: credentials.licenseKey },
@@ -464,7 +475,13 @@ router.patch("/subscriptions/:id/status", async (request, response, next) => {
     const subscription = await Subscription.findByIdAndUpdate(request.params.id, parsed.data, { new: true, runValidators: true });
     if (!subscription) return response.status(404).json({ success: false, message: "Subscription not found." });
     if (subscription.tenantId) {
-      await Tenant.updateOne({ tenantId: subscription.tenantId }, { $set: { status: parsed.data.status } });
+      const tenant = await Tenant.findOne({ tenantId: subscription.tenantId });
+      if (tenant) {
+        tenant.status = parsed.data.status === "Suspended"
+          ? "Suspended"
+          : tenant.status === "PendingActivation" ? "PendingActivation" : "Active";
+        await tenant.save();
+      }
     }
     return response.json({ success: true, data: publicSubscription(subscription) });
   } catch (error) {
@@ -540,7 +557,11 @@ router.post("/subscriptions/:id/renew", async (request, response, next) => {
     subscription.history.push({ date: currentDate, amount: parsed.data.paidNow, type: "License renewal", status: paymentStatus });
     await subscription.save();
     if (subscription.tenantId) {
-      await Tenant.updateOne({ tenantId: subscription.tenantId }, { $set: { status: "Active" } });
+      const tenant = await Tenant.findOne({ tenantId: subscription.tenantId });
+      if (tenant && tenant.status !== "PendingActivation") {
+        tenant.status = "Active";
+        await tenant.save();
+      }
     }
     return response.json({ success: true, data: publicSubscription(subscription) });
   } catch (error) {

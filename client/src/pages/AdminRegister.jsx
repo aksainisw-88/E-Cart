@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, KeyRound, ShieldCheck, Store } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { getTenantId, tenantHeaders } from "../utils/tenant";
+import AdminAccountRegister from "./AdminAccountRegister";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const inputClass = "mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm outline-none focus:border-primary";
@@ -38,10 +39,19 @@ const AdminRegister = () => {
   const [businessSegments, setBusinessSegments] = useState([]);
   const [segmentsLoading, setSegmentsLoading] = useState(true);
   const [segmentsError, setSegmentsError] = useState("");
+  const [onboardingMode, setOnboardingMode] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     let active = true;
+    fetch(`${API_URL}/api/auth/onboarding-config`)
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "Unable to check signup availability.");
+        return result.sharedPlatform;
+      })
+      .then((sharedPlatform) => { if (active) setOnboardingMode(sharedPlatform && !getTenantId() ? "shared" : "legacy"); })
+      .catch(() => { if (active) setOnboardingMode("unavailable"); });
     fetch(`${API_URL}/api/business-segments`)
       .then(async (response) => {
         const result = await response.json();
@@ -147,6 +157,10 @@ const AdminRegister = () => {
       setLoading(false);
     }
   };
+
+  if (onboardingMode === "shared") return <AdminAccountRegister />;
+  if (onboardingMode === null) return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-sm text-white">Loading signup options...</div>;
+  if (onboardingMode === "unavailable") return <div role="alert" className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-center text-sm text-white">Unable to load signup options. Check the server connection and refresh this page.</div>;
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-10 sm:px-6">

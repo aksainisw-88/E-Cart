@@ -26,6 +26,7 @@ const paymentProviders = [
 const emptyIntegrations = Object.fromEntries(paymentProviders.map(({ key }) => [key, { enabled: false, mode: "test", merchantId: "", terminalId: "", deviceId: "", apiKey: "", apiSecret: "", webhookSecret: "", apiKeyConfigured: false, apiSecretConfigured: false, webhookSecretConfigured: false }]));
 
 const AdminSettings = () => {
+  const isSubscriptionRegistration = window.location.pathname === "/admin/subscription-registration";
   const [profile, setProfile] = useState({ id: "", name: "", email: "", role: "" });
   const [preferences, setPreferences] = useState(readPreferences);
   const [integrations, setIntegrations] = useState(emptyIntegrations);
@@ -89,6 +90,13 @@ const AdminSettings = () => {
             if (!requestResponse.ok) throw new Error(requestResult.message || "Unable to load subscription request.");
             if (!plansResponse.ok) throw new Error(plansResult.message || "Unable to load subscription plans.");
             setPurchaseRequest(requestResult.data);
+            if (requestResult.store) {
+              setPurchaseForm((current) => ({
+                ...current,
+                business: requestResult.store.name || current.business,
+                phone: requestResult.store.phone || current.phone,
+              }));
+            }
             setPlans(plansResult.data);
             setSelectedPlanId((current) => current || plansResult.data[0]?.id || "");
             setPurchaseError("");
@@ -327,8 +335,8 @@ const AdminSettings = () => {
     <div className="mx-auto max-w-275">
       <div>
         <p className="text-sm font-medium text-primary">Admin workspace</p>
-        <h1 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">Settings</h1>
-        <p className="mt-2 text-sm text-slate-500">Manage your admin profile and workspace preferences.</p>
+        <h1 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">{isSubscriptionRegistration ? "Subscription registration" : "Settings"}</h1>
+        <p className="mt-2 text-sm text-slate-500">{isSubscriptionRegistration ? "Choose a plan, submit your request for Super Admin review, and activate your approved license." : "Manage your admin profile and workspace preferences."}</p>
       </div>
 
       {(message || error) && <div className={`mt-5 rounded-lg p-3 text-sm ${error ? "bg-red-50 text-red-700" : "bg-teal-50 text-teal-700"}`}>{error || message}</div>}
@@ -364,6 +372,11 @@ const AdminSettings = () => {
           <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
             <p className="font-semibold">Request {purchaseRequest.status === "Pending" ? "submitted" : "being processed"}</p>
             <p className="mt-1">Your {purchaseRequest.plan} ({purchaseRequest.billingInterval || "yearly"}) subscription request was received on {purchaseRequest.requestedAt}. The platform administrator will review it and issue your registration number and license key.</p>
+          </div>
+        ) : purchaseRequest?.status === "Approved" ? (
+          <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+            <p className="font-semibold">Subscription approved</p>
+            <p className="mt-1">Your request was approved. Enter the registration number and license key above to activate your subscription and unlock admin operations.</p>
           </div>
         ) : (
           <form onSubmit={submitPurchaseRequest} className="mt-5 space-y-4">

@@ -1,6 +1,7 @@
 const { AsyncLocalStorage } = require("async_hooks");
 const mongoose = require("mongoose");
 const Tenant = require("../models/Tenant");
+const PendingTenantRegistration = require("../models/PendingTenantRegistration");
 
 const tenantContext = new AsyncLocalStorage();
 let tenantRootConnection;
@@ -78,13 +79,43 @@ const getCurrentTenantId = () => tenantContext.getStore()?.tenantId || "";
 
 const resolveTenant = async (tenantId) => {
   if (!tenantId) return null;
-  const tenant = await Tenant.findOne({ tenantId: tenantId.toLowerCase(), status: "Active" }).lean();
-  if (!tenant) {
-    const error = new Error("This store is not available. Check the store address or contact support.");
-    error.statusCode = 404;
+  const tenant = await Tenant.findOne({ tenantId: tenantId.toLowerCase() }).lean();
+  if (tenant) return tenant;
+  const pendingRegistration = await PendingTenantRegistration.findOne({
+    tenantId: tenantId.toLowerCase(),
+    status: "Pending",
+  }).lean();
+  if (pendingRegistration) return pendingRegistration;
+  const suspendedTenant = await Tenant.exists({ tenantId: tenantId.toLowerCase() });
+  if (suspendedTenant) {
+    const error = new Error("This store is suspended. Contact the platform administrator.");
+    error.statusCode = 403;
     throw error;
   }
-  return tenant;
+  const error = new Error("This store is not available. Check the store address or contact support.");
+  error.statusCode = 404;
+  throw error;
+};
+
+const isTenantOnboardingRequest = (request) => {
+  const path = request.originalUrl.split("?")[0];
+  return /^\/api\/auth\/(?:login\/admin|me|logout|admin-store-setup|admin-forgot-password|admin-reset-password|forgot-password|reset-password)$/.test(path)
+    || /^\/api\/subscription\/(?:status|plans|request|activate)$/.test(path)
+    || (request.method === "GET" && path === "/api/business-segments");
+};
+
+const restrictPendingTenant = (tenant, request) => {
+  if (tenant.status === "Active") return null;
+  if (tenant.status === "Pending" || tenant.status === "PendingActivation") {
+    if (isTenantOnboardingRequest(request)) return null;
+    const error = new Error("Store operations are locked until Super Admin approval and license activation are complete.");
+    error.statusCode = 403;
+    error.code = "SUBSCRIPTION_REQUIRED";
+    return error;
+  }
+  const error = new Error("This store is suspended. Contact the platform administrator.");
+  error.statusCode = 403;
+  return error;
 };
 
 const tenantDatabaseMiddleware = (request, response, next) => {
@@ -113,6 +144,8 @@ const tenantDatabaseMiddleware = (request, response, next) => {
   resolveTenant(requestedTenantId)
     .then((tenant) => {
       if (!tenant) return next();
+      const restrictionError = restrictPendingTenant(tenant, request);
+      if (restrictionError) return next(restrictionError);
       return runWithTenant(tenant, next);
     })
     .catch(next);
@@ -126,5 +159,6 @@ module.exports = {
   initializeTenantDatabase,
   resolveTenant,
   runWithTenant,
+  restrictPendingTenant,
   tenantDatabaseMiddleware,
 };

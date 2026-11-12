@@ -34,6 +34,7 @@ import ResetPassword from "./pages/ResetPassword";
 import AdminLogin from "./pages/AdminLogin";
 import AdminRegister from "./pages/AdminRegister";
 import AdminTransactionReturns from "./pages/AdminTransactionReturns";
+import AdminStoreSetup from "./pages/AdminStoreSetup";
 
 const RequireCustomerAuth = ({ children }) => {
   const location = useLocation();
@@ -91,6 +92,8 @@ function App() {
         <Route path="/admin/reset-password" element={<ResetPassword />} />
         <Route path="/admin/register" element={<AdminRegister />} />
         <Route path="/admin" element={<AdminLayout />}>
+          <Route path="store-setup" element={<AdminStoreSetup />} />
+          <Route path="subscription-registration" element={<AdminSection section="settings" />} />
           <Route index element={<AdminDashboardOverview />} />
           <Route path="reports" element={<AdminReports />} />
           <Route path="reports/:reportType" element={<AdminReportModule />} />

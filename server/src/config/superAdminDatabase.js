@@ -17,6 +17,8 @@ const connectSuperAdminDatabase = async (uri) => {
   const CustomerDatabaseConfig = require("../models/CustomerDatabaseConfig");
   const ClientCredential = require("../models/ClientCredential");
   const Tenant = require("../models/Tenant");
+  const PendingTenantRegistration = require("../models/PendingTenantRegistration");
+  const TenantSignupOtp = require("../models/TenantSignupOtp");
   const collections = [
     { name: SuperAdmin.collection.collectionName, model: SuperAdmin },
     { name: Subscription.collection.collectionName, model: Subscription },
@@ -26,6 +28,8 @@ const connectSuperAdminDatabase = async (uri) => {
     { name: CustomerDatabaseConfig.collection.collectionName, model: CustomerDatabaseConfig },
     { name: ClientCredential.collection.collectionName, model: ClientCredential },
     { name: Tenant.collection.collectionName, model: Tenant },
+    { name: PendingTenantRegistration.collection.collectionName, model: PendingTenantRegistration },
+    { name: TenantSignupOtp.collection.collectionName, model: TenantSignupOtp },
   ];
   for (const { name, model } of collections) {
     const exists = await connection.db.listCollections({ name }, { nameOnly: true }).hasNext();
@@ -40,6 +44,8 @@ const connectSuperAdminDatabase = async (uri) => {
     CustomerDatabaseConfig.createIndexes(),
     ClientCredential.createIndexes(),
     Tenant.createIndexes(),
+    PendingTenantRegistration.createIndexes(),
+    TenantSignupOtp.createIndexes(),
   ]);
   const defaultSegments = [
     ["SEG001", "Pharma / Medical Store", "PHARMA", "Medicines, healthcare products, and wellness essentials.", "pharmacy"],
