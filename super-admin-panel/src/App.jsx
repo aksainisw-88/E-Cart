@@ -383,6 +383,17 @@ function App() {
     setSidebarOpen(false);
   };
 
+  const openClient = (client) => {
+    setSelectedClient(client);
+    setActivePage("client-details");
+    setSidebarOpen(false);
+  };
+
+  const closeClientDetails = () => {
+    setSelectedClient(null);
+    setActivePage("clients");
+  };
+
   if (authState === "checking") {
     return <main className="login-page"><p>Checking super-admin access...</p></main>;
   }
@@ -452,7 +463,7 @@ function App() {
       <main className="main-area">
         <header className="topbar">
           <button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open navigation"><Menu size={20} /></button>
-          <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{navItems.find((item) => item.id === activePage)?.label}</strong></div>
+          <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{activePage === "client-details" ? "Client details" : navItems.find((item) => item.id === activePage)?.label}</strong></div>
           <div className="topbar-actions">
             <div className="system-status"><span /> API connected</div>
             <button className="icon-button notification-button" aria-label="Notifications" onClick={() => notify(`${pendingRequests.length} registration requests need review.`)}>
@@ -473,13 +484,13 @@ function App() {
               pending={pending}
               expiringClients={expiringClients}
               switchPage={switchPage}
-              openClient={setSelectedClient}
+              openClient={openClient}
               decideRequest={decideRequest}
               onAdd={() => setDialog({ type: "new-request" })}
             />
           )}
           {activePage === "clients" && (
-            <ClientsPage clients={visibleClients} query={query} setQuery={setQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} openClient={setSelectedClient} onAdd={() => setDialog({ type: "new-request" })} />
+            <ClientsPage clients={visibleClients} query={query} setQuery={setQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} openClient={openClient} onAdd={() => setDialog({ type: "new-request" })} />
           )}
           {activePage === "business-segments" && (
             <BusinessSegmentsPage segments={businessSegments} saveSegment={saveBusinessSegment} toggleSegment={toggleBusinessSegment} />
@@ -491,28 +502,28 @@ function App() {
             <PlansPage plans={plans} savePlan={savePlan} togglePlan={togglePlan} />
           )}
           {activePage === "subscriptions" && (
-            <SubscriptionsPage clients={clients} openClient={setSelectedClient} onRenew={(client) => setDialog({ type: "renew", client })} />
+            <SubscriptionsPage clients={clients} openClient={openClient} onRenew={(client) => setDialog({ type: "renew", client })} />
           )}
           {activePage === "payments" && (
-            <PaymentsPage clients={clients} openClient={setSelectedClient} />
+            <PaymentsPage clients={clients} openClient={openClient} />
+          )}
+          {activePage === "client-details" && selectedClient && (
+            <ClientDetailsPage
+              client={{ ...(clients.find((client) => client.id === selectedClient.id) || selectedClient), ...(selectedClient.licenseKey ? { licenseKey: selectedClient.licenseKey } : {}) }}
+              onBack={closeClientDetails}
+              onStatusChange={(client) => updateClient(client, client.status === "Suspended" ? "Active" : "Suspended")}
+              onRenew={(client) => setDialog({ type: "renew", client })}
+              onEdit={(client) => setDialog({ type: "edit-client", client })}
+              onRotateKey={rotateLicenseKey}
+              onCopy={(value) => {
+                if (!navigator.clipboard) return notify("Clipboard access is unavailable.");
+                navigator.clipboard.writeText(value).then(() => notify("Copied to clipboard.")).catch(() => notify("Clipboard access is unavailable."));
+              }}
+            />
           )}
         </div>
       </main>
 
-      {selectedClient && (
-        <ClientDrawer
-          client={{ ...(clients.find((client) => client.id === selectedClient.id) || selectedClient), ...(selectedClient.licenseKey ? { licenseKey: selectedClient.licenseKey } : {}) }}
-          close={() => setSelectedClient(null)}
-          onStatusChange={(client) => updateClient(client, client.status === "Suspended" ? "Active" : "Suspended")}
-          onRenew={(client) => setDialog({ type: "renew", client })}
-          onEdit={(client) => setDialog({ type: "edit-client", client })}
-          onRotateKey={rotateLicenseKey}
-          onCopy={(value) => {
-            if (!navigator.clipboard) return notify("Clipboard access is unavailable.");
-            navigator.clipboard.writeText(value).then(() => notify("Copied to clipboard.")).catch(() => notify("Clipboard access is unavailable."));
-          }}
-        />
-      )}
       {dialog && (
         <Dialog
           dialog={dialog}
@@ -853,21 +864,49 @@ function PaymentsPage({ clients, openClient }) {
   );
 }
 
-function ClientDrawer({ client, close, onStatusChange, onRenew, onEdit, onRotateKey, onCopy }) {
-  const pendingAmount = Math.max(client.amount - client.paid, 0);
+function ClientDetailsPage({ client, onBack, onStatusChange, onRenew, onEdit, onRotateKey, onCopy }) {
   return (
-    <div className="drawer-layer" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
-      <aside className="client-drawer" role="dialog" aria-modal="true" aria-label={`${client.business} client details`}>
-        <div className="drawer-top"><span className="eyebrow">CLIENT PROFILE</span><button className="icon-button" onClick={close} aria-label="Close client details"><X size={19} /></button></div>
-        <div className="drawer-client-heading"><div className={`avatar drawer-avatar ${avatarColor(client.business)}`}>{client.business.slice(0, 1)}</div><div><h2>{client.business}</h2><p>{client.name}</p></div><StatusBadge status={client.status} /></div>
-        <div className="drawer-actions"><button className="button button-primary" onClick={() => onEdit(client)}><Settings size={15} /> Edit details</button><button className="button button-secondary" onClick={() => onRenew(client)}><FileClock size={16} /> Renew license</button><button className="button button-secondary" onClick={() => onStatusChange(client)}>{client.status === "Suspended" ? <CheckCircle2 size={16} /> : <XCircle size={16} />}{client.status === "Suspended" ? "Activate" : "Suspend"}</button><button className="button button-secondary" onClick={() => onRotateKey(client)}><RefreshCw size={15} /> Reissue key</button></div>
-        <div className="drawer-section"><div className="drawer-section-heading"><h3>Business details</h3></div><DetailRow label="Primary contact" value={client.name} /><DetailRow label="Email address" value={client.email} /><DetailRow label="Phone number" value={client.phone || "—"} /><DetailRow label="Registered on" value={shortDate(client.registeredAt)} /></div>
-        <div className="drawer-section"><div className="drawer-section-heading"><h3>License details</h3><ShieldCheck size={17} className="section-heading-icon" /></div><CredentialRow label="Registration number" value={client.registrationNumber || "Not issued"} onCopy={onCopy} /><CredentialRow label="License key" value={client.licenseKey || "Hidden after issuance"} onCopy={onCopy} />{client.tenantId && <CredentialRow label="Tenant ID" value={client.tenantId} onCopy={onCopy} />}<DetailRow label="Activated on" value={shortDate(client.activatedAt)} /><DetailRow label="Valid from" value={shortDate(client.validFrom)} /><DetailRow label="Valid until" value={shortDate(client.validTill)} /></div>
-        <div className="drawer-section"><div className="drawer-section-heading"><h3>Payment overview</h3><span className="mini-plan">{client.plan} plan</span></div><div className="drawer-finance"><div><small>Platform amount</small><strong>{currency(client.amount)}</strong></div><div><small>Paid amount</small><strong className="text-green">{currency(client.paid)}</strong></div><div><small>Pending amount</small><strong className="text-amber">{currency(pendingAmount)}</strong></div></div><div className="payment-progress"><span style={{ width: `${client.amount ? Math.min((client.paid / client.amount) * 100, 100) : 0}%` }} /></div><div className="payment-progress-label"><span>Payment completion</span><span>{client.amount ? Math.round((client.paid / client.amount) * 100) : 0}%</span></div></div>
-        <div className="drawer-section history-section"><div className="drawer-section-heading"><h3>Subscription history</h3><span className="history-count">{(client.history || []).length}</span></div>{(client.history || []).length === 0 ? <p className="no-history">No subscription or payment history recorded.</p> : (client.history || []).slice().reverse().map((item, index) => <div className="history-item" key={`${item.date}-${index}`}><div className="history-dot"><CreditCard size={13} /></div><div className="history-copy"><strong>{item.type}</strong><small>{shortDate(item.date)}</small></div><span className="history-amount">{currency(item.amount)}</span><PaymentBadge status={item.status} /></div>)}</div>
-        <div className="prototype-inline-note"><ShieldCheck size={14} /> License keys are stored as hashes and are only shown once when issued.</div>
-      </aside>
-    </div>
+    <>
+      <PageHeading
+        eyebrow="CLIENT PROFILE"
+        title={client.business || "Client details"}
+        description="Client contact information and subscription credentials."
+        actions={<button className="button button-secondary" onClick={onBack}><ArrowLeft size={16} /> Back to clients</button>}
+      />
+      <div className="client-details-layout">
+        <section className="panel client-details-panel">
+          <div className="client-details-title">
+            <div className={`avatar ${avatarColor(client.business)}`}>{client.business?.slice(0, 1) || "C"}</div>
+            <div><h2>{client.business || "—"}</h2><p>Company name</p></div>
+            <StatusBadge status={client.status} />
+          </div>
+          <div className="client-details-grid">
+            <DetailRow label="Client name" value={client.name || "—"} />
+            <DetailRow label="Company name" value={client.business || "—"} />
+            <DetailRow label="Email" value={client.email || "—"} />
+            <DetailRow label="Phone" value={client.phone || "—"} />
+          </div>
+        </section>
+        <section className="panel client-details-panel">
+          <div className="client-details-section-title"><KeyRound size={17} /><h2>License details</h2></div>
+          <div className="client-details-grid">
+            <CredentialRow label="Registration number" value={client.registrationNumber || "Not issued"} onCopy={onCopy} />
+            <CredentialRow label="License key" value={client.licenseKey || "Hidden after issuance"} onCopy={onCopy} />
+            {client.tenantId && <CredentialRow label="Tenant ID" value={client.tenantId} onCopy={onCopy} />}
+            <DetailRow label="Valid till" value={shortDate(client.validTill)} />
+            <DetailRow label="Valid from" value={shortDate(client.validFrom)} />
+            <DetailRow label="Activated on" value={shortDate(client.activatedAt)} />
+          </div>
+          {!client.licenseKey && <p className="client-key-note">License keys are stored as hashes and shown only once when issued. Reissue the key to generate a new one.</p>}
+        </section>
+      </div>
+      <section className="client-details-actions">
+        <button className="button button-primary" onClick={() => onEdit(client)}><Settings size={15} /> Edit details</button>
+        <button className="button button-secondary" onClick={() => onRenew(client)}><FileClock size={16} /> Renew license</button>
+        <button className="button button-secondary" onClick={() => onStatusChange(client)}>{client.status === "Suspended" ? <CheckCircle2 size={16} /> : <XCircle size={16} />}{client.status === "Suspended" ? "Activate" : "Suspend"}</button>
+        <button className="button button-secondary" onClick={() => onRotateKey(client)}><RefreshCw size={15} /> Reissue key</button>
+      </section>
+    </>
   );
 }
 
