@@ -65,9 +65,21 @@ const createRazorpayClient = (config) => {
 router.post("/", requireAnyRole("customer"), async (request, response, next) => {
   try {
     const data = orderSchema.parse(request.body);
-    const customer = await User.findById(request.user.id).select("customerType").lean();
+    const customer = await User.findById(request.user.id).select("customerType status location").lean();
+    if (!customer) return response.status(401).json({ success: false, message: "Customer account not found." });
+    if (customer.status === "Pending") {
+      return response.status(403).json({ success: false, code: "CUSTOMER_ACCESS_PENDING", message: "Your store access request is waiting for approval. You can place an order after the store approves your account." });
+    }
+    if (customer.status === "Blocked") return response.status(403).json({ success: false, message: "This customer account is blocked. Contact the store administrator." });
     let selectedStore = null;
-    if (data.storeId) {
+    const assignedLocationId = customer.location?.toString() || "";
+    if (assignedLocationId) {
+      if (data.storeId && data.storeId !== assignedLocationId) {
+        return response.status(403).json({ success: false, message: "Orders must be placed with the store that approved your access request." });
+      }
+      selectedStore = await StoreLocation.findOne({ _id: assignedLocationId, active: true }).select("_id isDefault").lean();
+      if (!selectedStore) return response.status(409).json({ success: false, message: "Your approved store is not currently available. Contact the store administrator." });
+    } else if (data.storeId) {
       selectedStore = await StoreLocation.findOne({ _id: data.storeId, active: true }).select("_id isDefault").lean();
       if (!selectedStore) return response.status(400).json({ success: false, message: "Select an active store before placing your order." });
     } else {

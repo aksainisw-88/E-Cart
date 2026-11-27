@@ -55,7 +55,7 @@ const userSchema = new mongoose.Schema(
     location: { type: mongoose.Schema.Types.ObjectId, ref: "StoreLocation", default: null },
     status: {
       type: String,
-      enum: ["Active", "Blocked"],
+      enum: ["Pending", "Active", "Blocked"],
       default: "Active",
     },
     menuPermissions: {

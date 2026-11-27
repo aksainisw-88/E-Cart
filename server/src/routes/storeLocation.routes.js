@@ -7,6 +7,7 @@ const User = require("../models/User");
 const { requireAuth, requireRole, requireAnyMenuPermission, requireOptionalAuth } = require("../middleware/auth");
 
 const router = express.Router();
+const accessRequestSchema = z.object({ locationId: z.string().regex(/^[a-f\d]{24}$/i) });
 const storeSchema = z.object({
   name: z.string().trim().min(2).max(100),
   description: z.string().trim().max(300).optional().default(""),
@@ -49,6 +50,33 @@ router.get("/", requireOptionalAuth, async (request, response, next) => {
     const stores = await StoreLocation.find(filter).select("name description phone email address city pincode active isDefault").sort({ name: 1 }).lean();
     response.json({ success: true, data: stores });
   } catch (error) { next(error); }
+});
+
+router.post("/access-request", requireAuth, requireRole("customer"), async (request, response, next) => {
+  try {
+    const parsed = accessRequestSchema.safeParse(request.body);
+    if (!parsed.success) return response.status(400).json({ success: false, message: "Choose an available store location." });
+    const customer = await User.findOne({ _id: request.user.id, role: "customer" });
+    if (!customer) return response.status(404).json({ success: false, message: "Customer account not found." });
+    if (customer.status === "Blocked") return response.status(403).json({ success: false, message: "This customer account is blocked. Contact the store administrator." });
+    if (customer.status !== "Pending") return response.status(409).json({ success: false, message: "Only pending customers can request store access." });
+
+    const location = await StoreLocation.findOne({ _id: parsed.data.locationId, active: true }).select("name city").lean();
+    if (!location) return response.status(404).json({ success: false, message: "That store location is no longer available." });
+
+    customer.location = location._id;
+    await customer.save();
+    return response.json({
+      success: true,
+      data: {
+        status: customer.status,
+        location: { _id: location._id, name: location.name, city: location.city || "" },
+      },
+      message: "Store access request sent. You can place orders after the store approves your account.",
+    });
+  } catch (error) {
+    return next(error);
+  }
 });
 
 router.get("/manage", ...adminOnly, async (request, response, next) => {

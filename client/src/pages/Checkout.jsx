@@ -17,6 +17,8 @@ const Checkout = () => {
   });
   const [session, setSession] = useState("checking");
   const [customerType, setCustomerType] = useState("B2C");
+  const [requestedStore, setRequestedStore] = useState(null);
+  const [assignedStoreId, setAssignedStoreId] = useState("");
   const [stores, setStores] = useState([]);
   const [selectedStoreId, setSelectedStoreId] = useState(() => localStorage.getItem("e-mart-b2b-store") || "");
   const [addresses, setAddresses] = useState([]);
@@ -39,7 +41,9 @@ const Checkout = () => {
       .then((user) => {
         if (!user) { setSession("guest"); return; }
         setCustomerType(user.customerType || "B2C");
-        setSession("signed-in");
+        setRequestedStore(user.location || null);
+        setAssignedStoreId(user.location?._id || "");
+        setSession(user.status === "Pending" ? "pending" : user.status === "Blocked" ? "blocked" : "signed-in");
       })
       .catch(() => setSession("guest"));
   }, []);
@@ -52,8 +56,9 @@ const Checkout = () => {
         const locations = result.data || [];
         setStores(locations);
         const previousStoreId = localStorage.getItem("e-mart-b2b-store");
-        const previousStore = locations.find((location) => location._id === previousStoreId);
-        const preferred = previousStore || locations[0];
+        const preferred = locations.find((location) => location._id === assignedStoreId)
+          || locations.find((location) => location._id === previousStoreId)
+          || locations[0];
         if (preferred) {
           setSelectedStoreId(preferred._id);
           localStorage.setItem("e-mart-b2b-store", preferred._id);
@@ -63,7 +68,7 @@ const Checkout = () => {
         }
       })
       .catch(() => setStores([]));
-  }, [session, customerType]);
+  }, [session, customerType, assignedStoreId]);
 
   useEffect(() => {
     if (session !== "signed-in") return;
@@ -148,6 +153,20 @@ const Checkout = () => {
         <Footer />
       </>
     );
+  if (session === "pending" || session === "blocked")
+    return (
+      <>
+        <main className="bg-gray-50 px-4 py-24">
+          <div className="mx-auto max-w-lg rounded-2xl border border-amber-200 bg-white p-8 text-center shadow-sm">
+            <h1 className="text-2xl font-bold text-gray-900">{session === "pending" ? "Store approval pending" : "Customer access unavailable"}</h1>
+            <p className="mt-3 text-sm leading-6 text-gray-500">{session === "pending" ? requestedStore?.name ? `Your access request for ${requestedStore.name} is waiting for the store administrator. You can place orders after approval.` : "Choose a store from your account and submit an access request before placing an order." : "This customer account is blocked. Contact the store administrator for help."}</p>
+            {session === "pending" && requestedStore?.name && <p className="mt-2 text-xs text-slate-400">Refresh this page after your request is approved.</p>}
+            <Link to={session === "pending" && !requestedStore?.name ? "/account" : "/products"} className="mt-6 inline-flex rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white">{session === "pending" && !requestedStore?.name ? "Choose a store" : "Browse products"}</Link>
+          </div>
+        </main>
+        <Footer />
+      </>
+    );
 
   return (
     <>
@@ -178,7 +197,7 @@ const Checkout = () => {
                   <div><h3 className="text-sm font-semibold text-gray-900">Select a store</h3><p className="mt-1 text-xs text-gray-500">Choose the branch that will fulfill this order.</p></div>
                   <Store className="h-5 w-5 text-primary" />
                 </div>
-                {stores.length ? <div className="mt-3 grid gap-3 sm:grid-cols-2">{stores.map((location) => <button key={location._id} type="button" onClick={() => { setSelectedStoreId(location._id); localStorage.setItem("e-mart-b2b-store", location._id); setDeliveryMessage(""); }} className={`rounded-lg border p-3 text-left transition ${selectedStoreId === location._id ? "border-primary bg-emerald-50" : "border-slate-200 hover:border-slate-300"}`}><span className="flex items-start justify-between gap-2"><span><span className="block text-sm font-semibold text-slate-800">{location.name}</span><span className="mt-1 block text-xs text-slate-500">{location.address}, {location.city}{location.pincode ? ` · ${location.pincode}` : ""}</span></span>{selectedStoreId === location._id && <Check className="h-4 w-4 shrink-0 text-primary" />}</span></button>)}</div> : <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">No active stores are available for business orders.</p>}
+                {stores.length ? <div className="mt-3 grid gap-3 sm:grid-cols-2">{stores.filter((location) => !assignedStoreId || location._id === assignedStoreId).map((location) => <button key={location._id} type="button" onClick={() => { setSelectedStoreId(location._id); localStorage.setItem("e-mart-b2b-store", location._id); setDeliveryMessage(""); }} className={`rounded-lg border p-3 text-left transition ${selectedStoreId === location._id ? "border-primary bg-emerald-50" : "border-slate-200 hover:border-slate-300"}`}><span className="flex items-start justify-between gap-2"><span><span className="block text-sm font-semibold text-slate-800">{location.name}</span><span className="mt-1 block text-xs text-slate-500">{location.address}, {location.city}{location.pincode ? ` · ${location.pincode}` : ""}</span></span>{selectedStoreId === location._id && <Check className="h-4 w-4 shrink-0 text-primary" />}</span></button>)}</div> : <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">No active stores are available for business orders.</p>}
               </section>}
               {addresses.length > 0 && <label className="mt-6 block text-sm font-medium text-gray-700">Use a saved address<select value={selectedAddress} onChange={(event) => { const address = addresses.find((item) => item._id === event.target.value); setSelectedAddress(event.target.value); if (address) setDetails(address); }} className="mt-2 h-11 w-full rounded-lg border border-gray-200 bg-white px-3 outline-none focus:border-primary"><option value="">Enter a new address</option>{addresses.map((address) => <option key={address._id} value={address._id}>{address.label} · {address.address}, {address.pincode}</option>)}</select></label>}
               <div className="mt-5 grid gap-4 sm:grid-cols-2">

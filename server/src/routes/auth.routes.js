@@ -168,7 +168,13 @@ const publicUser = (user) => ({
   name: user.name,
   email: user.email,
   role: user.role,
-  ...(user.role === "customer" ? { customerType: user.customerType || "B2C", businessName: user.businessName || "", gstin: user.gstin || "" } : {}),
+  ...(user.role === "customer" ? {
+    customerType: user.customerType || "B2C",
+    businessName: user.businessName || "",
+    gstin: user.gstin || "",
+    status: user.status || "Active",
+    location: user.location?.name ? { _id: user.location._id, name: user.location.name, city: user.location.city || "" } : null,
+  } : {}),
   ...(user.role !== "customer" ? { location: user.location || null } : {}),
   ...(Array.isArray(user.menuPermissions) ? { menuPermissions: user.menuPermissions } : {}),
 });
@@ -275,7 +281,7 @@ router.post("/register", async (request, response, next) => {
     }
 
     const password = await bcrypt.hash(data.password, 12);
-    const user = await User.create({ name: data.name, email, password, customerType: data.customerType, businessName: data.businessName, gstin: data.gstin });
+    const user = await User.create({ name: data.name, email, password, customerType: data.customerType, businessName: data.businessName, gstin: data.gstin, status: "Pending" });
     await challenge.deleteOne();
     setAuthCookie(response, user, request.app.locals.env);
     return response.status(201).json({ success: true, user: publicUser(user) });

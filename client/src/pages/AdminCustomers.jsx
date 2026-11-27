@@ -25,7 +25,7 @@ const AdminCustomers = () => {
     load();
   }, []);
   const toggleStatus = async (customer) => {
-    const status = customer.status === "Blocked" ? "Active" : "Blocked";
+    const status = customer.status === "Active" ? "Blocked" : "Active";
     const response = await fetch(
       `${API_URL}/api/customers/${customer._id}/status`,
       {
@@ -99,7 +99,7 @@ const AdminCustomers = () => {
         <h1 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">
           Customers
         </h1>
-        <div className="flex flex-wrap items-end justify-between gap-4"><p className="mt-2 text-sm text-slate-500">Manage customer details, account status, and customer source.</p><button type="button" onClick={openCreate} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark"><Plus className="h-4 w-4" />Add customer</button></div>
+        <div className="flex flex-wrap items-end justify-between gap-4"><p className="mt-2 text-sm text-slate-500">Review store access requests, approve customers, and manage account status.</p><button type="button" onClick={openCreate} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark"><Plus className="h-4 w-4" />Add customer</button></div>
       </div>
       {error && (
         <p className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">
@@ -117,7 +117,7 @@ const AdminCustomers = () => {
               className="w-full bg-transparent text-sm outline-none"
             />
           </div>
-          <div className="flex items-center gap-3"><select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"><option value="All">All statuses</option><option value="Active">Active</option><option value="Blocked">Blocked</option></select><span className="text-sm text-slate-500">{visible.length} customers</span></div>
+          <div className="flex items-center gap-3"><select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"><option value="All">All statuses</option><option value="Pending">Pending</option><option value="Active">Active</option><option value="Blocked">Blocked</option></select><span className="text-sm text-slate-500">{visible.length} customers</span></div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-190 text-left text-sm">
@@ -127,6 +127,7 @@ const AdminCustomers = () => {
                   "Customer",
                   "Email",
                   "Phone",
+                  "Store access",
                   "Source",
                   "Orders",
                   "Total spent",
@@ -154,6 +155,7 @@ const AdminCustomers = () => {
                   </td>
                   <td className="px-5 py-4 text-slate-500">{customer.email}</td>
                   <td className="px-5 py-4 text-slate-500">{customer.phone || "-"}</td>
+                  <td className="px-5 py-4 text-slate-600">{customer.location ? <><span className="font-medium text-slate-700">{customer.location.name}</span><span className="mt-1 block text-xs text-slate-400">{customer.location.city}</span></> : customer.status === "Pending" ? <span className="text-amber-700">Store not selected</span> : "-"}</td>
                   <td className="px-5 py-4"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${customer.customerSource === "Offline" ? "bg-amber-50 text-amber-700" : "bg-sky-50 text-sky-700"}`}>{customer.customerSource || "Online"}</span></td>
                   <td className="px-5 py-4 text-slate-500">
                     {customer.orderCount}
@@ -163,7 +165,7 @@ const AdminCustomers = () => {
                   </td>
                   <td className="px-5 py-4">
                     <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${customer.status === "Active" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${customer.status === "Active" ? "bg-emerald-50 text-emerald-700" : customer.status === "Pending" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`}
                     >
                       {customer.status}
                     </span>
@@ -171,7 +173,7 @@ const AdminCustomers = () => {
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-2">
                       <button type="button" onClick={() => openEdit(customer)} title="Edit customer" aria-label={`Edit ${customer.name}`} className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-primary"><Pencil className="h-4 w-4" /></button>
-                      <button type="button" onClick={() => toggleStatus(customer)} title={customer.status === "Active" ? "Block customer" : "Activate customer"} className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-dark">{customer.status === "Active" ? <><UserX className="h-4 w-4" />Block</> : <><UserCheck className="h-4 w-4" />Activate</>}</button>
+                      <button type="button" onClick={() => toggleStatus(customer)} disabled={customer.status === "Pending" && !customer.location} title={customer.status === "Active" ? "Block customer" : customer.status === "Pending" && !customer.location ? "Waiting for the customer to choose a store" : customer.status === "Pending" ? "Approve store access" : "Activate customer"} className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-dark disabled:cursor-not-allowed disabled:text-slate-300">{customer.status === "Active" ? <><UserX className="h-4 w-4" />Block</> : customer.status === "Pending" ? <><UserCheck className="h-4 w-4" />Approve</> : <><UserCheck className="h-4 w-4" />Activate</>}</button>
                       <button type="button" onClick={() => deleteCustomer(customer)} title="Delete customer" aria-label={`Delete ${customer.name}`} className="rounded-md p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </td>

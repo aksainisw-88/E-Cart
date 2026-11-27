@@ -23,7 +23,7 @@ const customerSchema = z.object({
 
 router.get("/", async (request, response, next) => {
   try {
-    const customers = await User.find({ role: "customer" }).select("name email phone address locality pincode district state gstin panNumber gender status customerSource createdAt addresses").sort({ createdAt: -1 }).lean();
+    const customers = await User.find({ role: "customer" }).select("name email phone address locality pincode district state gstin panNumber gender status customerSource createdAt addresses location").populate("location", "name city").sort({ createdAt: -1 }).lean();
     const locationId = request.user.locationId || "";
     const [orders, posSales] = await Promise.all([
       Order.aggregate([{ $match: locationId ? { store: locationId } : {} }, { $group: { _id: "$customer", count: { $sum: 1 }, total: { $sum: "$total" } } }]),
@@ -111,8 +111,13 @@ router.patch("/:id/status", async (request, response, next) => {
   try {
     const parsed = z.object({ status: z.enum(["Active", "Blocked"]) }).safeParse(request.body);
     if (!parsed.success) return response.status(400).json({ success: false, message: "Choose Active or Blocked status." });
-    const customer = await User.findOneAndUpdate({ _id: request.params.id, role: "customer" }, { status: parsed.data.status }, { new: true, runValidators: true }).select("name email phone status customerSource");
+    const customer = await User.findOne({ _id: request.params.id, role: "customer" });
     if (!customer) return response.status(404).json({ success: false, message: "Customer not found" });
+    if (parsed.data.status === "Active" && customer.status === "Pending" && !customer.location) {
+      return response.status(400).json({ success: false, message: "This customer has not selected a store location yet." });
+    }
+    customer.status = parsed.data.status;
+    await customer.save();
     response.json({ success: true, data: customer });
   } catch (error) { next(error); }
 });

@@ -41,6 +41,7 @@ const Account = ({ initialMode = "login" }) => {
   const [storePickerOpen, setStorePickerOpen] = useState(false);
   const [storePickerLoading, setStorePickerLoading] = useState(false);
   const [storePickerError, setStorePickerError] = useState("");
+  const [storeRequestBusy, setStoreRequestBusy] = useState(false);
   const [addressFormOpen, setAddressFormOpen] = useState(false);
   const [addressMessage, setAddressMessage] = useState("");
   const [addressError, setAddressError] = useState("");
@@ -66,7 +67,7 @@ const Account = ({ initialMode = "login" }) => {
         .then((result) => {
           const locations = result.data || [];
           setStores(locations);
-          const preferredId = localStorage.getItem("e-mart-b2b-store");
+          const preferredId = currentUser.location?._id || localStorage.getItem("e-mart-b2b-store");
           const preferred = locations.find((location) => location._id === preferredId) || locations[0];
           if (preferred) {
             setSelectedStoreId(preferred._id);
@@ -102,7 +103,7 @@ const Account = ({ initialMode = "login" }) => {
       if (!response.ok) throw new Error(result.message || "Unable to load store locations.");
       const availableStores = result.data || [];
       setStores(availableStores);
-      const preferredId = localStorage.getItem("e-mart-b2b-store");
+      const preferredId = pendingCustomer?.location?._id || currentUser?.location?._id || localStorage.getItem("e-mart-b2b-store");
       const preferred = availableStores.find((location) => location._id === preferredId) || availableStores[0];
       setSelectedStoreId(preferred?._id || "");
       if (!availableStores.length) setStorePickerError("No active store locations are available right now.");
@@ -112,15 +113,37 @@ const Account = ({ initialMode = "login" }) => {
       setStorePickerLoading(false);
     }
   };
-  const confirmStoreLocation = () => {
-    if (!stores.some((location) => location._id === selectedStoreId)) return;
-    localStorage.setItem("e-mart-b2b-store", selectedStoreId);
-    setStorePickerOpen(false);
-    if (pendingCustomer) {
-      setCurrentUser(pendingCustomer);
+  const confirmStoreLocation = async () => {
+    const selectedStore = stores.find((location) => location._id === selectedStoreId);
+    const customer = pendingCustomer || currentUser;
+    if (!selectedStore || !customer) return;
+    setStoreRequestBusy(true);
+    setStorePickerError("");
+    try {
+      const response = await fetch(`${API_URL}/api/stores/access-request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ locationId: selectedStoreId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to request access to this store.");
+      localStorage.setItem("e-mart-b2b-store", selectedStoreId);
+      setCurrentUser({ ...customer, status: result.data.status, location: result.data.location });
       setPendingCustomer(null);
+      setStorePickerOpen(false);
+      navigate("/account", { replace: true });
+    } catch (requestError) {
+      setStorePickerError(requestError instanceof TypeError ? "Unable to reach the server. Please try again." : requestError.message);
+    } finally {
+      setStoreRequestBusy(false);
     }
-    navigate("/products", { replace: true });
+  };
+  const openStoreRequest = () => {
+    if (!currentUser || currentUser.status !== "Pending") return;
+    setPendingCustomer(currentUser);
+    setStorePickerOpen(true);
+    loadStoreLocations();
   };
   const saveAddress = async (event) => {
     event.preventDefault();
@@ -214,7 +237,7 @@ const Account = ({ initialMode = "login" }) => {
       setSubmitted(true);
       if (["admin", "manager", "user"].includes(result.user.role)) {
         navigate("/admin/login", { replace: true });
-      } else if (result.user.customerType === "B2B") {
+      } else if (mode === "signup") {
         setPendingCustomer(result.user);
         setStorePickerOpen(true);
         await loadStoreLocations();
@@ -288,6 +311,16 @@ const Account = ({ initialMode = "login" }) => {
               </div>
             </div>
 
+            {currentUser.status === "Pending" && (
+              <section role="status" className="mb-6 flex flex-col justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:flex-row sm:items-center">
+                <div>
+                  <p className="font-semibold text-amber-900">{currentUser.location ? "Store access request pending" : "Choose a store to request access"}</p>
+                  <p className="mt-1 text-sm text-amber-800">{currentUser.location ? `Your request for ${currentUser.location.name}${currentUser.location.city ? `, ${currentUser.location.city}` : ""} is waiting for approval. You can place orders after the store approves your account. Refresh this page after approval.` : "Select the store you want to shop from. Its administrator must approve your request before you can place orders."}</p>
+                </div>
+                {!currentUser.location && <button type="button" onClick={openStoreRequest} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark"><Store className="h-4 w-4" />Choose store</button>}
+              </section>
+            )}
+
             <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
               <CustomerAccountNav />
               <div className="min-w-0 space-y-6">
@@ -317,7 +350,7 @@ const Account = ({ initialMode = "login" }) => {
                       <p className="text-sm text-slate-500">Choose a branch for your next order.</p>
                     </div>
                     <div className="mt-5 grid gap-3 md:grid-cols-2">
-                      {stores.map((location) => (
+                      {stores.filter((location) => !currentUser.location?._id || location._id === currentUser.location._id).map((location) => (
                         <article key={location._id} className={`rounded-lg border p-4 ${selectedStoreId === location._id ? "border-primary bg-emerald-50/50" : "border-slate-200"}`}>
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex min-w-0 items-start gap-3">
@@ -330,8 +363,8 @@ const Account = ({ initialMode = "login" }) => {
                             </div>
                             {selectedStoreId === location._id && <Check className="h-4 w-4 shrink-0 text-primary" />}
                           </div>
-                          <button type="button" onClick={() => { setSelectedStoreId(location._id); localStorage.setItem("e-mart-b2b-store", location._id); }} className={`mt-4 w-full rounded-lg px-3 py-2 text-xs font-semibold ${selectedStoreId === location._id ? "bg-primary text-white" : "border border-slate-200 text-slate-700 hover:border-primary hover:text-primary"}`}>
-                            {selectedStoreId === location._id ? "Selected for orders" : "Select this store"}
+                          <button type="button" disabled={Boolean(currentUser.location?._id)} onClick={() => { setSelectedStoreId(location._id); localStorage.setItem("e-mart-b2b-store", location._id); }} className={`mt-4 w-full rounded-lg px-3 py-2 text-xs font-semibold disabled:cursor-default ${currentUser.location?._id ? "bg-emerald-50 text-emerald-700" : selectedStoreId === location._id ? "bg-primary text-white" : "border border-slate-200 text-slate-700 hover:border-primary hover:text-primary"}`}>
+                            {currentUser.location?._id ? currentUser.status === "Pending" ? "Access approval pending" : "Approved for orders" : selectedStoreId === location._id ? "Selected for orders" : "Select this store"}
                           </button>
                         </article>
                       ))}
@@ -662,8 +695,8 @@ const Account = ({ initialMode = "login" }) => {
             <div className="flex items-start gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-primary"><Store className="h-5 w-5" /></span>
               <div>
-                <h2 id="store-picker-title" className="text-lg font-bold text-slate-900">Choose your store location</h2>
-                <p className="mt-1 text-sm text-slate-500">Select the branch for your business account and orders.</p>
+                <h2 id="store-picker-title" className="text-lg font-bold text-slate-900">Request access to a store</h2>
+                <p className="mt-1 text-sm text-slate-500">Choose where you want to shop. The store administrator must approve your request before you can place orders.</p>
               </div>
             </div>
             {storePickerLoading ? (
@@ -690,8 +723,8 @@ const Account = ({ initialMode = "login" }) => {
               </div>
             )}
             <div className="mt-6 flex justify-end border-t border-slate-100 pt-4">
-              <button type="button" onClick={confirmStoreLocation} disabled={storePickerLoading || Boolean(storePickerError) || !stores.some((location) => location._id === selectedStoreId)} className="inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50">
-                Continue <ArrowRight className="h-4 w-4" />
+              <button type="button" onClick={confirmStoreLocation} disabled={storePickerLoading || storeRequestBusy || Boolean(storePickerError) || !stores.some((location) => location._id === selectedStoreId)} className="inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50">
+                {storeRequestBusy ? "Sending request..." : "Request access"} <ArrowRight className="h-4 w-4" />
               </button>
             </div>
           </section>
