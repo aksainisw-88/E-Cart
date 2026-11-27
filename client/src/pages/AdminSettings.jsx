@@ -175,7 +175,7 @@ const AdminSettings = () => {
       setRegistrationNumber("");
       setLicenseKey("");
       setLicenseFormOpen(false);
-      setLicenseMessage(result.message || "Subscription verified.");
+      window.location.replace("/admin");
     } catch (requestError) {
       setLicenseError(requestError.message);
     } finally {
@@ -383,9 +383,9 @@ const AdminSettings = () => {
             <button type="button" onClick={() => setLicenseFormOpen(true)} className="text-sm font-semibold text-primary">Change license</button>
           </div>
         ) : (
-          <form onSubmit={activateSubscription} className="mt-5 grid gap-4 sm:grid-cols-2">
-            <label className="text-sm font-medium text-slate-700">Registration number<input required value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} autoComplete="off" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 font-mono outline-none focus:border-primary" placeholder="EC-YYYY-XXXXXXXXXXXX" /></label>
-            <label className="text-sm font-medium text-slate-700">License key<input required type="password" value={licenseKey} onChange={(event) => setLicenseKey(event.target.value)} autoComplete="off" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 font-mono outline-none focus:border-primary" placeholder="Enter the key provided by E-Cart" /></label>
+          <form onSubmit={activateSubscription} autoComplete="off" className="mt-5 grid gap-4 sm:grid-cols-2">
+            <label className="text-sm font-medium text-slate-700">Registration number<input id="subscription-registration-number" name="subscriptionRegistrationNumber" required value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} autoComplete="off" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 font-mono outline-none focus:border-primary" placeholder="EC-YYYY-XXXXXXXXXXXX" /></label>
+            <label className="text-sm font-medium text-slate-700">License key<input id="subscription-license-key" name="subscriptionLicenseKey" required type="password" value={licenseKey} onChange={(event) => setLicenseKey(event.target.value)} autoComplete="new-password" className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 font-mono outline-none focus:border-primary" placeholder="Enter the key provided by E-Cart" /></label>
             <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
               <button type="submit" disabled={licenseBusy} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white disabled:opacity-60"><LockKeyhole className="h-4 w-4" />{licenseBusy ? "Verifying..." : "Verify and activate"}</button>
               {subscription?.active && <button type="button" onClick={() => setLicenseFormOpen(false)} className="text-sm text-slate-500">Cancel</button>}
