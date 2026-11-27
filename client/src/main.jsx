@@ -9,6 +9,13 @@ import { StoreProvider } from "./context/StoreContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
 import { getTenantRouteBase, tenantHeaders } from "./utils/tenant.js";
 
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/service-worker.js", { scope: "/" })
+      .catch((error) => console.warn("E-Cart app install support could not start.", error));
+  });
+}
+
 const apiOrigin = new URL(import.meta.env.VITE_API_URL || window.location.origin).origin;
 const browserFetch = window.fetch.bind(window);
 // Existing API calls use fetch directly, so attach the selected tenant only to requests sent to this API.

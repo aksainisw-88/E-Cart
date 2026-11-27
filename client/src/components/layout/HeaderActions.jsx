@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 import { useCart } from "../../context/cartContext";
 import { useAuth } from "../../context/authContext";
 import { useWishlist } from "../../context/wishlistContext";
+import InstallAppButton from "./InstallAppButton";
 
 const HeaderActions = () => {
   const { itemCount, setDrawerOpen } = useCart();
@@ -15,6 +16,7 @@ const HeaderActions = () => {
 
   return (
     <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+      <InstallAppButton />
       <NavLink
         to={customer ? "/account" : "/customer/login"}
         aria-label={customer ? `Open ${customerName || "customer"} account` : "Sign in to your account"}
