@@ -257,7 +257,7 @@ const Account = ({ initialMode = "login" }) => {
     return <Navigate to="/admin" replace />;
   }
   if (!checkingSession && currentUser && location.pathname.startsWith("/customer/")) {
-    return <Navigate to="/account" replace />;
+    return <Navigate to="/products" replace />;
   }
 
   if (currentUser && !checkingSession) {
