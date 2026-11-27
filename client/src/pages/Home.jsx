@@ -19,12 +19,12 @@ const Home = () => {
     <main>
       <HeroSlider />
 
-      <section aria-label="Shopping services" className="bg-[#f4f7f4] px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
+      <section aria-label="Shopping services" className="bg-[#faf9f6] px-4 pb-6 sm:px-6 sm:pb-10 lg:px-8">
         <div className="mx-auto grid max-w-7xl gap-3 sm:grid-cols-3 sm:gap-4">
           {benefits.map(({ icon: Icon, title, detail, to }) => (
-            <Link key={title} to={to} className="group flex items-center gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm shadow-slate-900/[0.03] transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md sm:p-5">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-primary transition group-hover:bg-primary group-hover:text-white"><Icon className="h-5 w-5" /></span>
-              <span className="min-w-0"><strong className="block truncate text-sm font-bold text-slate-800">{title}</strong><span className="mt-0.5 block text-xs text-slate-500">{detail}</span></span>
+            <Link key={title} to={to} className="group flex items-center gap-4 border-b border-[#e7e9df] px-2 py-4 transition hover:border-[#7e997b] sm:border-b-0 sm:border-r sm:px-5 sm:last:border-r-0">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#edf2e8] text-[#496748] transition group-hover:bg-[#496748] group-hover:text-white"><Icon className="h-5 w-5" /></span>
+              <span className="min-w-0"><strong className="block truncate text-sm font-bold text-[#27362a]">{title}</strong><span className="mt-0.5 block text-xs text-[#7c8578]">{detail}</span></span>
             </Link>
           ))}
         </div>
