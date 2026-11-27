@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
+const CLIENT_URL = (import.meta.env.VITE_CLIENT_URL || "https://e-cart-client-gamma.vercel.app").replace(/\/+$/, "");
 const businessTypes = ["E-Commerce", "Pharmacy", "Supermart / Grocery", "Garments", "Other"];
 const marqueeItems = ["E-Commerce", "Pharmacy", "Grocery", "Garments", "Inventory", "Billing", "Orders", "Reports", "Delivery"];
 
@@ -244,9 +245,9 @@ function App() {
           <button className="ghost-cta" onClick={() => startInquiry("Demo")}>
             Request a demo
           </button>
-          <button className="primary-cta" onClick={() => startInquiry("Purchase")}>
-            Get started <ArrowRight size={16} />
-          </button>
+          <a className="primary-cta" href={`${CLIENT_URL}/admin/register`}>
+            Try free <ArrowRight size={16} />
+          </a>
           <button
             className="menu-toggle"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
