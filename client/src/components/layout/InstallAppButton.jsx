@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Download, X } from "lucide-react";
 
 const isAppInstalled = () => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
@@ -68,12 +69,12 @@ const InstallAppButton = () => {
         <span className="hidden text-xs font-semibold lg:inline">Install app</span>
       </button>
 
-      {helpOpen && (
+      {helpOpen && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/45 p-3 sm:items-center sm:p-6"
           onMouseDown={(event) => { if (event.target === event.currentTarget) setHelpOpen(false); }}
         >
-          <section role="dialog" aria-modal="true" aria-labelledby="install-app-title" onKeyDown={(event) => { if (event.key === "Escape") setHelpOpen(false); }} className="w-full max-w-lg rounded-3xl bg-white p-5 shadow-2xl sm:p-7">
+          <section role="dialog" aria-modal="true" aria-labelledby="install-app-title" onKeyDown={(event) => { if (event.key === "Escape") setHelpOpen(false); }} className="max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl sm:max-h-[calc(100dvh-3rem)] sm:p-7">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">E-Cart app</p>
@@ -93,7 +94,8 @@ const InstallAppButton = () => {
 
             <button type="button" onClick={() => setHelpOpen(false)} className="mt-6 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-dark">Got it</button>
           </section>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
