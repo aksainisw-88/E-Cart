@@ -8,6 +8,7 @@ import {
 } from "../../data/adminNavigation";
 import { useStore } from "../../context/storeContext";
 import { apiUrl } from "../../utils/api";
+import InstallAppButton from "../layout/InstallAppButton";
 
 const AdminLayout = () => {
   const location = useLocation();
@@ -320,6 +321,7 @@ const AdminLayout = () => {
             </div>
           </div>
           <div className="relative flex items-center gap-2 sm:gap-4">
+            <InstallAppButton />
             <button type="button" onClick={toggleDarkMode} aria-label={darkMode ? "Enable light mode" : "Enable dark mode"} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100">
               {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
